@@ -129,6 +129,9 @@ struct slv : flop// inherits of flop / useless for combinational logic or variab
 				n = x_i.n; // assign signal
 				vcd_file.vcd_dump_ull((n), &pvcd_entry->ID[0], pvcd_entry->binary);
 			}
+			else
+				n = x_i.n; // assign signal
+
 
 		}
 		else // do not know yet
@@ -315,6 +318,8 @@ struct Signed:slv<N>
 				slv<N>::n = x_i.n; // assign signal
 				vcd_file.vcd_dump_ll(conv_int(), &slv<N>::pvcd_entry->ID[0], slv<N>::pvcd_entry->binary);
 			}
+			else
+				slv<N>::n = x_i.n; // assign signal
 
 		}
 		else // do not know yet
