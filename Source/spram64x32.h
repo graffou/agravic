@@ -1,5 +1,5 @@
 #if 1
-//#include "slv.h"
+#include "slv.h"
 START_OF_FILE(spram64x32)
 INCLUDES
 
@@ -38,7 +38,7 @@ BEGIN
 			ENDIF
 		ENDIF
 	ENDIF
-END_PROCESS;
+END_PROCESS
 //}
 
 BLK_END;

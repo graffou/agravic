@@ -14,294 +14,40 @@
 #define gprintf gkprintf
 
 #include "gmodule.h"
-/*std::vector<gmodule*> gmodule::module_list;
-gmodule* gmodule::out_of_hier = new gmodule;
-unsigned long long int gmodule::vcd_time;
-*/
 #include "ports.h"
 #include "slv.h"
 #include "kb.h"
 
 
 
-#if 0
 
-// block momo----------------------------------
-INCLUDES
-
-ENTITY(momo_t,
-DECL_PORTS(
-		PORT(clk, CLK_TYPE, IN),
-		PORT(reset1_n, RST_TYPE, IN),
-		PORT(min, SLV_TYPE(5), IN),
-		PORT(mout, SLV_TYPE(5), OUT)
-		)
-);
-BEGIN
-
-PROCESS(0, clk, reset1_n)
-BEGIN
-	IF ( reset1_n == BIT(0) ) THEN
-		//gprintf("#Gmomo rst % ", reset1_n.get().n);
-		mout <= SLV(7, LEN(mout));
-	ELSEIF ( EVENT(clk) and (clk == BIT(1)) ) THEN
-		//gprintf("#mmomo in % out %", in , out);
-		//out_tmp <= in + SLV(3, LEN(out_tmp));
-		mout <= min + SLV(4, LEN(mout));
-		//gprintf("#mmomo in % out %", in , out);
-	ENDIF
-END_PROCESS;
-//}
-
-BLK_END;
-
-
-// block zozo -----------------------------------------------------------
-INCLUDES
-
-	ENTITY(zozo_t,
-	DECL_PORTS(
-			PORT(clk, CLK_TYPE, IN),
-			PORT(reset_n, RST_TYPE, IN),
-			PORT(zin, SLV_TYPE(5), IN),
-			PORT(zout, SLV_TYPE(5), OUT)
-			)
-	);
-
-	// Put all internal signals and component declarations (not variables !)
-	COMPONENT(momo_t,
-	DECL_PORTS(
-			PORT(clk, CLK_TYPE, IN),
-			PORT(reset1_n, RST_TYPE, IN),
-			PORT(min, SLV_TYPE(5), IN),
-			PORT(mout, SLV_TYPE(5), OUT)
-			)
-	);
-
-	SIG(internal, SLV_TYPE(5));// internal;
-
-	// Put all components bindings and processes next
-	BEGIN
-
-	BLK_INST(my_momo, momo_t,
-	MAPPING(
-			PM(clk, clk),
-			PM(reset1_n, reset_n),
-			PM(min, internal),
-			PM(mout, zout)
-			)
-	);
-
-	PROCESS(0, clk, reset_n)
-	BEGIN
-	IF ( reset_n == BIT(0) ) THEN
-		internal <= SLV(0, LEN(internal));
-	ELSEIF ( EVENT(clk) and (clk == BIT(1)) ) THEN
-		internal <= zin + ( internal + SLV(2, LEN(internal)) );
-	ENDIF
-	END_PROCESS;
-
-	BLK_END;
-#else
-#if 1
-	RECORD(yeye_t,
-			DECL_FIELDS(
-					FIELD(bobo, UINT(5)),
-					FIELD(baba, UINT(9))
-					)
-	);
-#else
-	 struct yeye_t_base{ slv<5> bobo; slv<9> baba;};
-	 struct yeye_t : yeye_t_base, vcd_entry
-	 { vcd_entry* pvcd_entry = static_cast<vcd_entry*>(this); using yeye_t_base::bobo; using yeye_t_base::baba;
-	 yeye_t() {}
-	 yeye_t(const sig_desc& x) : vcd_entry(x)
-	 { vcd_entry::nbits = -2048; x.pmodule->vcd_list.push_back(static_cast<vcd_entry*>(this)); std::string rec_name = x.name;
-	 {std::string __zozo__ = rec_name + '.' + "bobo"; bobo.pvcd_entry = create_vcd_entry(__zozo__, x.pmodule, bobo.length);}
-	 {std::string __zozo__ = rec_name + '.' + "baba"; baba.pvcd_entry = create_vcd_entry(__zozo__, x.pmodule, baba.length);}
-	 }
-	 void activate()
-	 {
-		 bobo.pvcd_entry->driver = &( (vcd_entry::driver)->bobo);
-		 bobo.pvcd_entry->activate();
-		 baba.pvcd_entry->driver = &((*(vcd_entry::driver)).baba);
-		 baba.pvcd_entry->activate();
-	 } void operator <= (const yeye_t& x){ bobo <= x.bobo; baba <= x.baba; } void operator = (const yeye_t& x){ bobo = x.bobo; baba = x.baba; } void operator <= (const yeye_t_base& x){ bobo <= x.bobo; baba <= x.baba; } void operator = (const yeye_t_base& x){ bobo = x.bobo; baba = x.baba; } static const int length = -2048; };
-
-#endif
-	CONSTANT BASE_RECORD_TYPE(yeye_t) yeye_t0 = {0,0};
-
-	INCLUDES
-
-	ENTITY(momo_t,
-	DECL_PORTS(
-			PORT(clk, CLK_TYPE, IN),
-			PORT(reset1_n, RST_TYPE, IN),
-			PORT(min, UINT(5), IN),
-			PORT(yeye_o, yeye_t, OUT),
-			PORT(mout, UINT(5), OUT)
-			)
-	);
-#if 1
-
-#else
-	 struct yeye_t_base{ slv<5> bobo; slv<9> baba;}; struct yeye_t : yeye_t_base, vcd_entry{ using yeye_t::bobo; using yeye_t::baba; } yeye_t(const sig_desc& x) : vcd_entry(x){ vcd_entry::nbits = -1024; x.pmodule->vcd_list.push_back(static_cast<vcd_entry*>(this)); std::string rec_name = x.name; {std::string __zozo__ = rec_name + '.' + "bobo"; bobo.pvcd_entry = create_vcd_entry(__zozo__, x.pmodule, -16);} {std::string __zozo__ = rec_name + '.' + "baba"; baba.pvcd_entry = create_vcd_entry(__zozo__, x.pmodule, -16);} } void activate() { bobo.pvcd_entry->activate(); baba.pvcd_entry->activate(); } void operator <= (const yeye_t& x){ bobo <= x.bobo; baba <= x.baba; }};
-
-#endif
-	//struct yeye_t_base { slv<5> bobo; slv<9> baba;}; struct yeye_t : yeye_t_base ,vcd_entry { yeye_t(const sig_desc& x) : vcd_entry(x){ vcd_entry::nbits = -1024; x.pmodule->vcd_list.push_back(static_cast<vcd_entry*>(this)); std::string rec_name = x.name; bobo.pvcd_entry = create_vcd_entry("yeye_t.bobo", x.pmodule, -16); baba.pvcd_entry = create_vcd_entry("yeye_t.baba", x.pmodule, -16); } void activate() { bobo.pvcd_entry->activate(); baba.pvcd_entry->activate(); } void operator <= (const yeye_t& x){ bobo <= x.bobo; baba <= x.baba; };
-
-	//SIG(yuyu, yeye_t);
-	TYPE(tata_t, ARRAY_TYPE(UINT(5), 4));
-	CONSTANT BASE_ARRAY_TYPE(UINT(5), 4) tata_t0 = {1,2,3,4};
-	SIG(tata, tata_t);
-	SIG(gogo, INT(5));
-	BEGIN
-
-	PROCESS(0, clk, reset1_n)
-	BEGIN
-		VAR(yuyu, yeye_t);
-		IF ( reset1_n == BIT(0) ) THEN
-			mout <= TO_UINT(7, LEN(mout));
-			//yuyu.bobo <= TO_UINT(0, LEN(yuyu.bobo));
-			yeye_o <= yeye_t0;
-			tata <= OTHERS(TO_UINT(0,5));
-			gogo <= (TO_INT(0,5));
-		ELSEIF ( EVENT(clk) and (clk == BIT(1)) ) THEN
-			yuyu := yeye_t0;
-			mout <= min + TO_UINT(4, LEN(mout));
-			yuyu.bobo := min;
-			gogo <= SIGNED(PORT_BASE(min));
-			yeye_o <= yuyu;
-			tata(0) <= yuyu.bobo;
-		ENDIF
-	END_PROCESS;
-
-	BLK_END;
-
-
-	INCLUDES
-
-		ENTITY(zozo_t,
-		DECL_PORTS(
-				PORT(clk, CLK_TYPE, IN),
-				PORT(reset_n, RST_TYPE, IN),
-				PORT(zin, UINT(5), IN),
-				PORT(zout, UINT(5), OUT)
-				)
-		);
-
-		// Put all internal signals and component declarations (not variables !)
-		COMPONENT(momo_t,
-		DECL_PORTS(
-				PORT(clk, CLK_TYPE, IN),
-				PORT(reset1_n, RST_TYPE, IN),
-				PORT(min, UINT(5), IN),
-				PORT(yeye_o, yeye_t, OUT),
-				PORT(mout, UINT(5), OUT)
-				)
-		);
-
-		SIG(internal, UINT(5));// internal;
-		SIG(my_yeye, yeye_t);
-		// Put all components bindings and processes next
-		BEGIN
-
-		BLK_INST(my_momo, momo_t,
-		MAPPING(
-				PM(clk, clk),
-				PM(reset1_n, reset_n),
-				PM(min, internal),
-				PM(yeye_o, my_yeye),
-				PM(mout, zout)
-				)
-		);
-
-		PROCESS(0, clk, reset_n)
-		BEGIN
-		IF ( reset_n == BIT(0) ) THEN
-		gprintf("#RRESET INTERNAL");
-			internal <= TO_UINT(0, LEN(internal));
-		ELSEIF ( EVENT(clk) and (clk == BIT(1)) ) THEN
-			internal <= zin  +( internal + TO_UINT(2, LEN(internal)) );
-			//internal <= zin + SIGNED(PORT_BASE(zin)) +( internal + TO_UINT(2, LEN(internal)) );
-		ENDIF
-		END_PROCESS;
-
-		BLK_END;
-
-#endif
-
-
+#include "structures.h"
 #include "spram64x32.h"
-//#include "risc-V_core.h"
-
+#include "risc-V_core.h"
+#include "tb.h"
 int main()
 {
-	slv<5> a = gen_sig_desc("a", gmodule::out_of_hier);
-	slv<5> b = gen_sig_desc("b", gmodule::out_of_hier);
-	//SIG(a, gmodule::out_of_hier);
-	//SIG(b, gmodule::out_of_hier);
 
-	//momo_t<0> my_momo(gen_blk_map("my_momo", gmodule::out_of_hier, momo_t<0>::in_stat, a, momo_t<0>::out_stat, b));
-	//momo_t<0>* pmy_momo = new momo_t<0>(gen_blk_map("my_momo", gmodule::out_of_hier, momo_t<0>::in_stat, a, momo_t<0>::out_stat, b));
-	//momo_t<0>& my_momo = *pmy_momo;
-
-
-	TOP_SIG(clk, CLK_TYPE);
-	TOP_SIG(reset_n, RST_TYPE);// reset_n;
-
-	gprintf("#Mclk % reset % ptrs", &clk, &reset_n);
-
-	gprintf("ptrs % % \n", &momo_t<0>::min, &momo_t<0>::mout);
-	//momo_t<0>& my_momo2 = *create_block<momo_t<0>>("my_momo2", gmodule::out_of_hier, &momo_t<0>::in, &a, &momo_t<0>::out, &b);
-
-	//momo_t<0>& my_momo2 = *create_block< momo_t<0> >("my_momo", gmodule::out_of_hier, &momo_t<0>::in, &a, &momo_t<0>::out, &b);
-
-/*
-	 BLK_INST_TOP(
-			my_momo2, momo_t,
-			MAPPING(
-					PM(in, a),
-					PM(out, b)
-					)
-			);
-*/
-
-
-	//toto<1> titi = gen_bind(toto<1>::in_stat, a, toto<1>::out_stat, b);
 	gprintf("#Ublk inst top");
 	BLK_INST_TOP(
-			titi, zozo_t,
-			MAPPING(
-					PM(clk, clk),
-					PM(reset_n, reset_n),
-					PM(zin, a),
-					PM(zout, b)
-					)
+			tb, tb_t,
 			);
 
+	tb.run();
+
 	// Obligatory order !!
+#if 0
 	init_vcd();
 	clk.parse_modules();
 
 	vcd_file.activate();
-
-	gprintf("#VYO");
-	a <= 1;
-	b <= 2;
-	reset_n <= BIN(0);
-	clk <= BIN(1);
-	clk <= BIN(0);
-	clk <= BIN(1);
-	reset_n <= BIN(1);
-	for (int i = 0; i < 10000 ; i++)
-	{
-		//gprintf("#Rclk a % b %", a,b);
-		clk <= not clk;
-	}
+#endif
 
 
 	gprintf("#VEnd of simulation, time is % ps", vcd_file.vcd_time * vcd_file.timebase_ps);
+
+//	for (int i = 2; i < 256; i++)
+//		gprintf(" #define EVAL%d(...) EVAL1(EVAL%d(__VA_ARGS__))\n", i, i-1);
 
 	//toto<1> titi = gen_bind( link(toto<1>::in_stat, a), link(toto<1>::out_stat, b));
 	//toto<1> titi = gen_bind( toto<1>::out_stat, b);

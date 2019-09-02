@@ -175,7 +175,13 @@ struct slv : flop// inherits of flop / useless for combinational logic or variab
 		//std::cerr << n << " " << "x " << x_i.n << " " <<((n<<P)|(x_i.n));
 		return slv<N+P>( (n<<P) | x_i.n );
 	}
-
+	// bit vector concatenation
+	template<int P>
+	slv<N+P> operator&(const slv<P>& x_i)
+	{
+		//std::cerr << n << " " << "x " << x_i.n << " " <<((n<<P)|(x_i.n));
+		return slv<N+P>( (n<<P) | x_i.n );
+	}
 	// extract bit range toto.range<8,6>() <=> toto(8 downto 6)
 	template <int P, int Q>
 	slv<P-Q+1> range()
@@ -199,7 +205,14 @@ struct slv : flop// inherits of flop / useless for combinational logic or variab
 	static const int length = N;
 	static const int size = 1;
 
-
+	slv<N> sll(int x_i)
+		{
+			return slv<N>(n << x_i);
+		}
+	slv<N> srl(int x_i)
+		{
+			return slv<N>(n >> x_i);
+		}
 	//bitwise not
 	slv<N> operator!()
 	{
@@ -296,6 +309,10 @@ struct Signed:slv<N>
 		return Signed<m>(conv_int());
 	}
 
+	slv<N> srl(int x_i)
+		{
+			return slv<N>(conv_int() >> x_i);
+		}
 	//This method is a copy of the one in slv
 	//This is utterly ugly, but I can't see any efficient way of sharing the code, except letting it in slv and use a function pointer for vcd_dump_ll / vcd_dump_ull
 	// or add a member that flags a signed slv ?
@@ -491,7 +508,7 @@ std::vector<tree*> tree::trees;
 
 
 
-struct clk_t : tree
+struct clk_t : public tree
 {
 	//static std::vector<clk_t> clocks; //
 	std::vector<flop*> flop_list;
@@ -513,6 +530,16 @@ struct clk_t : tree
 	{
 		// TODO
 	}
+
+	clk_t(const gated_clk_desc& x_i) : tree(x_i)
+	{
+		x_i.parent_clk->children.push_back(this);
+	}
+	clk_t& get()
+	{
+		gprintf("#Vclk get");
+		return *this;
+	}
 	// set half period in numbers of vcd periods
 	void set_half_period(uint64_t half_period_i)
 	{
@@ -525,7 +552,11 @@ struct clk_t : tree
 	{
 		flop_list.push_back(x_i);
 	}
-
+	// Register a flip-flop (called from reset statement of synchronous processes)
+	void register_clk(clk_t* x_i)
+	{
+		children.push_back(x_i);
+	}
 	// Must be called after the whole hierarchy has been built
 	// The module list is parsed and all possible processes tested (process0 -> process3)
 	// Non implemented processes return NULL for clock signal ptr
@@ -611,6 +642,7 @@ struct clk_t : tree
 		{
 			//gprintf("#ball processes");
 #ifdef GATED_CLOCKS
+			gprintf("#mchidren:%", children.size());
 			for (int i = 0; i < children.size(); i++)
 				children[i]->exec_processes();
 #endif
@@ -632,7 +664,15 @@ struct clk_t : tree
 	}
 
 };
-
+/*
+template<class T1, class T2> register_clk(T1 g_clk, T2)
+void register_clk(T1 x, T2 y)
+{
+	gprintf("#VFunction register clock");// to %",tree::trees[x]->is_clk());
+	tree::trees[x]->is_clk();
+	tree::trees[x]->register_clk(y);
+}
+*/
 template<class T1, class T2>
 void register_flop(T1 x, T2 y)
 {
@@ -788,6 +828,7 @@ struct array< T1<T,N> > : T1<T,N>, vcd_entry
 #define SLV(a, n) slv<n>(a)
 
 #define SLV_TYPE(n) slv<n>
+#define TO_SLV(a) a
 #define PORT_BASE(a) a.base_type()  // Required to perform something that is not supported by the std:reference_wrapper used for port class ex: SIGNED(PORT_BASE(data_i))
 #define SIGNED_TYPE(n) Signed<n>
 #define UNSIGNED_TYPE(n) slv<n>
@@ -816,6 +857,7 @@ struct array< T1<T,N> > : T1<T,N>, vcd_entry
 #define SIGNED(a) conv_signed(a)
 #define UNSIGNED(a) conv_unsigned(a)
 #define RANGE(a,b,c) a.range<b,c>()
+#define SLV_RANGE(a,b,c) a.range<b,c>() // for further concatenation in vhdl
 #define B(a,b) a.get_bit(b)
 #define HI(a) a.high
 #define LEN(a) a.length
@@ -837,6 +879,7 @@ struct array< T1<T,N> > : T1<T,N>, vcd_entry
 #define TOP_SIG(a, t)  t a = gen_sig_desc(#a, gmodule::out_of_hier)
 #define CONST(a, t)  const t a
 #define SIG(a, t)  t a = gen_sig_desc(#a, this)
+#define GATED_CLK(a, t, c)  t a = gen_gated_clk_desc(#a, this, c)
 #define VAR(a, t)  t a //= gen_sig_desc(#a, this)
 #define CONST(a, t) const t a
 #define MEMBER(a, t) t a
@@ -846,21 +889,24 @@ struct array< T1<T,N> > : T1<T,N>, vcd_entry
 #define EVENT(a) static_cast<tree>(a).event()//CAT_(a,.event())
 #define CONSTANT const
 #define OTHERS(a) __others(a)
+#define RESET(a) a <= TO_UINT(0, LEN(a))
+#define shift_left(a, b) a.sll(b)
+#define shift_right(a, b) a.srl(b)
+#define SHIFT_LEFT(a, b) a.sll(b)
+#define SHIFT_RIGHT(a, b) a.srl(b)
 
 #else
 #define CONSTANT constant
 #define CONST(a,n) constant a : std_logic_vector((n-1) downto 0)
 #define SLV(a, n) conv_std_logic_vector(a, n)
 #define SLV_TYPE(n) std_logic_vector((n-1) downto 0)
+#define TO_SLV(a) std_logic_vector(a)
 #define CLK_TYPE std_logic
 #define RST_TYPE std_logic
 #define BIT_TYPE std_logic
 
 #define SIGNED(a) signed(a)
 #define UNSIGNED(a) unsigned(a)
-#define SLV(a, n) slv<n>(a)
-
-#define SLV_TYPE(n) slv<n>
 
 #define SIGNED_TYPE(n) signed ((n-1) downto 0)
 #define UNSIGNED_TYPE(n) unsigned ((n-1) downto 0)
@@ -868,6 +914,10 @@ struct array< T1<T,N> > : T1<T,N>, vcd_entry
 #define UINT(n) unsigned ((n-1) downto 0)
 // OK for vhdl
 //#define RESIZE(a,n) a.resize<n>()
+
+// For unsigned ints only
+#define EXT(x, n) RESIZE(x, n)
+#define SXT(x, n) UNSIGNED(RESIZE(SIGNED(x), n))
 
 #define TO_INT(a,n) TO_SIGNED(a,n)
 #define TO_UINT(a,n) TO_UNSIGNED(a,n)
@@ -882,7 +932,10 @@ struct array< T1<T,N> > : T1<T,N>, vcd_entry
 #define BIT(a) IF_ELSE(a) ('1')('0')
 #define EQ(a,b) (a=b)
 
-#define RANGE(a,b,c) a(b downto c) //a.range<b,c>()
+// added unsigned since vhdl find an ambiguity to & operator when array types are defined as well ??????!!!!!!
+#define TYPE_UNSIGNED_CONV UNSIGNED'
+#define RANGE(a,b,c) (a(b downto c)) //a.range<b,c>()
+#define SLV_RANGE(a,b,c) std_logic_vector(a(b downto c)) //a.range<b,c>()
 #define B(a,b) a(b)
 #define HI(a) a'high
 #define LEN(a) a'length
@@ -923,6 +976,12 @@ struct array< T1<T,N> > : T1<T,N>, vcd_entry
 #define get2_PORT(a,b,c) b
 #define get3_PORT(a,b,c) c
 #define get_DECL_PORTS(...) __VA_ARGS__
+
+#define FIELD_DEF(name, type) name : type;
+#define get_DECL_FIELDS(...) __VA_ARGS__
+#define get1_FIELD(a,b) a
+#define get2_FIELD(a,b) b
+
 #define STRINGIFY(x) #x// EVAL(x)
 #define PORT_DEF(name, type, in) name :  \
 		IF_ELSE(in) (in) (out) type
@@ -933,6 +992,10 @@ struct array< T1<T,N> > : T1<T,N>, vcd_entry
 #define ENTITY(type, ports, ...) IF_ELSE(HAS_ARGS(__VA_ARGS__))(template<int dummy0, __VA_ARGS>)(entity)  type is port(/*
 		*/ EVAL(DECL_PORTS(get_##ports)) /*
 		*/ ); end type; architecture rtl of type is component dummy_zkw_pouet is port(clk : in std_logic);end component//std::cerr << "CTOR " << name << "\n";}
+
+#define TESTBENCH(type, ...) entity  type is /*
+		*/ ); end type; architecture rtl of type is component dummy_zkw_pouet is port(clk : in std_logic);end component//std::cerr << "CTOR " << name << "\n";}
+
 #define COMPONENT(type, ports, ...) IF_ELSE(HAS_ARGS(__VA_ARGS__))(template<int dummy0, __VA_ARGS>)(component)  type is port(/*
 		*/ EVAL(DECL_PORTS(get_##ports)) /*
 		*/ ); end component //std::cerr << "CTOR " << name << "\n";}
@@ -960,22 +1023,44 @@ struct array< T1<T,N> > : T1<T,N>, vcd_entry
 	(type<0,APPLY_GENERIC(__VA_ARGS__)>& name = *create_block(#name, this, APPLY_MAP(type<0,APPLY_GENERIC(__VA_ARGS__)>, port_map)))\
 	(name : type port map( APPLY_MAP(type<0>, port_map)))
 
+
+#define DECL_FIELD(a) FIELD_DEF(EVAL1(get1_##a),EVAL1(get2_##a))
+#define DECL_FIELDS(...) EVAL(MAP(DECL_FIELD, __VA_ARGS__))
+
+#define RECORD(typename, ports)	type typename is record \
+		EVAL(DECL_FIELDS(get_##ports))\
+		end record
+
+
 #define EVENT(a) a'event
+
+// this is fake in vhdl
+#define COMB_PROCESS(a,b)
+#define END_COMB_PROCESS
 
 #define PROCESS(a,b,c) process##a : process(b,c)
 #define BEGIN begin
-#define END_PROCESS end process
+#define END_PROCESS end process;
 #define INTERNAL_SIGNALS
 
 #define INCLUDESz library ieee;\
 use ieee.std_logic_1164.all;\
 use ieee.std_logic_arith.all;\
 use ieee.std_logic_unsigned.all;
-#define START_OF_FILE(a) -- vhdl file of block a generated by platform GS
+#define START_OF_FILE(a) -- vhdl file of block a generated by Agravic
 #define INCLUDES library ieee;\
 use ieee.std_logic_1164.all;\
 use IEEE.NUMERIC_STD.ALL;
 #define OTHERS(a) (others => a)
+#define RESET(a) a <= TO_UINT(0, LEN(a))
+
+#define PACKAGE(a) package a is
+#define END_PACKAGE(a) end a;
+#define USE_PACKAGE(a) library work; use work.a.all;
+
+
+
+
 #endif
 
 
@@ -1070,9 +1155,14 @@ use IEEE.NUMERIC_STD.ALL;
 
 // Block and ports declaration
 #define ENTITY(type, ports, ...) IF_ELSE(HAS_ARGS(__VA_ARGS__))(template<int dummy0, __VA_ARGS>)(template<int dummy0>) struct type : gmodule {/*
-		*/ EVAL(DECL_PORTS(get_##ports)) /*
+		*/ EVAL1(DECL_PORTS(get_##ports)) /*
+		*/ type(const char*x, gmodule* y):gmodule(x,y) {}//std::cerr << "CTOR " << name << "\n";}
+#define TESTBENCH(type, ...) template<int dummy0> struct type : gmodule {/*
 		*/ type(const char*x, gmodule* y):gmodule(x,y) {}//std::cerr << "CTOR " << name << "\n";}
 
+#define PACKAGE(a)
+#define END_PACKAGE(a)
+#define USE_PACKAGE(a)
 #if 0
 #define RECORD(type, ports)	struct type : vcd_entry{\
 		EVAL(DECL_FIELDS(get_##ports))\
@@ -1134,14 +1224,19 @@ use IEEE.NUMERIC_STD.ALL;
 	(type<0>& name = *create_block< type<0> >(#name, this, APPLY_MAP(type<0>, port_map)))
 
 // Instantiation of top rtl block - should be testbench
-#define BLK_INST_TOP(name, type, port_map, ...) IF_ELSE(HAS_ARGS(__VA_ARGS__))\
+/*#define BLK_INST_TOP(name, type, port_map, ...) IF_ELSE(HAS_ARGS(__VA_ARGS__))\
 	(type<0,APPLY_GENERIC(__VA_ARGS__)>& name = *create_block(#name, gmodule::out_of_hier, APPLY_MAP(type<0,APPLY_GENERIC(__VA_ARGS__)>, port_map)))\
-	(type<0>& name = *create_block<type<0>>(#name, gmodule::out_of_hier, APPLY_MAP(type<0>, port_map)))
+	(type<0>& name = *create_block<type<0>>(#name, gmodule::out_of_hier, APPLY_MAP(type<0>, port_map)))*/
+#define BLK_INST_TOP(name, type, ...) type<0>& name = *create_block<type<0>>(#name)
 
 // process_void for trial purposes, when no clk nor reset
 #define PROCESS_VOID(number) constexpr control_signals process##number(){  __control_signals__.clk = -1; __control_signals__.reset_n = -1;
+#define COMB_PROCESS(number, signal1) constexpr control_signals process##number(){ __control_signals__.clk = signal1.get().n; __control_signals__.reset_n = -1; //gprintf("#### % % % ####", name, signal1.get().n, signal2.get().n);
+
 #define PROCESS(number, signal1, signal2) constexpr control_signals process##number(){ __control_signals__.clk = signal1.get().n; __control_signals__.reset_n = signal2.get().n; //gprintf("#### % % % ####", name, signal1.get().n, signal2.get().n);
+
 #define END_PROCESS return(__control_signals__); }
+#define END_COMB_PROCESS return(__control_signals__); }
 
 
 #define MAP_LIST(blk_name, blk_type, ...) EVAL(MAP_PLUS2(blk_name, blk_type)

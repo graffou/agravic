@@ -131,6 +131,11 @@ template <class T, bool in>
             //std::cerr << '/';
         }
 
+    T base_type()
+	{
+   	 return std::reference_wrapper<T>::get();
+	}
+
     operator T(){
     	return std::reference_wrapper<T>::get();
     }
@@ -413,6 +418,7 @@ template <class T, bool in>
 #endif
 
 // Define binary operators, Catapult style
+
 #define BIN_OP_DEF(BIN_OP) \
     template<class T1, class T2> auto operator BIN_OP(const port<T1, true>& x, const T2& y) {return T1(x) BIN_OP y;} \
     template<class T1, class T2> auto operator BIN_OP(const T2& y, const port<T1, true>& x) {return y BIN_OP T1(x);} \
@@ -440,6 +446,20 @@ struct gen_blk_map_t
 	gmodule* pmodule;
 
 };
+
+// Creates a top-level block without ports (testbench)
+template<class type_out, class T0>
+type_out* create_block(const T0& name_i)
+{
+	gprintf("#VCTOR % \n", name_i);
+	type_out* pblk = new type_out(name_i, gmodule::out_of_hier);
+
+	pblk->name = name_i;
+	pblk->parent = gmodule::out_of_hier;
+	gprintf("#VCreating testbench");
+
+	return pblk;
+}
 
 // Creates a new block with its port mapping (vhdl-style block instantiation)
 template<class type_out, class T0, class... Args>

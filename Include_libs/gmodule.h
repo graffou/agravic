@@ -21,6 +21,9 @@ struct block_desc
     }
 
 };
+struct clk_t;
+// Helper structure used to initialize slvs with macros
+// #define SLV(name, nbits, pmodule) slv<nbits> name = sig_desc(#name, this);
 
 // Helper structure used to initialize slvs with macros
 // #define SLV(name, nbits, pmodule) slv<nbits> name = sig_desc(#name, this);
@@ -38,12 +41,31 @@ struct sig_desc
 	}
 };
 
+struct gated_clk_desc: public sig_desc
+{
+	//const char* name;
+	clk_t* parent_clk;
+	gated_clk_desc(){}
+	template<class T, class T2>
+	gated_clk_desc(T name_i, gmodule* pmodule_i, const T2& clk_i)
+	{
+		name = name_i;
+		pmodule = pmodule_i;
+		parent_clk = &(clk_i.get());
+	}
+
+};
+
 template<class T>
 sig_desc gen_sig_desc(T name_i, gmodule* pmodule_i)
 {
 	return sig_desc(name_i, pmodule_i);
 }
-
+template<class T, class T2> //T2 might be clk or port<clk>
+gated_clk_desc gen_gated_clk_desc(T name_i, gmodule* pmodule_i, const T2& clk_i)
+{
+	return gated_clk_desc(name_i, pmodule_i, clk_i);
+}
 // return type of process
 // null pointers when calling a non-existing one (virtual method called)
 // actual processes return actual pointers thanks to process and end_process macros
