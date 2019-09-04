@@ -7,7 +7,7 @@ PACKAGE(structures)
 
 RECORD(blk2mem_t,
 		DECL_FIELDS(
-				FIELD(addr, UINT(14)),
+				FIELD(addr, UINT(13)),
 				FIELD(data, UINT(32)),
 				FIELD(be,   UINT(4)),
 				FIELD(cs_n, BIT_TYPE),

@@ -877,11 +877,11 @@ struct array< T1<T,N> > : T1<T,N>, vcd_entry
 
 #define TYPE(a, t) typedef t a
 #define TOP_SIG(a, t)  t a = gen_sig_desc(#a, gmodule::out_of_hier)
-#define CONST(a, t)  const t a
+//#define CONST(a, t)  const t a
 #define SIG(a, t)  t a = gen_sig_desc(#a, this)
 #define GATED_CLK(a, t, c)  t a = gen_gated_clk_desc(#a, this, c)
 #define VAR(a, t)  t a //= gen_sig_desc(#a, this)
-#define CONST(a, t) const t a
+#define CONST(a, t)  const t a
 #define MEMBER(a, t) t a
 #define REC(a) struct a {
 #define ENDREC };

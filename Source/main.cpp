@@ -22,8 +22,11 @@
 
 
 #include "structures.h"
-#include "spram64x32.h"
+#include "spram8kx32.h"
+#include "mem.h"
+#include "peripherals.h"
 #include "risc-V_core.h"
+#include "top.h"
 #include "tb.h"
 int main()
 {
