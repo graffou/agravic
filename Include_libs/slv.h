@@ -22,19 +22,48 @@ struct flop
 template<class T1, class T2>
 void register_flop(T1 x, T2 y);
 
+template<int N>
+struct base_slv
+{
+	 uint64_t n = 0;
+	 base_slv(){}
+	 base_slv(const base_slv<N>& x)
+	{
+		n = x.n;
+	}
+	 base_slv(uint64_t x)
+	{
+		n = x;
+	}
+	constexpr operator int() const
+		{
+			return n;
+		}
+	const static int length = N;
+	const static int high = N-1;
+	static const int size = 1;
+
+};
+
 // SLV unsigned -------------------------------------------------------------------------------------------------------------
 // was originally intended to mimmic std_logic_vector, but finally is equivalent to signed(N-1 downto 0) of numeric_std package
 template<int N>
-struct slv : flop// inherits of flop / useless for combinational logic or variables, but much simpler (and little overhead)
+struct slv : public base_slv<N>, flop// inherits of flop / useless for combinational logic or variables, but much simpler (and little overhead)
 {
 
-	uint64_t n; // Stored value
+    using base_slv<N>::n;	//uint64_t n; // Stored value
 	uint8_t init = 0; // Is set at first <= assignment. 1 -> flip-flop, 2-> combinational
 	const uint64_t mask = (1ull << N) - 1; // Mask to keep N bits
 	vcd_entry* pvcd_entry;
 
 	slv(){
 		pvcd_entry = &dummy_vcd_entry;// is a global variable which has 'non probing' attribute
+		//gprintf("#BBare slv of size %R ptr %R", N, this);
+	}
+
+	slv(base_slv<N> x_i)
+	{
+		n = x_i.n;
 	}
 
 	// init with signal name and module ptr (for a signal that is vcd probable)
@@ -52,12 +81,20 @@ struct slv : flop// inherits of flop / useless for combinational logic or variab
 		//std::cerr << "!!" << n << "!!\n";
 	}
 
+	uint64_t conv_int() const
+	{
+		return n;
+	}
 	// Masks unnecessary bits (keep N bits)
 	inline void bit_adjust()
 	{
 		n &= mask;
 	}
 
+	constexpr const int get_const() const
+	{
+		return n;
+	}
 	// Only assignment allowed is with same type signals
 	void operator=(const slv<N>& x_i)
 	{
@@ -113,21 +150,30 @@ struct slv : flop// inherits of flop / useless for combinational logic or variab
 	// TODO Should replicate that in Signed class and call vcd_dump_ull here
 	inline void operator<=(const slv<N>& x_i)
 	{
+		//gprintf("#CU<= %R %R %M ptr %M", pvcd_entry->pmodule->name, pvcd_entry->name, int(init), this);
+
 		if (init == 1) // flip flop
 		{
+			//gprintf("#gFF % out % in", pvcd_entry->name, n, x_i);
 			_d = x_i.n; // assign flip-flop input
+			/*
 			if ( (pvcd_entry->ID[0] != '#') and (x_i.n != n) )
 			{
 				vcd_file.vcd_dump_ull((_d), &pvcd_entry->ID[0], pvcd_entry->binary);
 			}
+			*/
 		}
 		else if (init == 2) // combinational
 		{
+			//gprintf("#R%", "start");
+			//gprintf("#R%", n);
+			//gprintf("#R%", x_i.n);
+			//gprintf("#R%", pvcd_entry->ID[0]);
 			//gprintf("#comb vcd n % in % name % ID", n, x_i.n, pvcd_entry->name, pvcd_entry->ID);
 			if ( (pvcd_entry->ID[0] != '#') and (x_i.n != n) )
 			{
 				n = x_i.n; // assign signal
-				vcd_file.vcd_dump_ull((n), &pvcd_entry->ID[0], pvcd_entry->binary);
+				vcd_file.vcd_dump_ull((n), &pvcd_entry->ID[0], pvcd_entry->nbits);
 			}
 			else
 				n = x_i.n; // assign signal
@@ -148,7 +194,7 @@ struct slv : flop// inherits of flop / useless for combinational logic or variab
 				if (pvcd_entry->ID[0] != '#')
 				{
 					gprintf("#Rwriting vcd value %", _d);
-					vcd_file.vcd_dump_ull((_d), &pvcd_entry->ID[0], pvcd_entry->binary);
+					vcd_file.vcd_dump_ull((_d), &pvcd_entry->ID[0], pvcd_entry->nbits);
 				}
 				else
 				{
@@ -162,9 +208,11 @@ struct slv : flop// inherits of flop / useless for combinational logic or variab
 				init = 2;
 				n = x_i.n;
 				if (pvcd_entry->ID[0] != '#')
-					vcd_file.vcd_dump_ull((n), &pvcd_entry->ID[0], pvcd_entry->binary);
+					vcd_file.vcd_dump_ull((n), &pvcd_entry->ID[0], pvcd_entry->nbits);
 			}
 		}
+		//gprintf("#GU<= %R %R %M", pvcd_entry->pmodule->name, pvcd_entry->name, int(init));
+
 	}
 
 
@@ -238,7 +286,10 @@ struct slv : flop// inherits of flop / useless for combinational logic or variab
 	// called after clocked process execution
 	void clock()
 	{
-		//gprintf("#R% in % out %", pvcd_entry->name, _d, n);
+		if ( (pvcd_entry->ID[0] != '#') and (_d != n) )
+		{
+			vcd_file.vcd_dump_ull((_d), &pvcd_entry->ID[0], pvcd_entry->nbits);
+		}		//gprintf("#R% in % out %", pvcd_entry->name, _d, n);
 		n = _d;
 	}
 
@@ -248,8 +299,31 @@ struct slv : flop// inherits of flop / useless for combinational logic or variab
 	{
 		return slv<m>(n);
 	}
+
+	constexpr operator int() const
+		{
+			return n;
+		}
+
 };
 
+template<int N>
+struct const_slv
+{
+	 uint64_t n;
+	constexpr const_slv(const slv<N> x)
+	{
+		n = x.n;
+	}
+	constexpr operator int() const
+		{
+			return n;
+		}
+	const static int length = N;
+	const static int high = N-1;
+	static const int size = 1;
+
+};
 // finally unused ?
 /*
 template< template<int> class T, int N>
@@ -302,6 +376,14 @@ struct Signed:slv<N>
 			return (slv<N>(slv<N>::n));
 		}
 
+	void clock()
+	{
+		if ( (slv<N>::pvcd_entry->ID[0] != '#') and (slv<N>::_d != slv<N>::n) )
+		{
+			vcd_file.vcd_dump_ll(_d_conv_int(), &slv<N>::pvcd_entry->ID[0], slv<N>::pvcd_entry->nbits);
+			slv<N>::n = slv<N>::_d;
+		}
+	}
 
 	template <int m>
 	Signed<m> resize()
@@ -319,13 +401,16 @@ struct Signed:slv<N>
 	//Maybe I'll fix that in the future
 	inline void operator<=(const Signed<N>& x_i)
 	{
+		//gprintf("#C<=");
 		if (slv<N>::init == 1) // flip flop
 		{
 			slv<N>::_d = x_i.n; // assign flip-flop input
+/*
 			if ( (slv<N>::pvcd_entry->ID[0] != '#') and (x_i.n != slv<N>::n) )
 			{
 				vcd_file.vcd_dump_ll(_d_conv_int(), &slv<N>::pvcd_entry->ID[0], slv<N>::pvcd_entry->binary);
 			}
+			*/
 		}
 		else if (slv<N>::init == 2) // combinational
 		{
@@ -333,7 +418,7 @@ struct Signed:slv<N>
 			if ( (slv<N>::pvcd_entry->ID[0] != '#') and (x_i.n != slv<N>::n) )
 			{
 				slv<N>::n = x_i.n; // assign signal
-				vcd_file.vcd_dump_ll(conv_int(), &slv<N>::pvcd_entry->ID[0], slv<N>::pvcd_entry->binary);
+				vcd_file.vcd_dump_ll(conv_int(), &slv<N>::pvcd_entry->ID[0], slv<N>::pvcd_entry->nbits);
 			}
 			else
 				slv<N>::n = x_i.n; // assign signal
@@ -352,7 +437,7 @@ struct Signed:slv<N>
 				slv<N>::n = x_i.n; // reset value
 
 				if (slv<N>::pvcd_entry->ID[0] != '#')
-					vcd_file.vcd_dump_ll(_d_conv_int(), &slv<N>::pvcd_entry->ID[0], slv<N>::pvcd_entry->binary);
+					vcd_file.vcd_dump_ll(_d_conv_int(), &slv<N>::pvcd_entry->ID[0], slv<N>::pvcd_entry->nbits);
 				register_flop(__control_signals__.clk, static_cast<flop*>(this));
 			}
 			else
@@ -361,7 +446,7 @@ struct Signed:slv<N>
 				slv<N>::init = 2;
 				slv<N>::n = x_i.n;
 				if (slv<N>::pvcd_entry->ID[0] != '#')
-					vcd_file.vcd_dump_ll(conv_int(), &slv<N>::pvcd_entry->ID[0], slv<N>::pvcd_entry->binary);
+					vcd_file.vcd_dump_ll(conv_int(), &slv<N>::pvcd_entry->ID[0], slv<N>::pvcd_entry->nbits);
 			}
 		}
 	}
@@ -420,24 +505,24 @@ struct tree : slv<1>
 
 	void operator=(const slv<1>& x_i)
 	{
-		if (*p_en == 1)
+		if (*p_en == slv<1>(1))
 		{
 			if ( not (x_i == static_cast<slv<1>>(*this)) )
-				evt = 1;
+				evt = slv<1>(1);
 			else
-				evt = 0;
+				evt = slv<1>(0);
 			slv<1>::operator=(x_i);
 		}
 		else
 		{
-			evt = 0;
+			evt = slv<1>(0);
 			slv<1>::operator=(0);
 		}
 	}
 
 	void operator<=(const slv<1>& x_i)
 	{
-		if (*p_en == 1)
+		if (*p_en == slv<1>(1))
 		{
 			if ( not (x_i == static_cast<slv<1>>(*this)) )
 				evt = 1;
@@ -550,7 +635,9 @@ struct clk_t : public tree
 	// Register a flip-flop (called from reset statement of synchronous processes)
 	void register_flop(flop* x_i)
 	{
+		gprintf("#Centry %", flop_list.size());
 		flop_list.push_back(x_i);
+		gprintf("#C<<<<<<");
 	}
 	// Register a flip-flop (called from reset statement of synchronous processes)
 	void register_clk(clk_t* x_i)
@@ -564,8 +651,11 @@ struct clk_t : public tree
 	// All relevant processes are registered and will be executed on clock events
 	void parse_modules( )
 	{
+		gprintf("#CParse modules");
 		for (int i = 0; i < gmodule::module_list.size(); i++)
 		{
+			gprintf("#CParsing module %R", gmodule::module_list[i]->name);
+
 			control_signals x;
 			// This is ugly but I don't see any better solution
 			// Parse all processes in modules
@@ -622,6 +712,7 @@ struct clk_t : public tree
 		//gprintf("#VCLOCK flops: %Y", flop_list.size());
 		for (int i = 0; i < flop_list.size(); i++)
 		{
+			//gprintf("#cflop %", i);
 			flop_list[i]->clock();
 		}
 	}
@@ -676,8 +767,8 @@ void register_clk(T1 x, T2 y)
 template<class T1, class T2>
 void register_flop(T1 x, T2 y)
 {
-	gprintf("#VFunction register flop");// to %",tree::trees[x]->is_clk());
-	tree::trees[x]->is_clk();
+	//gprintf("#VFunction register flop");// to %",tree::trees[x]->is_clk());
+	//tree::trees[x]->is_clk();
 	tree::trees[x]->register_flop(y);
 }
 
@@ -717,9 +808,18 @@ slv<N> conv_unsigned(const slv<N>& x_i)
 
 // should work
 template<class T>
-int conv_int(const T& x_i)
+ int conv_int(const T& x_i)
 {
-	Signed<32> r = x_i;
+	uint64_t nn = x_i.conv_int();
+	//Signed<32> r = Signed<32>(x_i.n);
+	return int(nn);
+}
+// For case statements
+template<int N>
+const constexpr inline int const_conv_int(const slv<N> x_i)
+{
+	//uint64_t nn = x_i.conv_int();
+	//Signed<32> r = Signed<32>(x_i.n);
 	return int(x_i.n);
 }
 
@@ -849,11 +949,12 @@ struct array< T1<T,N> > : T1<T,N>, vcd_entry
 #define CAT(a,b) a.cat(b)
 #define STRING(a) #a
 #define BIN(a) slv<sizeof(STRING(a))-1>(0b##a)
+#define CASE_BIN(a) (0b##a)
 #define HEX(a) slv<sizeof(STRING(a))*4-1>(0x##a)
 #define BIT(a) slv<sizeof(STRING(a))-1>(0b##a)
 #define EQ(a,b) (a==b)
 #define EXT(a,b) slv<b>(a.n)
-#define SXT(a,b) slv<b>(Signed(a).conv_int())
+#define SXT(a,b) slv<b>(Signed<b>(a).conv_int())
 #define SIGNED(a) conv_signed(a)
 #define UNSIGNED(a) conv_unsigned(a)
 #define RANGE(a,b,c) a.range<b,c>()
@@ -866,8 +967,8 @@ struct array< T1<T,N> > : T1<T,N>, vcd_entry
 #define ENDIF }
 #define ELSE } else {
 #define ELSEIF } else if
-#define SWITCH(a) switch(a){
-#define CASE(b) break;case b:
+#define SWITCH(a) switch(TO_INTEGER(a)){
+#define CASE(b) break;case b: //.get_const()://const_conv_int(b) ://const_conv_int(b):
 #define DEFAULT break;default:
 #define ENDCASE }
 #define VA =
@@ -881,7 +982,8 @@ struct array< T1<T,N> > : T1<T,N>, vcd_entry
 #define SIG(a, t)  t a = gen_sig_desc(#a, this)
 #define GATED_CLK(a, t, c)  t a = gen_gated_clk_desc(#a, this, c)
 #define VAR(a, t)  t a //= gen_sig_desc(#a, this)
-#define CONST(a, t)  const t a
+#define CONST(a, t)   const t a
+#define CASE_CONST(a, t)   const int a
 #define MEMBER(a, t) t a
 #define REC(a) struct a {
 #define ENDREC };
@@ -897,7 +999,8 @@ struct array< T1<T,N> > : T1<T,N>, vcd_entry
 
 #else
 #define CONSTANT constant
-#define CONST(a,n) constant a : std_logic_vector((n-1) downto 0)
+//#define CONST(a,n) constant a : std_logic_vector((n-1) downto 0)
+//#define CASE_CONST(a,n) constant a : std_logic_vector((n-1) downto 0)
 #define SLV(a, n) conv_std_logic_vector(a, n)
 #define SLV_TYPE(n) std_logic_vector((n-1) downto 0)
 #define TO_SLV(a) std_logic_vector(a)
@@ -927,6 +1030,7 @@ struct array< T1<T,N> > : T1<T,N>, vcd_entry
 #define CAT(a,b) a & b
 #define STRING(a) #a
 #define BIN(a) #a
+#define CASE_BIN(a) #a
 #define HEX(a) x##a
 
 #define BIT(a) IF_ELSE(a) ('1')('0')
@@ -953,6 +1057,7 @@ struct array< T1<T,N> > : T1<T,N>, vcd_entry
 #define SIG(a, t) signal a : t
 #define VAR(a, t) variable a : t
 #define CONST(a, t) constant a : t
+#define CASE_CONST(a, t) constant a : t
 #define REC(a) type a is record
 #define ENDREC end record;
 #define MEMBER(a, t) a : t
@@ -1058,7 +1163,7 @@ use IEEE.NUMERIC_STD.ALL;
 #define END_PACKAGE(a) end a;
 #define USE_PACKAGE(a) library work; use work.a.all;
 
-
+#define gprintf(...) -- gprintf(__VA_ARGS__)
 
 
 #endif
@@ -1154,7 +1259,8 @@ use IEEE.NUMERIC_STD.ALL;
 #define EQ_FIELD(a) FIELD_EQ(EVAL1(get1_##a))
 
 // Block and ports declaration
-#define ENTITY(type, ports, ...) IF_ELSE(HAS_ARGS(__VA_ARGS__))(template<int dummy0, __VA_ARGS>)(template<int dummy0>) struct type : gmodule {/*
+//#define ENTITY(type, ports, ...) IF_ELSE(HAS_ARGS(__VA_ARGS__))(template<int dummy0, __VA_ARGS>)(template<int dummy0>) struct type : gmodule {/*
+#define ENTITY(type, ports, ...) IF_ELSE(HAS_ARGS(__VA_ARGS__))(template<int dummy##type, __VA_ARGS>)(template<int dummy##type>) struct type : gmodule {/*
 		*/ EVAL1(DECL_PORTS(get_##ports)) /*
 		*/ type(const char*x, gmodule* y):gmodule(x,y) {}//std::cerr << "CTOR " << name << "\n";}
 #define TESTBENCH(type, ...) template<int dummy0> struct type : gmodule {/*
@@ -1163,6 +1269,7 @@ use IEEE.NUMERIC_STD.ALL;
 #define PACKAGE(a)
 #define END_PACKAGE(a)
 #define USE_PACKAGE(a)
+#define INTEGER int
 #if 0
 #define RECORD(type, ports)	struct type : vcd_entry{\
 		EVAL(DECL_FIELDS(get_##ports))\
@@ -1180,10 +1287,12 @@ use IEEE.NUMERIC_STD.ALL;
 #define RECORD(type, ports)	struct type##_base{\
 		EVAL(DECL_FIELDS(get_##ports))};\
 		struct type : type##_base, vcd_entry{\
+		~type() = default; \
 		vcd_entry* pvcd_entry = static_cast<vcd_entry*>(this);\
 		EVAL(USING_FIELDS(type,get_##ports)) \
 		type() {}\
 		type(const sig_desc& x) : vcd_entry(x){\
+		gprintf("#VNew record : %", x.name);\
 		vcd_entry::nbits = -2048; /* marks record */\
 		x.pmodule->vcd_list.push_back(static_cast<vcd_entry*>(this)); \
 		std::string rec_name = x.name; \

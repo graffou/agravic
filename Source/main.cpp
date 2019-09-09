@@ -17,24 +17,46 @@
 #include "ports.h"
 #include "slv.h"
 #include "kb.h"
-
-
+#include "input_parms.h"
 
 
 #include "structures.h"
 #include "spram8kx32.h"
 #include "mem.h"
 #include "peripherals.h"
+#include "risc_V_constants.h"
+
 #include "risc-V_core.h"
 #include "top.h"
 #include "tb.h"
-int main()
+
+
+int main(int argc, char* argv[])
 {
+	CLI_PARM(bin_file, std::string);
+	bin_file.set_mandatory();
+	CLI_PARSE(argc, argv);
 
 	gprintf("#Ublk inst top");
 	BLK_INST_TOP(
 			tb, tb_t,
 			);
+	tb.dut.check();
+	gprintf("#CInit file");
+	tb.init_file(bin_file);
+	//exit(0);
+	gprintf("#CInit vcd");
+	init_vcd(); //exit(0);
+	gprintf("#CInit clk");
+	tb.init_clk_rst();
+	tb.dut.check();
+	tb.clk.parse_modules();
+	gprintf("#CActivate vcd");
+
+	vcd_file.activate();
+	tb.dut.check();
+
+	gprintf("#CRunning testbench");
 
 	tb.run();
 

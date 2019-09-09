@@ -26,10 +26,12 @@ RTL_VHDL = $(patsubst %.h, %.vhd, $(RTL))
 
 All: dut
 
+# Creates executable 
+exe:  $(CONV) $(SOURCEDIR)main.cpp  
+	sed -e 's/:=/=/g' Source/main.cpp | g++ $(CC_FLAGS) $(INCLUDES_C) -o dut -g3 -xc++ - 
+
 # Creates executable and generates VHDL files:;!/
 dut:  $(RTL_VHDL) $(RTL_CONV) $(CONV) $(SOURCEDIR)main.cpp  
-	echo $(NOT_RTL)
-	echo $(CONV)
 	sed -e 's/:=/=/g' Source/main.cpp | g++ $(CC_FLAGS) $(INCLUDES_C) -o dut -g3 -xc++ - 
 
 # Shows preprocessor output for macro debug

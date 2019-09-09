@@ -148,7 +148,7 @@ struct vcd_file_t : public std::ofstream
 		timebase_ps = x_i;
 	}
 
-	void vcd_dump_ull(const uint64_t& val, char* id, bool& bin)
+	void vcd_dump_ull(const uint64_t& val, char* id, const uint8_t& bin)
 	{
 
 	  if (not dummy)
@@ -190,7 +190,7 @@ struct vcd_file_t : public std::ofstream
 	}
 
 
-	void vcd_dump_ll(const uint64_t& val, char* id, bool& bin)
+	void vcd_dump_ll(const uint64_t& val, char* id, const uint8_t& bin)
 	{
 
 	  if (not dummy)
@@ -302,7 +302,7 @@ struct vcd_file_t : public std::ofstream
 
 				for (int jj = 0; jj < gmodule::module_list[kk]->vcd_list.size(); jj++)
 				{
-					gprintf("vcd_list %\n", gmodule::module_list[kk]->vcd_list[jj]->name);
+					//gprintf("vcd_list %\n", gmodule::module_list[kk]->vcd_list[jj]->name);
 					if ( gmodule::module_list[kk]->vcd_list[jj]->ID[0] != '#')
 					{
 						gprintf("#VProbing %", gmodule::module_list[kk]->vcd_list[jj]->name);
@@ -338,16 +338,34 @@ struct vcd_file_t : public std::ofstream
 
 };
 
-
+// activate vcd probe using a line from vcd.scn file
 void activate_vcd(const gstring& x_i)
 {
 	gmodule* pmodule;
+	bool bin = 0;
 	size_t n = x_i.find_last_of(':');
 	gprintf("n = %\n", n);
 	if (n == std::string::npos)
 		n = -1;
 	std::string module = x_i.substr(0, n);
-	std::string probe = x_i.substr(n+1);
+	std::string probe_mode = x_i.substr(n+1);
+	std::string probe;
+	std::string mode;
+	n = probe_mode.find_last_of(' ');
+	//gprintf("n = %\n", n);
+	if (n == std::string::npos)
+	{
+		gprintf("No space found in % \n", probe_mode);
+		probe = probe_mode;
+	}
+	else
+	{
+		probe = probe_mode.substr(0, n);
+		mode = probe_mode.substr(n+1);
+		bin = (mode == "bin");
+	}
+
+
 
 	gprintf("#K s % mod % pr % ", x_i, module, probe);
 	for (int kk = 0; kk < gmodule::module_list.size(); kk++)
@@ -364,9 +382,36 @@ void activate_vcd(const gstring& x_i)
 				if ( (probe == test) or (probe.empty()) ) // and (gmodule::module_list[kk]->vcd_list[i]->nbits > -1024)) )
 				{
 					gmodule::module_list[kk]->vcd_list[i]->activate();
-					gprintf("#mActivating %r:%b probe %g", gmodule::module_list[kk]->get_full_name(), gmodule::module_list[kk]->vcd_list[i]->name, probe);
+					if (bin)
+					{
+						gprintf("#mActivating %r:%b probe %g in binary mode", gmodule::module_list[kk]->get_full_name(), gmodule::module_list[kk]->vcd_list[i]->name, probe);
+						gmodule::module_list[kk]->vcd_list[i]->binary = 1;
+					}
+					else
+					{
+						gprintf("#mActivating %r:%b probe %g", gmodule::module_list[kk]->get_full_name(), gmodule::module_list[kk]->vcd_list[i]->name, probe);
+						//gmodule::module_list[kk]->vcd_list[i]->nbits = 0;
+
+					}
 				}
 
+			}
+		}
+	}
+
+}
+
+// set nbits = 0 for all vcd entries that are not binaries
+void clean_vcd()
+{
+	for (int kk = 0; kk < gmodule::module_list.size(); kk++)
+	{
+
+		for ( int i = 0; i < gmodule::module_list[kk]->vcd_list.size(); i++ )
+		{
+			if (not gmodule::module_list[kk]->vcd_list[i]->binary)
+			{
+				gmodule::module_list[kk]->vcd_list[i]->nbits = 0;
 			}
 		}
 	}
@@ -386,13 +431,13 @@ vcd_entry dummy_vcd_entry = gen_sig_desc("DUMMY", gmodule::out_of_hier);
 template <class T>
 vcd_entry* create_vcd_entry(T name_i, gmodule* pmodule_i, int nbits_i)
 {
-	gprintf(">CVE %\n", name_i);
+	//gprintf(">CVE %\n", name_i);
 	vcd_entry* pvcd_entry = new vcd_entry(gen_sig_desc(name_i, pmodule_i));
 	pvcd_entry->nbits = nbits_i;
 	if (nbits_i == 1)
 		pvcd_entry->binary = 1;
 	(pmodule_i->vcd_list).push_back(pvcd_entry);
-	gprintf("<CVE\n");
+	//gprintf("<CVE\n");
 	return pvcd_entry;
 }
 

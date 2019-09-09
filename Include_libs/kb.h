@@ -148,6 +148,9 @@ void init_vcd()
 			}
 		}
 	}
+
+	// Set nbits=0 for non-binary entries
+	clean_vcd();
 }
 
 void kb()

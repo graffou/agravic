@@ -68,11 +68,12 @@ template <class T, bool in>
         {
             if (parent_node != NULL)
             {
-                gprintf("#RPropagate... in %", pmodule->name);
+                gprintf("#RPropagate... in % to %", pmodule->name, parent_node->dummy.pvcd_entry->name);
                parent_node->operator()(x);
                parent_node->dummy.pvcd_entry->driver = x.pvcd_entry;
                //gprintf("#R!!Propagate... parent ref ptr % parent node n % %", &(parent_node->get()), parent_node->get().n, parent_node->pmodule->name);
             }
+            else gprintf("#REnd propagate");
         }
 
     //void operator()(const std::reference_wrapper<T>& x) // is bound to another reference (port)
@@ -81,11 +82,22 @@ template <class T, bool in>
         	//std::cerr << "?" << x.get() << "?";
             std::reference_wrapper<T>::operator=(x); // copy ref.
         	std::cerr << "?";
-            //if (pdummy != NULL)
-            //    delete pdummy; // delete dummy
             //gprintf("#bbinding (ref) % of % ptr = %r org = %r", name, pmodule->name, &std::reference_wrapper<T>::get(), &x.get());
         	std::cerr << "?";
-           x.parent_node = this;
+           //x.parent_node = this;
+           gprintf("#MBinding %s to %R", dummy.pvcd_entry->name, x.dummy.pvcd_entry->name);
+
+           port<T, in>* node = &x;
+           if ((node->parent_node) == NULL) gprintf("#GFree parent in");// :%s ", (node)->dummy.pvcd_entry->name);
+           while ( (node->parent_node) != NULL)
+           {
+        	   gprintf("#RDelegating to: ", (node)->dummy.pvcd_entry->name);
+        	   node = (node)->parent_node;
+           }
+
+           node->parent_node = this;
+           gprintf("#CSetting parent of %R as %R", (node)->dummy.pvcd_entry->name, dummy.pvcd_entry->name);
+
         }
 
     void operator()( T& x) // is bound to a signal
@@ -131,7 +143,7 @@ template <class T, bool in>
             //std::cerr << '/';
         }
 
-    T base_type()
+    T& base_type()
 	{
    	 return std::reference_wrapper<T>::get();
 	}
@@ -205,7 +217,7 @@ template <class T, bool in>
                  return std::reference_wrapper<T<N>>::get();//static_cast<std::reference_wrapper<T<N>>>(*this);
              }
 
-         T<N> base_type()
+         T<N>& base_type()
 		{
         	 return std::reference_wrapper<T<N>>::get();
 		}
@@ -231,7 +243,19 @@ template <class T, bool in>
                 //    delete pdummy; // delete dummy
                 //gprintf("#bbinding (ref) % of % ptr = %r org = %r", name, pmodule->name, &std::reference_wrapper<T<N>>::get(), &x.get());
             	//std::cerr << "?";
-               x.parent_node = this;
+               //x.parent_node = this;
+
+               port<T<N>, in>* node = &x;
+               if ((node->parent_node) == NULL) gprintf("#GFree parent in");// :%s ", (node)->dummy.pvcd_entry->name);
+               while ( (node->parent_node) != NULL)
+               {
+            	   gprintf("#RDelegating to: ", (node)->dummy.pvcd_entry->name);
+            	   node = (node)->parent_node;
+               }
+
+               node->parent_node = this;
+               gprintf("#CSetting parent of %R as %R", (node)->dummy.pvcd_entry->name, dummy.pvcd_entry->name);
+
             }
 
         void operator()( T<N>& x) // is bound to a signal

@@ -517,13 +517,14 @@ struct gstring : public string
  {
 	 return std::string::find(x_i) != std::string::npos;
  }
-    
+/*
  template<class T>
  bool operator==(const T& x_i)
  {
-	 return std::string::compare(x_i) != 0;
+	 //return std::string::compare(x_i) != 0;
+
  }
- 
+*/
  char operator()(int idx)
  {
 	 if (idx < std::string::size())
