@@ -87,15 +87,20 @@ constexpr void run()
 	cmd.be <= BIN(1111);
 	clk <= not clk;
 	clk <= not clk;
+	uint32_t addr = 0;
 	while (not code_file.eof() and not(cmd.addr == BIN(1011111111100) ))
 	{
+		__control_signals__.clk = -1;
+		__control_signals__.reset_n = -1;
+
 		uint32_t data;
 		code_file.read ((char*)&data, sizeof(data)); //>> data;
 		cmd.data <= slv<32>(data);
 		//printf("%x\n", data)
 		if (cmd.addr < BIN(0000000011100) )
 		gprintf("#Maddr : %R write %R %Y", to_hex(TO_INTEGER(cmd.addr)), to_hex(TO_INTEGER(cmd.data)), code_file.tellg());
-		cmd.addr <= cmd.addr + TO_UINT(4, LEN(cmd.addr));
+		cmd.addr <= TO_UINT(addr, LEN(cmd.addr));//cmd.addr + TO_UINT(4, LEN(cmd.addr));
+		addr = addr + 4;
 		clk <= not clk;
 		clk <= not clk;
 	}

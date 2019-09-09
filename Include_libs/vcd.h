@@ -355,7 +355,7 @@ void activate_vcd(const gstring& x_i)
 	//gprintf("n = %\n", n);
 	if (n == std::string::npos)
 	{
-		gprintf("No space found in % \n", probe_mode);
+		gprintf("No space char found in % \n", probe_mode);
 		probe = probe_mode;
 	}
 	else
