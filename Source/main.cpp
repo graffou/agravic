@@ -71,6 +71,9 @@ int main(int argc, char* argv[])
 
 	gprintf("#VEnd of simulation, time is % ps", vcd_file.vcd_time * vcd_file.timebase_ps);
 
+	slv<12> zz= 4012;
+	gprintf("Signed : % \n",Signed<12>(zz).conv_int());
+
 //	for (int i = 2; i < 256; i++)
 //		gprintf(" #define EVAL%d(...) EVAL1(EVAL%d(__VA_ARGS__))\n", i, i-1);
 

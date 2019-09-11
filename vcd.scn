@@ -5,3 +5,16 @@ tb:dut:u0_mem:clk
 tb:dut:u1_mem:clk
 tb:dut:u0_peripherals:clk
 tb:dut:u0_risc_V_core:ropcode bin
+tb:dut:u0_risc_V_core:raw_opcode bin
+tb:dut:u0_risc_V_core:rinstr bin
+tb:dut:u0_risc_V_core:rrinstr bin
+tb:dut:u0_risc_V_core:PC bin
+tb:dut:u0_risc_V_core:regs(1) bin
+tb:dut:u0_risc_V_core:regs(2) bin
+tb:dut:u0_risc_V_core:regs(3) bin
+tb:dut:u0_risc_V_core:regs(4) bin
+tb:dut:u0_risc_V_core:regs(5) bin
+tb:dut:u0_risc_V_core:regs(6) bin
+tb:dut:u0_risc_V_core:regs(10) bin
+tb:dut:u0_risc_V_core:regs(15) bin
+tb:dut:u0_risc_V_core:regs(31) bin

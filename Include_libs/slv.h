@@ -832,6 +832,10 @@ struct array_base
 	{
 		return array_base<T,N>::v[n];
 	}
+	T& operator[](int n)
+	{
+		return array_base<T,N>::v[n];
+	}
 };
 
 
@@ -911,12 +915,12 @@ struct array< T1<T,N> > : T1<T,N>, vcd_entry
 			array_base<T,N>::v[i].pvcd_entry->activate();
 		}
 	}
-	/*
+/*
 	T& operator()(int n)
 	{
 		return array_base<T,N>::v[n];
 	}
-	*/
+*/
 	static const int length = -65536;
 };
 
@@ -954,10 +958,10 @@ struct array< T1<T,N> > : T1<T,N>, vcd_entry
 #define BIT(a) slv<sizeof(STRING(a))-1>(0b##a)
 #define EQ(a,b) (a==b)
 #define EXT(a,b) slv<b>(a.n)
-#define SXT(a,b) slv<b>(Signed<b>(a).conv_int())
+#define SXT(a,b) slv<b>(conv_signed(a).conv_int())
 #define SIGNED(a) conv_signed(a)
 #define UNSIGNED(a) conv_unsigned(a)
-#define RANGE(a,b,c) a.range<b,c>()
+#define RANGE(a,b,c) (a.template range<b,c>())
 #define SLV_RANGE(a,b,c) a.range<b,c>() // for further concatenation in vhdl
 #define B(a,b) a.get_bit(b)
 #define HI(a) a.high
