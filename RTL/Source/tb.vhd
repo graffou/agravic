@@ -9,6 +9,7 @@ signal clk : std_logic;
 signal reset_n : std_logic;
 signal cmd : blk2mem_t;
 signal gpios : unsigned ((32 -1) downto 0);
+int ncycles = 10000;
 std::ifstream code_file;
 begin
 dut : top port map( clk_top => clk, reset_n => reset_n, load_port_i => cmd, gpios_o => gpios);

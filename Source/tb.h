@@ -30,7 +30,7 @@ SIG(clk, CLK_TYPE);
 SIG(reset_n, RST_TYPE);// reset_n;
 SIG(cmd, blk2mem_t);
 SIG(gpios, UINT(32));
-
+int ncycles = 10000;
 std::ifstream code_file;
 
 BEGIN
@@ -97,8 +97,9 @@ constexpr void run()
 		code_file.read ((char*)&data, sizeof(data)); //>> data;
 		cmd.data <= slv<32>(data);
 		//printf("%x\n", data)
-		if (cmd.addr < BIN(0000000011100) )
-		gprintf("#Maddr : %R write %R %Y", to_hex(TO_INTEGER(cmd.addr)), to_hex(TO_INTEGER(cmd.data)), code_file.tellg());
+		if (cmd.addr < BIN(0000000011100) ) {
+			gprintf("#Maddr : %R write %R %Y", to_hex(TO_INTEGER(cmd.addr)), to_hex(TO_INTEGER(cmd.data)), code_file.tellg());
+		}
 		cmd.addr <= TO_UINT(addr, LEN(cmd.addr));//cmd.addr + TO_UINT(4, LEN(cmd.addr));
 		addr = addr + 4;
 		clk <= not clk;
@@ -110,9 +111,10 @@ constexpr void run()
 	clk <= not clk;
 	clk <= not clk;
 
-	for (int i = 0; i < 10000 ; i++)
+	gprintf("#VStaring simulation, % ", ncycles);
+	for (int i = 0; i < ncycles*2 ; i++)
 	{
-		std::cerr << '.';
+		//std::cerr << '.';
 		clk <= not clk;
 	}
 

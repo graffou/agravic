@@ -72,7 +72,7 @@ struct param_base
 	template <class T2>
 	void check_name(T2& argname_i)
 	{		
-		gprintf("#Rchecking %", argname_i);
+		//gprintf("#Rchecking %", argname_i);
 		p_set_value = NULL;
 
 		// check that arguments starts with dash char
@@ -81,25 +81,25 @@ struct param_base
 		{
 			//argname.replace("-", ""); // remove dash
 			argname.erase(0,1);
-			gprintf("#KAllegedly removed dash: %", argname);
+			//gprintf("#KAllegedly removed dash: %", argname);
 		}
 		else 
 		{
-			gprintf("#no dash: %", argname);
+			//gprintf("#no dash: %", argname);
 			return; // no dash, not valid. exit
 		}
 		bool help_asked = (argname == "help");
-		if (help_asked) gprintf("\n\n--------------------------------------------------------------\n");
+		if (help_asked) gprintf("\n\n---------------------------- Parameters of executable ----------------------------------\n");
 		
 		// Find parm pointer that corresponds to this argument name
 		param_base* x = this;
-		gprintf("#Ustarting from %", x->name);
+		//gprintf("#Ustarting from %", x->name);
 		//int cnt = 0;	
 		while ( (x != NULL) )
 		{
 			if (help_asked)
 				x->display_help();
-			gprintf("#Vcompare /%Y/ and /%Y/ sz %Y %Y -> %Y", x->name, argname, (x->name).size(), argname.size(), (x->name == argname));
+			//gprintf("#Vcompare /%Y/ and /%Y/ sz %Y %Y -> %Y", x->name, argname, (x->name).size(), argname.size(), (x->name == argname));
 			if (x->name == argname) // found argument
 			{
 				//gprintf("#bfound %", x->name);
@@ -109,7 +109,7 @@ struct param_base
 			}
 			else
 			{
-				gprintf("#UNo match current is % p_prev %", x->name, x->p_prev);				
+				//gprintf("#UNo match current is % p_prev %", x->name, x->p_prev);				
 				x = x->p_prev;
 				//gprintf("#UBack to % x=%", x->name, x);				
 			}

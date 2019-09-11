@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include <iostream>
 #define DEBUG
+//#define NOPRINT
+
 #include <sstream>
 
 #include <iostream>
@@ -19,13 +21,11 @@
 #include "kb.h"
 #include "input_parms.h"
 
-
 #include "structures.h"
 #include "spram8kx32.h"
 #include "mem.h"
 #include "peripherals.h"
 #include "risc_V_constants.h"
-
 #include "risc-V_core.h"
 #include "top.h"
 #include "tb.h"
@@ -35,12 +35,20 @@ int main(int argc, char* argv[])
 {
 	CLI_PARM(bin_file, std::string);
 	bin_file.set_mandatory();
+	bin_file.set_help("CPU code file in binary format");
+	CLI_PARM_INIT(ncycles, int, 5000);
+	ncycles.set_help("Number of clock cycles the simulation will run");
+
 	CLI_PARSE(argc, argv);
+
 
 	gprintf("#Ublk inst top");
 	BLK_INST_TOP(
 			tb, tb_t,
 			);
+
+	tb.ncycles = ncycles.val;
+
 	tb.dut.check();
 	gprintf("#CInit file");
 	tb.init_file(bin_file);
@@ -53,6 +61,7 @@ int main(int argc, char* argv[])
 	tb.clk.parse_modules();
 	gprintf("#CActivate vcd");
 
+	vcd_file.set_timebase_ps(10000);// 10ns <=> 50MHz clk
 	vcd_file.activate();
 	tb.dut.check();
 

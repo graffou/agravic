@@ -1,8 +1,9 @@
-//#include "macros.h"
-///#include "gmodule.h"
-//#include "ports.h"
+// Giorno Risc-V core september, 2019
+// ----------------------------------
+// This is a simple, 3-stage pipeline implementation of RISC-V rv32i instruction set
+// Written using the Agravic simulation and rtl generation platform
+
 #include "slv.h"
-//#include "slv.h"
 START_OF_FILE(risc-V_core)
 INCLUDES
 USE_PACKAGE(structures)
@@ -23,7 +24,7 @@ DECL_PORTS(
 		//PORT(gpios_o, UINT(32), OUT)
 		)
 );
-//#include "risc_V_constants.h"
+
 // Internal registers
 TYPE(reg_file_t, ARRAY_TYPE(UINT(32), 32));
 SIG(regs, reg_file_t);
@@ -34,10 +35,10 @@ SIG(loading, BIT_TYPE); // 1 when loading code
 SIG(rtrap, BIT_TYPE); // 1 when loading code
 SIG(alt_op, BIT_TYPE); // 1 when alternate op is required (funct7 = 0100000)
 SIG(cpu_wait, BIT_TYPE); // 1 halts pipeline
-SIG(cpu_wait2, BIT_TYPE); // 1 halts PC progress (LW)
 SIG(flush, BIT_TYPE); // 1 flushes instruction in decode / execute stages
 //SIG(jmp_op, BIT_TYPE); // 1 when instruction is a jump or a branch, so that instruction is fetched in second half of the cycle
 SIG(rimmediate, UINT(32));
+SIG(rimmediate_type, UINT(3));
 SIG(use_immediate, BIT_TYPE);
 SIG(raw_opcode, UINT(7));
 SIG(ropcode, UINT(7));
@@ -49,8 +50,8 @@ SIG(rfunct7, UINT(7));
 SIG(rrd, UINT(5));
 SIG(rrs1, UINT(5));
 SIG(rrs2, UINT(5));
-SIG(rrd_val, UINT(32));
-SIG(rtaken, UINT(1)); // 1 when executing instruction
+SIG(rrd_val, UINT(32)); // debug
+SIG(rtaken, UINT(1)); // debug
 
 SIG(exec, BIT_TYPE); // 1 when executing instruction
 SIG(pipe, UINT(4));
@@ -71,20 +72,21 @@ SIG(mie, UINT(32));
 SIG(mcounter, UINT(64));
 SIG(blk2mem_t0, blk2mem_t);
 SIG(mem2blk_t0, mem2blk_t);
-SIG(rinstr, UINT(32));
-SIG(rrinstr, UINT(32));
+SIG(rinstr, UINT(32)); // debug
+SIG(rrinstr, UINT(32)); // debug
 
-SIG(radd_res, UINT(33)); // keep carry
-SIG(rsub_res, UINT(33));
-SIG(rsll_res, UINT(32));
-SIG(rsrl_res_u, UINT(32));
-SIG(rsrl_res_s, UINT(32));
-SIG(rrs1_lt_rs2_u, UINT(1));
-SIG(rrs1_lt_rs2_s, UINT(1));
-SIG(rrs1_eq_rs2, UINT(1));
-SIG(rand_res, UINT(32));
-SIG(ror_res, UINT(32));
-SIG(rxor_res, UINT(32));
+SIG(radd_res, UINT(33)); // debug
+SIG(rsub_res, UINT(33));// debug
+SIG(rsll_res, UINT(32));// debug
+SIG(rsrl_res_u, UINT(32));// debug
+SIG(rsrl_res_s, UINT(32));// debug
+SIG(rrs1_lt_rs2_u, UINT(1));// debug
+SIG(rrs1_lt_rs2_s, UINT(1));// debug
+SIG(rrs1_eq_rs2, UINT(1));// debug
+SIG(rand_res, UINT(32));// debug
+SIG(ror_res, UINT(32));// debug
+SIG(rxor_res, UINT(32));// debug
+SIG(rjalr, UINT(5));// debug
 
 BEGIN
 
@@ -99,14 +101,12 @@ VAR(rs1, UINT(5));
 VAR(rs2, UINT(5));
 VAR(funct3, UINT(3));
 VAR(funct7, UINT(7));
-//VAR(alt_op, UINT(1));
-//VAR(use_immediate, UINT(1));
 VAR(immediate, UINT(32));
 VAR(immediate_type, UINT(3));
 VAR(op1, UINT(32));
 VAR(op2, UINT(32));
 VAR(add_res, UINT(33)); // keep carry
-VAR(sub_res, UINT(33));
+VAR(sub_res, UINT(33)); // keep carry
 VAR(sll_res, UINT(32));
 VAR(srl_res_u, UINT(32));
 VAR(srl_res_s, UINT(32));
@@ -136,9 +136,7 @@ BEGIN
 		RESET(pipe);
 		RESET(PC);
 		RESET(PCp);
-		//RESET(is_immediate);
 		cpu_wait <= BIT(0);
-		cpu_wait2 <= BIT(0);
 		flush <= BIT(0);
 		alt_op <= BIT(0);
 		use_immediate <= BIT(0);
@@ -163,19 +161,13 @@ BEGIN
 			// rising edge
 			flush <= BIT(0);
 			instr := PORT_BASE(instmem2core_i).data;
-			IF ( ( (cpu_wait == BIT(0) ) and (cpu_wait2 == BIT(0) ) ) or (PORT_BASE(datamem2core_i).data_en == BIT(1))) THEN
-				pipe <= ( RANGE(pipe, HI(pipe)-1, 0) & BIT(1) );//PORT_BASE(instmem2core_i).data_en );
-				PCp <= PC;
-				PC <= PC + TO_UINT(4, LEN(PC));
-			ENDIF
 
-			cpu_wait2 <= cpu_wait;
+
 			// Instruction decoding -------------------------------------------------------------------
-			// Basic model: assume every read request is satisfied
 			IF ( (B(pipe,0) == BIT(1)) and (cpu_wait == BIT(0)) and (flush == BIT(0)) ) THEN 			//IF ( (PORT_BASE(instmem2core_i).data_en == BIT(1)) and (cpu_wait == BIT(0)) ) THEN
 					rinstr <= instr;
 					opcode := RANGE(instr, 6, 0);
-					gprintf("#MOPCODE %",opcode);
+					//gprintf("#MOPCODE %",opcode);
 					rd := RANGE(instr, 11, 7);
 					rs1 := RANGE(instr, 19, 15);
 					rs2 := RANGE(instr, 24, 20);
@@ -202,17 +194,18 @@ BEGIN
 						CASE(CASE_SYS) immediate_type := I_type;
 						CASE(CASE_MEM) immediate_type := I_type;
 						CASE(CASE_OPI) immediate_type := I_type;
-						CASE(CASE_LOAD) immediate_type := I_type; cpu_wait2 <= BIT(1);
+						CASE(CASE_LOAD) immediate_type := I_type;
 						CASE(CASE_STORE) immediate_type := S_type;
 						CASE(CASE_LUI) immediate_type := U_type;
 						CASE(CASE_AUIPC) immediate_type := U_type;
 						CASE(CASE_JAL) immediate_type := J_type;
-						CASE(CASE_JALR) immediate_type := J_type;
+						CASE(CASE_JALR) immediate_type := I_type;
 						CASE(CASE_BRANCH) immediate_type := B_type;
 						DEFAULT immediate_type := no_type;
 					ENDCASE
+					rimmediate_type <= immediate_type;
 
-					// Decode immediate argument. !! USE SLV_RANGE instead of RANGE (returns slv and not unsigned) to generate slices, otherwise cat does not compile in vhdl
+					// Decode immediate argument. !! USE SLV_RANGE instead of RANGE (returns slv and not unsigned) to generate slices, otherwise a & b does not compile in vhdl
 					SWITCH(immediate_type)
 						CASE(CASE_I_type) immediate := SXT( RANGE(instr, 31, 20), LEN(immediate) );
 						CASE(CASE_S_type) immediate := SXT( SLV_RANGE(instr, 31, 25) & SLV_RANGE(instr, 11, 7), LEN(immediate));
@@ -239,7 +232,6 @@ BEGIN
 						rimmediate <= immediate;
 					ENDIF
 
-
 					// So that op1 is decoded as rs1 and not regs(rs1)
 					IF ( (opcode == SYS) and (B(funct3, 2) == BIT(1)) ) THEN
 						csri <= BIT(1);
@@ -247,7 +239,15 @@ BEGIN
 						csri <= BIT(0);
 					ENDIF
 			ENDIF
-	// Execute instruction ----------------------------------------------------------------------
+
+			// Basic code memory model: assume every read request is satisfied
+			IF ( ( (cpu_wait == BIT(0) ) and not (ropcode == LOAD) ) or (PORT_BASE(datamem2core_i).data_en == BIT(1))) THEN
+				pipe <= ( RANGE(pipe, HI(pipe)-1, 0) & BIT(1) );
+				PCp <= PC;
+				PC <= PC + TO_UINT(4, LEN(PC));
+			ENDIF
+
+			// Execute instruction ----------------------------------------------------------------------
 			IF ( (B(pipe, 1) == BIT(1)) and (cpu_wait == BIT(0)) and (flush == BIT(0)) ) THEN
 				exec <= BIT(1);
 					rrinstr <= rinstr;
@@ -261,9 +261,9 @@ BEGIN
 				ELSE
 					op2 := regs(TO_INTEGER(rrs2));
 				ENDIF
-
 				rop1 <= op1;
 				rop2 <= op2;
+
 				// Arithmetic operations and results
 				add_res := EXT(op1, LEN(add_res)) + EXT(op2, LEN(add_res));
 				sub_res := EXT(op1, LEN(add_res)) - EXT(op2, LEN(add_res));
@@ -293,7 +293,7 @@ BEGIN
 
 				rwb <= BIN(00000);
 				rd_val := BIN(10101010010101011010101001010101); // default
-
+				rjalr <= BIN(00000);
 				SWITCH(ropcode) // Execute opcode
 					CASE(CASE_SYS)
 						//SWITCH(rimmediate)
@@ -331,8 +331,9 @@ BEGIN
 						PORT_BASE(core2datamem_o).data <= SHIFT_LEFT(regs(TO_INTEGER(rrs2)), TO_INTEGER(nshift & BIN(000)));
 					CASE(CASE_LUI) rd_val := rimmediate;
 					CASE(CASE_AUIPC) rd_val := rimmediate; // Pc added at decoding stage
-					CASE(CASE_JAL) PC <= rimmediate; rd_val := PC; flush <= BIT(1); pipe <= TO_UINT(0, LEN(pipe));
-					CASE(CASE_JALR) PC <= RESIZE(add_res, LEN(PC)); rd_val := PC; flush <= BIT(1); pipe <= TO_UINT(0, LEN(pipe));
+					CASE(CASE_JAL) PC <= rimmediate; rd_val := PCp; flush <= BIT(1); pipe <= TO_UINT(0, LEN(pipe));
+					CASE(CASE_JALR) PC <= RESIZE( ( RANGE(add_res, 31,1) & BIN(0) ), LEN(PC)); // It seems that lsb could be used for stg else: clear lsb
+						rd_val := PCp; flush <= BIT(1); pipe <= TO_UINT(0, LEN(pipe)); rjalr <= rrd;
 					CASE(CASE_BRANCH)
 						taken := ( RANGE(rfunct3, 1,1) and (rs1_lt_rs2_u xor RANGE(rfunct3, 0, 0)) ) or // LT / GTE U
 								 ( (RANGE(rfunct3, 1,1) xor RANGE(rfunct3,2,2) ) and (rs1_lt_rs2_s xor RANGE(rfunct3, 0,0)) ) or // LT / GTE S
@@ -359,7 +360,6 @@ BEGIN
 			// Register writeback (load) -----------------------------------------------------------------
 			IF ( not(rwb == TO_UINT(0, LEN(rwb))) and (PORT_BASE(datamem2core_i).data_en == BIT(1)) ) THEN
 				cpu_wait <= BIT(0);
-				//cpu_wait2 <= BIT(0);
 				ld_data := PORT_BASE(datamem2core_i).data;
 				ld_data := SHIFT_RIGHT(ld_data, TO_INTEGER( (rshiftwb & BIN(000))));
 				SWITCH(funct3wb)
@@ -370,22 +370,20 @@ BEGIN
 					CASE(CASE_LBU) rd_val := EXT(RANGE(ld_data, 7, 0), LEN(rd_val));
 					DEFAULT rd_val := TO_UINT(0, LEN(rd_val));
 				ENDCASE
-				//PORT_BASE(core2datamem_o).cs_n <= BIT(1);
 				wrd := rwb;
 			ENDIF
-	//ELSEIF ( EVENT(clk) and (clk == BIT(0)) ) THEN
-	// falling edge
+
 			regs(TO_INTEGER(wrd)) <= rd_val;
 			regs(0) <= TO_UINT(0, 32); // ensure that x0 is 0
 
 			// Loading code from load_port
 			IF (PORT_BASE(load_port_i).wr_n == BIT(0) ) THEN // loading code
-				gprintf("#RLOAD");
+				gprintf("#RLOADING CODE");
 				loading <= BIT(1);
 				PC <= RESIZE( PORT_BASE(load_port_i).addr, LEN(PC) );
 				PCp <= PORT_BASE(load_port_i).data; // reuse these regs
 			ELSEIF ( loading == BIT(1) ) THEN
-				gprintf("#RENDLOAD");
+				gprintf("#RCODE LOADED, starting Giorno core");
 				PC <= TO_UINT(0, LEN(PC));
 				loading <= BIT(0);
 				flush <= BIT(1);
@@ -415,7 +413,6 @@ BEGIN
 		PORT_BASE(core2instmem_o).cs_n <= BIT(0);
 		PORT_BASE(core2instmem_o).wr_n <= not loading;
 		PORT_BASE(core2instmem_o).be <= BIN(1111);
-		gprintf("comb PC % % % % % %\n", PC, PORT_BASE(core2instmem_o).addr, PORT_BASE(core2instmem_o).data , PORT_BASE(core2instmem_o).cs_n, PORT_BASE(core2instmem_o).wr_n, PORT_BASE(core2instmem_o).be);
 	END_COMB_PROCESS
 
 BLK_END;

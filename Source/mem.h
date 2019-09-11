@@ -152,7 +152,7 @@ BLK_END;
 
 				IF (delayed_write == BIT(1)) THEN
 
-					gprintf("#MMem write % @ % ", to_hex(data), to_hex(addr), be);
+					//gprintf("#MMem write % @ % ", to_hex(data), to_hex(addr), be);
 				//rmem(TO_INTEGER(PORT_BASE(core2mem_i).addr)) <= PORT_BASE(core2mem_i).data;
 
 					IF ( B(be, 3) == BIT(1) ) THEN

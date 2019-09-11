@@ -11,9 +11,9 @@ signal loading : std_logic;
 signal rtrap : std_logic;
 signal alt_op : std_logic;
 signal cpu_wait : std_logic;
-signal cpu_wait2 : std_logic;
 signal flush : std_logic;
 signal rimmediate : unsigned ((32 -1) downto 0);
+signal rimmediate_type : unsigned ((3 -1) downto 0);
 signal use_immediate : std_logic;
 signal raw_opcode : unsigned ((7 -1) downto 0);
 signal ropcode : unsigned ((7 -1) downto 0);
@@ -57,6 +57,7 @@ signal rrs1_eq_rs2 : unsigned ((1 -1) downto 0);
 signal rand_res : unsigned ((32 -1) downto 0);
 signal ror_res : unsigned ((32 -1) downto 0);
 signal rxor_res : unsigned ((32 -1) downto 0);
+signal rjalr : unsigned ((5 -1) downto 0);
 begin
 process0 : process(clk_core,reset_n)
 variable instr : unsigned ((32 -1) downto 0);
@@ -99,7 +100,6 @@ begin
   PC <= TO_UNSIGNED(0,PC'length);
   PCp <= TO_UNSIGNED(0,PCp'length);
   cpu_wait <= '0';
-  cpu_wait2 <= '0';
   flush <= '0';
   alt_op <= '0';
   use_immediate <= '0';
@@ -122,16 +122,9 @@ begin
   elsif ( clk_core'event and (clk_core = '1' ) ) then
    flush <= '0';
    instr := instmem2core_i.data;
-   IF ( ( (cpu_wait = '0' ) and (cpu_wait2 = '0' ) ) or (datamem2core_i.data_en = '1' )) then
-    pipe <= ( (pipe(pipe'high-1 downto 0)) & '1' );
-    PCp <= PC;
-    PC <= PC + TO_UNSIGNED(4,PC'length);
-   end if;
-   cpu_wait2 <= cpu_wait;
    IF ( (pipe(0) = '1' ) and (cpu_wait = '0') and (flush = '0') ) then
      rinstr <= instr;
      opcode := (instr(6 downto 0));
-     -- gprintf("#MOPCODE %",opcode);
      rd := (instr(11 downto 7));
      rs1 := (instr(19 downto 15));
      rs2 := (instr(24 downto 20));
@@ -153,15 +146,16 @@ begin
       when CASE_SYS => immediate_type := I_type;
       when CASE_MEM => immediate_type := I_type;
       when CASE_OPI => immediate_type := I_type;
-      when CASE_LOAD => immediate_type := I_type; cpu_wait2 <= '1' ;
+      when CASE_LOAD => immediate_type := I_type;
       when CASE_STORE => immediate_type := S_type;
       when CASE_LUI => immediate_type := U_type;
       when CASE_AUIPC => immediate_type := U_type;
       when CASE_JAL => immediate_type := J_type;
-      when CASE_JALR => immediate_type := J_type;
+      when CASE_JALR => immediate_type := I_type;
       when CASE_BRANCH => immediate_type := B_type;
       when others => immediate_type := no_type;
      end case;
+     rimmediate_type <= immediate_type;
      case immediate_type is
       when CASE_I_type => immediate := unsigned(RESIZE(signed((instr(31 downto 20))), immediate'length));
       when CASE_S_type => immediate := unsigned(RESIZE(signed(std_logic_vector(instr(31 downto 25)) & std_logic_vector(instr(11 downto 7))), immediate'length));
@@ -189,6 +183,11 @@ begin
      else
       csri <= '0';
      end if;
+   end if;
+   IF ( ( (cpu_wait = '0' ) and not (ropcode = LOAD) ) or (datamem2core_i.data_en = '1' )) then
+    pipe <= ( (pipe(pipe'high-1 downto 0)) & '1' );
+    PCp <= PC;
+    PC <= PC + TO_UNSIGNED(4,PC'length);
    end if;
    IF ( (pipe(1) = '1' ) and (cpu_wait = '0') and (flush = '0') ) then
     exec <= '1' ;
@@ -229,6 +228,7 @@ begin
     rrs1_lt_rs2_s <= rs1_lt_rs2_s;
     rwb <= "00000";
     rd_val := "10101010010101011010101001010101";
+    rjalr <= "00000";
     case ropcode is
      when CASE_SYS =>
       rd_val := TO_UNSIGNED(0,rd_val'length);
@@ -263,8 +263,9 @@ begin
       core2datamem_o.data <= SHIFT_LEFT(regs(TO_INTEGER(rrs2)), TO_INTEGER(nshift & "000"));
      when CASE_LUI => rd_val := rimmediate;
      when CASE_AUIPC => rd_val := rimmediate;
-     when CASE_JAL => PC <= rimmediate; rd_val := PC; flush <= '1' ; pipe <= TO_UNSIGNED(0,pipe'length);
-     when CASE_JALR => PC <= RESIZE(add_res, PC'length); rd_val := PC; flush <= '1' ; pipe <= TO_UNSIGNED(0,pipe'length);
+     when CASE_JAL => PC <= rimmediate; rd_val := PCp; flush <= '1' ; pipe <= TO_UNSIGNED(0,pipe'length);
+     when CASE_JALR => PC <= RESIZE( ( (add_res(31 downto 1)) & "0" ), PC'length);
+      rd_val := PCp; flush <= '1' ; pipe <= TO_UNSIGNED(0,pipe'length); rjalr <= rrd;
      when CASE_BRANCH =>
       taken := ( (rfunct3(1 downto 1)) and (rs1_lt_rs2_u xor (rfunct3(0 downto 0))) ) or
          ( ((rfunct3(1 downto 1)) xor (rfunct3(2 downto 2)) ) and (rs1_lt_rs2_s xor (rfunct3(0 downto 0))) ) or
@@ -302,12 +303,12 @@ begin
    regs(TO_INTEGER(wrd)) <= rd_val;
    regs(0) <= TO_UNSIGNED(0,32);
    IF (load_port_i.wr_n = '0' ) then
-    -- gprintf("#RLOAD");
+    -- gprintf("#RLOADING CODE");
     loading <= '1' ;
     PC <= RESIZE( load_port_i.addr, PC'length );
     PCp <= load_port_i.data;
    elsif ( loading = '1' ) then
-    -- gprintf("#RENDLOAD");
+    -- gprintf("#RCODE LOADED, starting Giorno core");
     PC <= TO_UNSIGNED(0,PC'length);
     loading <= '0';
     flush <= '1' ;
@@ -332,6 +333,5 @@ begin
   core2instmem_o.cs_n <= '0';
   core2instmem_o.wr_n <= not loading;
   core2instmem_o.be <= "1111";
-  -- gprintf("comb PC % % % % % %\n", PC, core2instmem_o.addr, core2instmem_o.data , core2instmem_o.cs_n, core2instmem_o.wr_n, core2instmem_o.be);
 
 end rtl;
