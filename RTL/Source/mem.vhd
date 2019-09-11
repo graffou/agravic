@@ -13,21 +13,16 @@ process0 : process(clk_mem,reset_n)
 variable baddr : unsigned ((13 -1) downto 0);
 variable rdata : unsigned ((32 -1) downto 0);
 begin
- IF ( reset_n = '0' ) then
-  -- gprintf("#V addr ");
-  mem2core_o.data <= TO_UNSIGNED(0,mem2blk_t0.data'length);
-  mem2core_o.data_en <= '0';
- elsif ( clk_mem'event and (clk_mem = '1' ) ) then
+ IF ( clk_mem'event and (clk_mem = '1' ) ) then
   IF (core2mem_i.cs_n = '0') then
    baddr := core2mem_i.addr;
-   IF (core2mem_i.wr_n = '1' ) then
-    rdata := mem3(TO_INTEGER(baddr)) &
-       mem2(TO_INTEGER(baddr)) &
-       mem1(TO_INTEGER(baddr)) &
-       mem0(TO_INTEGER(baddr));
-    mem2core_o.data <= rdata;
-    mem2core_o.data_en <= '1' ;
-   else
+   rdata := mem3(TO_INTEGER(baddr)) &
+      mem2(TO_INTEGER(baddr)) &
+      mem1(TO_INTEGER(baddr)) &
+      mem0(TO_INTEGER(baddr));
+   mem2core_o.data <= rdata;
+   mem2core_o.data_en <= '1' ;
+   IF (core2mem_i.wr_n = '0') then
     -- gprintf("#MMem write % @ % ", to_hex(core2mem_i.data), to_hex(core2mem_i.addr), core2mem_i.be);
     IF ( core2mem_i.be(3) = '1' ) then
      mem3(TO_INTEGER(baddr)) <= (core2mem_i.data(31 downto 24));

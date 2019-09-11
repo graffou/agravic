@@ -35,6 +35,8 @@ signal rshiftwb : unsigned ((2 -1) downto 0);
 signal csri : std_logic;
 signal priv : unsigned ((2 -1) downto 0);
 signal mstatus : unsigned ((32 -1) downto 0);
+signal mepc : unsigned ((32 -1) downto 0);
+signal mscratch : unsigned ((32 -1) downto 0);
 signal mtvec : unsigned ((32 -1) downto 0);
 signal mcause : unsigned ((32 -1) downto 0);
 signal mideleg : unsigned ((32 -1) downto 0);
@@ -93,6 +95,7 @@ variable cause : unsigned ((32 -1) downto 0);
 variable trap_addr_base : unsigned ((32 -1) downto 0);
 variable trap_addr_offset : unsigned ((32 -1) downto 0);
 variable csr_val : unsigned ((32 -1) downto 0);
+variable csr_addr : unsigned ((12 -1) downto 0);
 variable csr_wb : unsigned ((32 -1) downto 0);
 begin
  IF ( reset_n = '0' ) then
@@ -111,8 +114,10 @@ begin
   medeleg <= TO_UNSIGNED(0,medeleg'length);
   mideleg <= TO_UNSIGNED(0,mideleg'length);
   mtvec <= TO_UNSIGNED(0,mtvec'length);
+  mepc <= TO_UNSIGNED(0,mepc'length);
   mip <= TO_UNSIGNED(0,mip'length);
   mie <= TO_UNSIGNED(0,mie'length);
+  mscratch <= TO_UNSIGNED(0,mscratch'length);
   rinstr <= TO_UNSIGNED(0,rinstr'length);
   rrinstr <= TO_UNSIGNED(0,rrinstr'length);
   ropcode <= TO_UNSIGNED(0,ropcode'length);
@@ -231,7 +236,41 @@ begin
     rjalr <= "00000";
     case ropcode is
      when CASE_SYS =>
-      rd_val := TO_UNSIGNED(0,rd_val'length);
+      case (rimmediate(11 downto 0)) is
+       when CASE_AMSTATUS => csr_val := mstatus;
+       when CASE_AMEDELEG => csr_val := medeleg;
+       when CASE_AMIDELEG => csr_val := mideleg;
+       when CASE_AMIE => csr_val := mie;
+       when CASE_AMTVEC => csr_val := mtvec;
+       when CASE_AMIP => csr_val := mip;
+       when CASE_AMSCRATCH => csr_val := mscratch;
+       when CASE_AMEPC => csr_val := mepc;
+       when CASE_AMCAUSE => csr_val := mcause;
+       when others => csr_val := TO_UNSIGNED(0,csr_val'length);
+      end case;
+      case rfunct3 is
+       when CASE_CSRRW => csr_val := op1;
+       when CASE_CSRRS => csr_val := csr_val or op1;
+       when CASE_CSRRC => csr_val := csr_val and not op1;
+       when CASE_CSRRWI => csr_val := op1;
+       when CASE_CSRRSI => csr_val := csr_val or op1;
+       when CASE_CSRRCI => csr_val := csr_val and not op1;
+       when CASE_ECALL => PC <= mepc; flush <= '1' ; pipe <= TO_UNSIGNED(0,pipe'length);
+       when others => csr_val := TO_UNSIGNED(0,csr_val'length);
+      end case;
+      case (rimmediate(11 downto 0)) is
+       when CASE_AMSTATUS => mstatus <= csr_val;
+       when CASE_AMEDELEG => medeleg <= csr_val;
+       when CASE_AMIDELEG => mideleg <= csr_val;
+       when CASE_AMIE => mie <= csr_val;
+       when CASE_AMTVEC => mtvec <= csr_val;
+       when CASE_AMIP => mip <= csr_val;
+       when CASE_AMSCRATCH => mscratch <= csr_val;
+       when CASE_AMEPC => mepc <= csr_val;
+       when CASE_AMCAUSE => mcause <= csr_val;
+       when others => csr_val := csr_val ;
+      end case;
+      rd_val := csr_val;
      when CASE_MEM =>
      when CASE_OP =>
       case rfunct3 is

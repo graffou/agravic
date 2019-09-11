@@ -63,6 +63,8 @@ SIG(rshiftwb, UINT(2)); //load value shift (in bytes)
 SIG(csri, BIT_TYPE); // 1 when CSR*I instruction
 SIG(priv, UINT(2));
 SIG(mstatus, UINT(32));
+SIG(mepc, UINT(32));
+SIG(mscratch, UINT(32));
 SIG(mtvec, UINT(32));
 SIG(mcause, UINT(32));
 SIG(mideleg, UINT(32));
@@ -126,6 +128,7 @@ VAR(cause, UINT(32)); // trap cause
 VAR(trap_addr_base, UINT(32)); // base trap addr
 VAR(trap_addr_offset, UINT(32)); // trap offset
 VAR(csr_val, UINT(32)); // CSR read value
+VAR(csr_addr, UINT(12)); // CSR addr value
 VAR(csr_wb, UINT(32)); // CSR writeback value
 
 
@@ -148,8 +151,10 @@ BEGIN
 		RESET(medeleg);
 		RESET(mideleg);
 		RESET(mtvec);
+		RESET(mepc);
 		RESET(mip);
 		RESET(mie);
+		RESET(mscratch);
 		RESET(rinstr);
 		RESET(rrinstr);
 		RESET(ropcode);
@@ -294,11 +299,47 @@ BEGIN
 				rwb <= BIN(00000);
 				rd_val := BIN(10101010010101011010101001010101); // default
 				rjalr <= BIN(00000);
+
 				SWITCH(ropcode) // Execute opcode
-					CASE(CASE_SYS)
-						//SWITCH(rimmediate)
-						//	CASE ()
-						rd_val := TO_UINT(0, LEN(rd_val));
+					CASE(CASE_SYS) // CSR R/W
+						SWITCH(RANGE(rimmediate,11,0))
+							CASE(CASE_AMSTATUS) csr_val := mstatus;
+							//CASE(AMISA) csr_val := misa;
+							CASE(CASE_AMEDELEG) csr_val := medeleg;
+							CASE(CASE_AMIDELEG) csr_val := mideleg;
+							CASE(CASE_AMIE) csr_val := mie;
+							CASE(CASE_AMTVEC) csr_val := mtvec;
+							//CASE(AMCOUNTEREN) csr_val := mtcounteren;
+							CASE(CASE_AMIP) csr_val := mip;
+							CASE(CASE_AMSCRATCH) csr_val := mscratch;
+							CASE(CASE_AMEPC) csr_val := mepc;
+							CASE(CASE_AMCAUSE) csr_val := mcause;
+							DEFAULT csr_val := TO_UINT(0, LEN(csr_val));
+						ENDCASE
+						SWITCH(rfunct3) // same for immediate and register: choice of op1 is made previously
+							CASE(CASE_CSRRW) csr_val := op1;
+							CASE(CASE_CSRRS) csr_val := csr_val or op1;
+							CASE(CASE_CSRRC) csr_val := csr_val and not op1;
+							CASE(CASE_CSRRWI) csr_val := op1;
+							CASE(CASE_CSRRSI) csr_val := csr_val or op1;
+							CASE(CASE_CSRRCI) csr_val := csr_val and not op1;
+							CASE(CASE_ECALL) PC <= mepc; flush <= BIT(1); pipe <= TO_UINT(0, LEN(pipe)); // TODO: Change mepc to appropriate register when not in machine mode
+							DEFAULT csr_val := TO_UINT(0, LEN(csr_val));
+						ENDCASE
+						SWITCH(RANGE(rimmediate,11,0))
+							CASE(CASE_AMSTATUS) mstatus <= csr_val;
+							CASE(CASE_AMEDELEG) medeleg <= csr_val;
+							CASE(CASE_AMIDELEG) mideleg <= csr_val;
+							CASE(CASE_AMIE) mie <= csr_val;
+							CASE(CASE_AMTVEC) mtvec <= csr_val;
+							//CASE(AMCOUNTEREN) csr_val := mtcounteren;
+							CASE(CASE_AMIP) mip <= csr_val;
+							CASE(CASE_AMSCRATCH) mscratch <= csr_val;
+							CASE(CASE_AMEPC) mepc <= csr_val;
+							CASE(CASE_AMCAUSE) mcause <= csr_val;
+							DEFAULT csr_val := csr_val ;// TODO trap := BIT(1); cause := ILLINSTR;
+						ENDCASE
+						rd_val := csr_val;
 					CASE(CASE_MEM)
 					CASE(CASE_OP)
 						SWITCH(rfunct3)

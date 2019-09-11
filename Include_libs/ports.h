@@ -444,9 +444,9 @@ template <class T, bool in>
 // Define binary operators, Catapult style
 
 #define BIN_OP_DEF(BIN_OP) \
-    template<class T1, class T2> auto operator BIN_OP(const port<T1, true>& x, const T2& y) {return T1(x) BIN_OP y;} \
+    template<class T1, class T2> auto operator BIN_OP(const port<T1, true>& x, const T2& y) {return (x.get()) BIN_OP y;} \
     template<class T1, class T2> auto operator BIN_OP(const T2& y, const port<T1, true>& x) {return y BIN_OP T1(x);} \
-    template<class T1, class T2> auto operator BIN_OP(const port<T2, true>& y, const port<T1, true>& x) {return y BIN_OP T1(x);} \
+    template<class T1, class T2> auto operator BIN_OP(const port<T2, true>& y, const port<T1, true>& x) {return y BIN_OP (x.get());} \
 
 BIN_OP_DEF(*)
 BIN_OP_DEF(/)
