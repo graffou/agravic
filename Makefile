@@ -27,9 +27,13 @@ RTL_VHDL = $(patsubst %.h, %.vhd, $(RTL))
 All: dut
 
 # Creates executable 
-exe:  $(CONV) $(SOURCEDIR)main.cpp  
+exe:  $(RTL_CONV) $(CONV) $(SOURCEDIR)main.cpp  
 	sed -e 's/:=/=/g' Source/main.cpp | g++ $(CC_FLAGS) $(INCLUDES_C) -o dut -g3 -xc++ - 
-
+	
+# Creates executable for risc-V test suite
+nonreg:  $(RTL_CONV) $(CONV) $(SOURCEDIR)main.cpp  
+	sed -e 's/:=/=/g' Source/main.cpp | g++ $(CC_FLAGS) $(INCLUDES_C) -DNONREG -o dut -g3 -xc++ - 
+	g++ -IInclude_libs nonreg.cpp -o nonreg
 # Creates executable and generates VHDL files:;!/
 dut:  $(RTL_VHDL) $(RTL_CONV) $(CONV) $(SOURCEDIR)main.cpp  
 	sed -e 's/:=/=/g' Source/main.cpp | g++ $(CC_FLAGS) $(INCLUDES_C) -o dut -g3 -xc++ - 

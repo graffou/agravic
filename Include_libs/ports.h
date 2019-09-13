@@ -138,7 +138,7 @@ template <class T, bool in>
             abort<in>(dummy.pvcd_entry->name, pmodule->get_full_name());
 #endif
             //std::cerr << "get " << std::reference_wrapper<T>::get();
-
+            //std::cerr << '.';
             std::reference_wrapper<T>::get() <= x;
             //std::cerr << '/';
         }

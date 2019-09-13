@@ -1,6 +1,7 @@
 #pragma once
 
 #include <iostream>
+#include <sstream>
 
 //extern void printf(...);
 //#include <stdio.h>
@@ -517,6 +518,17 @@ struct gstring : public string
  {
 	 return std::string::find(x_i) != std::string::npos;
  }
+ template <class T1, class T2>
+ void replace(const T1&x_i, const T2& y_i)
+ {
+	 string x(x_i);
+	 string y(y_i);
+	 int idx = 0;
+	 while (find_string(x, idx))
+	 {
+		 string::replace(idx, x.length(), y);
+	 }
+ }
 /*
  template<class T>
  bool operator==(const T& x_i)
@@ -627,7 +639,6 @@ struct gstring : public string
  
 };
 
-
 //template <class T, class T0>
 template <class T00>
 //void gprintf(T& os, T0 x)
@@ -703,6 +714,25 @@ static void gkprintf(std::ostream& os,const char* format)
   toto.display_till_end(os, start);
 }
 
+
+template<class T>
+void shell(T& s)//stringstream& s)
+{
+
+	std::string ss = s.str();
+    gkprintf("\nsh: %K",ss);
+    system(ss.c_str());
+    s.str("");//Clear shell cmd
+}
+
+template <class T> // for char*
+void shell(const T* s)//stringstream& s)
+{
+	std::string ss(s);
+    gkprintf("\nsh: %K",ss);
+    system(ss.c_str());
+    //s.str("");//Clear shell cmd
+}
 
 template <class T>
 gstring to_hex(T val, int nbins = 0)

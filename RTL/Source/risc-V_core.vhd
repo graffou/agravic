@@ -8,6 +8,8 @@ signal regs : reg_file_t;
 signal PC : unsigned ((32 -1) downto 0);
 signal PCp : unsigned ((32 -1) downto 0);
 signal loading : std_logic;
+signal load_mem0 : std_logic;
+signal load_mem : std_logic;
 signal rtrap : std_logic;
 signal alt_op : std_logic;
 signal cpu_wait : std_logic;
@@ -27,6 +29,8 @@ signal rrs1 : unsigned ((5 -1) downto 0);
 signal rrs2 : unsigned ((5 -1) downto 0);
 signal rrd_val : unsigned ((32 -1) downto 0);
 signal rtaken : unsigned ((1 -1) downto 0);
+signal halt : std_logic;
+signal inst_cs_n : std_logic;
 signal exec : std_logic;
 signal pipe : unsigned ((4 -1) downto 0);
 signal rwb : unsigned ((5 -1) downto 0);
@@ -97,14 +101,17 @@ variable trap_addr_offset : unsigned ((32 -1) downto 0);
 variable csr_val : unsigned ((32 -1) downto 0);
 variable csr_addr : unsigned ((12 -1) downto 0);
 variable csr_wb : unsigned ((32 -1) downto 0);
+variable next_PC : unsigned ((32 -1) downto 0);
 begin
  IF ( reset_n = '0' ) then
   pipe <= TO_UNSIGNED(0,pipe'length);
   PC <= TO_UNSIGNED(0,PC'length);
   PCp <= TO_UNSIGNED(0,PCp'length);
   cpu_wait <= '0';
+  inst_cs_n <= '1' ;
   flush <= '0';
   alt_op <= '0';
+  halt <= '0';
   use_immediate <= '0';
   csri <= '0';
   loading <= '0';
@@ -124,9 +131,12 @@ begin
   rfunct3 <= TO_UNSIGNED(0,rfunct3'length);
   rtrap <= '0';
   priv <= "11";
+  load_mem <= '0';
+  load_mem0 <= '0';
   elsif ( clk_core'event and (clk_core = '1' ) ) then
    flush <= '0';
    instr := instmem2core_i.data;
+   next_PC := PC;
    IF ( (pipe(0) = '1' ) and (cpu_wait = '0') and (flush = '0') ) then
      rinstr <= instr;
      opcode := (instr(6 downto 0));
@@ -189,10 +199,13 @@ begin
       csri <= '0';
      end if;
    end if;
-   IF ( ( (cpu_wait = '0' ) and not (ropcode = LOAD) ) or (datamem2core_i.data_en = '1' )) then
+   IF ( ( (cpu_wait = '0' ) and not (ropcode = LOAD) and (halt = '0') ) or (datamem2core_i.data_en = '1' )) then
     pipe <= ( (pipe(pipe'high-1 downto 0)) & '1' );
     PCp <= PC;
-    PC <= PC + TO_UNSIGNED(4,PC'length);
+    next_PC := PC + TO_UNSIGNED(4,PC'length);
+    inst_cs_n <= '0';
+   else
+    inst_cs_n <= '1' ;
    end if;
    IF ( (pipe(1) = '1' ) and (cpu_wait = '0') and (flush = '0') ) then
     exec <= '1' ;
@@ -234,6 +247,7 @@ begin
     rwb <= "00000";
     rd_val := "10101010010101011010101001010101";
     rjalr <= "00000";
+    load_mem0 <= '0';
     case ropcode is
      when CASE_SYS =>
       case (rimmediate(11 downto 0)) is
@@ -255,7 +269,7 @@ begin
        when CASE_CSRRWI => csr_val := op1;
        when CASE_CSRRSI => csr_val := csr_val or op1;
        when CASE_CSRRCI => csr_val := csr_val and not op1;
-       when CASE_ECALL => PC <= mepc; flush <= '1' ; pipe <= TO_UNSIGNED(0,pipe'length);
+       when CASE_ECALL => next_PC := mepc; flush <= '1' ; pipe <= TO_UNSIGNED(0,pipe'length);
        when others => csr_val := TO_UNSIGNED(0,csr_val'length);
       end case;
       case (rimmediate(11 downto 0)) is
@@ -288,45 +302,54 @@ begin
       rwb <= rrd;
       funct3wb <= rfunct3;
       rshiftwb <= nshift;
-      core2datamem_o.addr <= (add_res(blk2mem_t0.addr'length+1 downto 2));
-      core2datamem_o.cs_n <= '0';
-      core2datamem_o.wr_n <= '1' ;
-      core2datamem_o.be <= "1111";
+      if ((add_res(31 downto 28)) = "0000") then
+       load_mem0 <= '1' ;
+       blk2mem_t0.cs_n <= '0';
+      else
+       load_mem0 <= '0';
+       blk2mem_t0.cs_n <= '0';
+      end if;
+      blk2mem_t0.addr <= (add_res(blk2mem_t0.addr'length+1 downto 2));
+      blk2mem_t0.wr_n <= '1' ;
+      blk2mem_t0.be <= "1111";
      when CASE_STORE =>
-      core2datamem_o.addr <= (add_res(blk2mem_t0.addr'length+1 downto 2));
-      core2datamem_o.cs_n <= '0';
-      core2datamem_o.wr_n <= '0';
       wbe := ( rfunct3(1) & rfunct3(1) & (rfunct3(0) or rfunct3(1)) & '1' );
       wbe := SHIFT_LEFT(wbe, TO_INTEGER(nshift));
-      core2datamem_o.be <= wbe;
-      core2datamem_o.data <= SHIFT_LEFT(regs(TO_INTEGER(rrs2)), TO_INTEGER(nshift & "000"));
+      blk2mem_t0.addr <= (add_res(blk2mem_t0.addr'length+1 downto 2));
+      blk2mem_t0.cs_n <= '0';
+      blk2mem_t0.wr_n <= '0';
+      blk2mem_t0.be <= wbe;
+      blk2mem_t0.data <= SHIFT_LEFT(regs(TO_INTEGER(rrs2)), TO_INTEGER(nshift & "000"));
      when CASE_LUI => rd_val := rimmediate;
      when CASE_AUIPC => rd_val := rimmediate;
-     when CASE_JAL => PC <= rimmediate; rd_val := PCp; flush <= '1' ; pipe <= TO_UNSIGNED(0,pipe'length);
-     when CASE_JALR => PC <= RESIZE( ( (add_res(31 downto 1)) & "0" ), PC'length);
+     when CASE_JAL => next_PC := rimmediate; rd_val := PCp; flush <= '1' ; pipe <= TO_UNSIGNED(0,pipe'length);
+     when CASE_JALR => next_PC := RESIZE( ( (add_res(31 downto 1)) & "0" ), PC'length);
       rd_val := PCp; flush <= '1' ; pipe <= TO_UNSIGNED(0,pipe'length); rjalr <= rrd;
      when CASE_BRANCH =>
       taken := ( (rfunct3(1 downto 1)) and (rs1_lt_rs2_u xor (rfunct3(0 downto 0))) ) or
          ( ((rfunct3(1 downto 1)) xor (rfunct3(2 downto 2)) ) and (rs1_lt_rs2_s xor (rfunct3(0 downto 0))) ) or
          ( not ((rfunct3(1 downto 1)) and not (rfunct3(2 downto 2)) ) and (rs1_eq_rs2 xor (rfunct3(0 downto 0))) );
       IF (taken = "1") then
-       PC <= rimmediate; flush <= '1' ; pipe <= TO_UNSIGNED(0,pipe'length);
+       next_PC := rimmediate; flush <= '1' ; pipe <= TO_UNSIGNED(0,pipe'length);
       end if;
      when others => trap := '1' ; cause := ILLINSTR;
     end case;
     rtaken <= taken;
     rrd_val <= rd_val;
     IF ( not (ropcode = LOAD) and not (ropcode = STORE) ) then
-     core2datamem_o.cs_n <= '1' ;
+     blk2mem_t0.cs_n <= '1' ;
     end if;
     wrd := rrd;
    else
-    core2datamem_o.cs_n <= '1' ;
+    blk2mem_t0.cs_n <= '1' ;
     exec <= '0';
     rd_val := "10101010010101011010101001010101";
    end if;
+   load_mem <= load_mem0;
    IF ( not(rwb = TO_UNSIGNED(0,rwb'length)) and (datamem2core_i.data_en = '1' ) ) then
     cpu_wait <= '0';
+    load_mem <= '0';
+    load_mem0 <= '0';
     ld_data := datamem2core_i.data;
     ld_data := SHIFT_RIGHT(ld_data, TO_INTEGER( (rshiftwb & "000")));
     case funct3wb is
@@ -342,13 +365,14 @@ begin
    regs(TO_INTEGER(wrd)) <= rd_val;
    regs(0) <= TO_UNSIGNED(0,32);
    IF (load_port_i.wr_n = '0' ) then
-    -- gprintf("#RLOADING CODE");
     loading <= '1' ;
-    PC <= RESIZE( load_port_i.addr, PC'length );
+    inst_cs_n <= '0';
+    next_PC := RESIZE( load_port_i.addr, PC'length );
     PCp <= load_port_i.data;
    elsif ( loading = '1' ) then
     -- gprintf("#RCODE LOADED, starting Giorno core");
-    PC <= TO_UNSIGNED(0,PC'length);
+    next_PC := TO_UNSIGNED(0,PC'length);
+    inst_cs_n <= '0';
     loading <= '0';
     flush <= '1' ;
     pipe <= TO_UNSIGNED(0,pipe'length);
@@ -361,16 +385,18 @@ begin
     else
      trap_addr_offset := TO_UNSIGNED(0,trap_addr_offset'length);
     end if;
-    PC <= trap_addr_base + trap_addr_offset;
+    next_PC := trap_addr_base + trap_addr_offset;
     mcause <= cause;
    end if;
+   PC <= next_PC;
  end if;
  end process;
 
   core2instmem_o.addr <= (PC(blk2mem_t0.addr'length+1 downto 2));
   core2instmem_o.data <= PCp;
-  core2instmem_o.cs_n <= '0';
+  core2instmem_o.cs_n <= inst_cs_n;
   core2instmem_o.wr_n <= not loading;
   core2instmem_o.be <= "1111";
+  core2datamem_o <= blk2mem_t0;
 
 end rtl;

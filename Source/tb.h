@@ -31,7 +31,10 @@ SIG(reset_n, RST_TYPE);// reset_n;
 SIG(cmd, blk2mem_t);
 SIG(gpios, UINT(32));
 int ncycles = 10000;
+bool success = 1;
 std::ifstream code_file;
+std::ifstream check_file;
+std::ifstream sig_start_file;
 
 BEGIN
 
@@ -68,10 +71,14 @@ void init_clk_rst()
 template<class T>
 void init_file( T& name_i)
 {
-	std::string name = name_i; // input is of input_parm<> type
+	gstring name = name_i; // input is of input_parm<> type
 	code_file.open(name.c_str(), std::ifstream::binary);
 	gprintf("#VOpening code file %Y open %Y", name.c_str(), code_file.is_open());
-
+	name.replace(".bin", ".sig_start");
+	sig_start_file.open(name.c_str());
+	name.replace("elf.sig_start", "reference_output");
+	check_file.open(name.c_str());
+	gprintf("#VOpening check file %Y open %Y", name.c_str(), check_file.is_open());
 }
 
 constexpr void run()
@@ -88,8 +95,10 @@ constexpr void run()
 	clk <= not clk;
 	clk <= not clk;
 	uint32_t addr = 0;
-	while (not code_file.eof() and not(cmd.addr == BIN(1011111111100) ))
+	uint32_t end_addr = 0;
+	while (not code_file.eof() and not(cmd.addr == BIN(1011111111111) ))
 	{
+		gprintf("% % \n", cmd.addr, BIN(101111111111100));
 		__control_signals__.clk = -1;
 		__control_signals__.reset_n = -1;
 
@@ -100,22 +109,61 @@ constexpr void run()
 		if (cmd.addr < BIN(0000000011100) ) {
 			gprintf("#Maddr : %R write %R %Y", to_hex(TO_INTEGER(cmd.addr)), to_hex(TO_INTEGER(cmd.data)), code_file.tellg());
 		}
-		cmd.addr <= TO_UINT(addr, LEN(cmd.addr));//cmd.addr + TO_UINT(4, LEN(cmd.addr));
+		cmd.addr <= TO_UINT(addr/4, LEN(cmd.addr));//cmd.addr + TO_UINT(4, LEN(cmd.addr));
+#ifdef NONREG // for risc-v compliance test, copy init data to data memory
+		if (addr >= 8192)
+		{
+			dut.u1_mem.set(addr/4, data);
+			gprintf("#MLoading data mem % %", to_hex(addr/4), to_hex(data));
+			gprintf("#Cmem content % %", to_hex(addr/4), to_hex(dut.u1_mem.get(addr/4)));
+		}
+
+#endif
 		addr = addr + 4;
+		std::cerr << '>';
 		clk <= not clk;
 		clk <= not clk;
+		std::cerr << '/';
 	}
 	cmd.cs_n <= BIT(1);
 	cmd.wr_n <= BIT(1);
-
 	clk <= not clk;
 	clk <= not clk;
 
-	gprintf("#VStaring simulation, % ", ncycles);
+	gprintf("#VStarting simulation, % ", ncycles);
 	for (int i = 0; i < ncycles*2 ; i++)
 	{
 		//std::cerr << '.';
 		clk <= not clk;
+	}
+	for (int i= 2048; i < 2100;i++)
+		gprintf("#Cmem content % %", to_hex(i), to_hex(dut.u1_mem.get(i)));
+	for (int i= 0; i < 200;i++)
+		gprintf("#Mmem content % %", to_hex(i), to_hex(dut.u0_mem.get(i)));
+	sig_start_file >> std::hex >> addr;
+	std::string yo;
+	sig_start_file >> std::hex >> yo; // reads end of line:
+	sig_start_file >> std::hex >> end_addr;
+	gprintf("#VTesting signature from %Y to %Y", to_hex(addr), to_hex(end_addr));
+	addr = addr >> 2;
+	end_addr = end_addr >> 2;
+	gprintf("#VTesting signature from %Y to %Y", to_hex(addr), to_hex(end_addr));
+	while (not check_file.eof())
+	{
+		uint32_t check_val;
+		check_file >> std::hex >> check_val;
+		if (not check_file.eof() and (addr <= end_addr) )
+		{
+			if (check_val == dut.u1_mem.get(addr))
+				gprintf("#GChecking % % %", addr, to_hex(check_val), to_hex(dut.u1_mem.get(addr)));
+			else
+			{
+				success = 0;
+				gprintf("#RChecking % % %", addr, to_hex(check_val), to_hex(dut.u1_mem.get(addr)));
+			}
+		}
+
+		addr ++;
 	}
 
 }

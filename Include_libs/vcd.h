@@ -375,7 +375,7 @@ void activate_vcd(const gstring& x_i)
 			for ( int i = 0; i < gmodule::module_list[kk]->vcd_list.size(); i++ )
 			{
 				std::string test = gmodule::module_list[kk]->vcd_list[i]->name;
-				gprintf("#Gentry %m", test);
+				//gprintf("#Gentry %m", test);
 				if ( ( test[0] == '<' ) or ( test[0] == '>' ) ) // in or out
 					test = test.substr(1);
 

@@ -109,8 +109,22 @@ BLK_END;
 
 
 
+		uint32_t get(uint32_t baddr)
+		{
+			slv<32> val = mem3((baddr)) &
+					mem2((baddr)) &
+					mem1((baddr)) &
+					mem0((baddr));
+			return TO_INTEGER(val);
+		}
+		void set(uint32_t addr, uint32_t val)
+		{
+			mem3(addr) = (val >> 24) & 255;
+			mem2(addr) = (val >> 16) & 255;
+			mem1(addr) = (val >> 8) & 255;
+			mem0(addr) = (val) & 255;
 
-
+		}
 		PROCESS(0, clk_mem, reset_n)
 		VAR(baddr, UINT(13));
 		VAR(rdata, UINT(32));
@@ -151,7 +165,7 @@ BLK_END;
 
 				IF (delayed_write == BIT(1)) THEN
 
-					//gprintf("#MMem write % @ % ", to_hex(data), to_hex(addr), be);
+					gprintf("#MMem write % @ % ", to_hex(data), to_hex(addr), be);
 				//rmem(TO_INTEGER(PORT_BASE(core2mem_i).addr)) <= PORT_BASE(core2mem_i).data;
 
 					IF ( B(be, 3) == BIT(1) ) THEN

@@ -19,6 +19,13 @@ tb:dut:u0_risc_V_core:regs(3) bin
 tb:dut:u0_risc_V_core:regs(4) bin
 tb:dut:u0_risc_V_core:regs(5) bin
 tb:dut:u0_risc_V_core:regs(6) bin
+tb:dut:u0_risc_V_core:regs(7) bin
+tb:dut:u0_risc_V_core:regs(8) bin
+tb:dut:u0_risc_V_core:regs(9) bin
 tb:dut:u0_risc_V_core:regs(10) bin
+tb:dut:u0_risc_V_core:regs(11) bin
+tb:dut:u0_risc_V_core:regs(12) bin
+tb:dut:u0_risc_V_core:regs(13) bin
+tb:dut:u0_risc_V_core:regs(14) bin
 tb:dut:u0_risc_V_core:regs(15) bin
 tb:dut:u0_risc_V_core:regs(31) bin
