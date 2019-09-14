@@ -246,8 +246,9 @@ BEGIN
 
 					IF (immediate_type == no_type) THEN
 						use_immediate <= BIT(0);
-					ELSEIF ( (immediate_type == J_type) or (immediate_type == B_type) or (opcode == AUIPC) ) THEN // precompute address offset here
-						rimmediate <= immediate + PCp;
+					ELSEIF ( (immediate_type == J_type) or (immediate_type == B_type) or (opcode == AUIPC) or
+							( (opcode == SYS) and (RANGE(funct7, 6, 1) == BIN(000000) /*ECALL or EBREAK*/) ) ) THEN // JAL /Branch/AUIPC or ECALL/EBREAK require instruction address (current one for ECALL)
+						rimmediate <= immediate + PCp; // precompute address offset here // For ECALL, immediate = 0, so just get PCp
 						use_immediate <= BIT(0); // immediate not for use for calculations
 					ELSE
 						use_immediate <= BIT(1);
@@ -347,8 +348,18 @@ BEGIN
 							CASE(CASE_CSRRWI) csr_val := op1;
 							CASE(CASE_CSRRSI) csr_val := csr_val or op1;
 							CASE(CASE_CSRRCI) csr_val := csr_val and not op1;
-							CASE(CASE_ECALL) next_PC := mepc; flush <= BIT(1); pipe <= TO_UINT(0, LEN(pipe)); // TODO: Change mepc to appropriate register when not in machine mode
-#ifdef NONREG
+							CASE(CASE_ECALL) // ECALL-EBREAK or MRET
+							IF (use_immediate == BIT(0)) THEN // ECALL-EBREAK. strange statement (if not use _imm ... <= rimm.) but this actually uses the immediate reg reuse used for branches
+								//next_PC := mepc; flush <= BIT(1); pipe <= TO_UINT(0, LEN(pipe)); ropcode <= TO_UINT(0, LEN(ropcode));// TODO: Change mepc to appropriate register when not in machine mode
+								mepc <= rimmediate; cause := (BIN(0000000000000000000000000000) & (not B(rrs2, 0)) & BIN(0) & priv); trap := BIT(1);
+								//mepc <= rimmediate; cause := (BIN(000000000000000000000000000010) & priv); trap := BIT(1);
+ 							ELSEIF ( ( rfunct7 == BIN(0011000) ) and ( rrs2 == BIN(00010) ) ) THEN  // MRET
+								next_PC := mepc; flush <= BIT(1); pipe <= TO_UINT(0, LEN(pipe)); ropcode <= TO_UINT(0, LEN(ropcode));// TODO: Change mepc to appropriate register when not in machine mode
+							ENDIF
+							//ELSE
+							//	trap := BIT(1); cause := ILLINSTR;
+							//ENDIF
+								#ifdef NONREG
 								IF ( B(regs(3), 0) == BIN(1)) THEN  // program end
 										halt <= BIT(1);
 								ENDIF
@@ -415,19 +426,15 @@ BEGIN
 						cpu_wait_on_write <= BIT(1);//opcode_is_load;
 					CASE(CASE_LUI) rd_val := rimmediate;
 					CASE(CASE_AUIPC) rd_val := rimmediate; // Pc added at decoding stage
-					CASE(CASE_JAL) next_PC := rimmediate; rd_val := PCp; flush <= BIT(1); pipe <= TO_UINT(0, LEN(pipe));
+					CASE(CASE_JAL) next_PC := rimmediate; rd_val := PCp; flush <= BIT(1); pipe <= TO_UINT(0, LEN(pipe));ropcode <= TO_UINT(0, LEN(ropcode));
 					CASE(CASE_JALR) next_PC := RESIZE( ( RANGE(add_res, 31,1) & BIN(0) ), LEN(PC)); // It seems that lsb could be used for stg else: clear lsb
-						rd_val := PCp; flush <= BIT(1); pipe <= TO_UINT(0, LEN(pipe)); rjalr <= rrd;
+						rd_val := PCp; flush <= BIT(1); pipe <= TO_UINT(0, LEN(pipe)); rjalr <= rrd; ropcode <= TO_UINT(0, LEN(ropcode));
 					CASE(CASE_BRANCH)
-/*						taken := ( RANGE(rfunct3, 1,1) and (rs1_lt_rs2_u xor RANGE(rfunct3, 0, 0)) ) or // LT / GTE U
-								 ( (RANGE(rfunct3, 1,1) xor RANGE(rfunct3,2,2) ) and (rs1_lt_rs2_s xor RANGE(rfunct3, 0,0)) ) or // LT / GTE S
-								 ( not (RANGE(rfunct3, 1,1) and not RANGE(rfunct3,2,2) ) and (rs1_eq_rs2 xor RANGE(rfunct3, 0,0)) ); // BNE BEQ
-*/
 						taken := ( ( ( ( RANGE(rfunct3, 1,1) and (rs1_lt_rs2_u) ) or ( (not RANGE(rfunct3, 1,1)) and (rs1_lt_rs2_s) ) ) and RANGE(rfunct3,2,2) ) or
 								 ( rs1_eq_rs2 and not RANGE(rfunct3,2,2) ) ) xor RANGE(rfunct3, 0,0);
 
 						IF (taken == BIN(1)) THEN
-							next_PC := rimmediate; flush <= BIT(1); pipe <= TO_UINT(0, LEN(pipe));
+							next_PC := rimmediate; flush <= BIT(1); pipe <= TO_UINT(0, LEN(pipe)); ropcode <= TO_UINT(0, LEN(ropcode));
 						ENDIF
 					DEFAULT trap := BIT(1); cause := ILLINSTR;
 
@@ -501,6 +508,8 @@ BEGIN
 					trap_addr_offset := TO_UINT(0, LEN(trap_addr_offset));
 				ENDIF
 				next_PC := trap_addr_base + trap_addr_offset;
+				flush <= BIT(1); pipe <= TO_UINT(0, LEN(pipe)); ropcode <= TO_UINT(0, LEN(ropcode));
+				//pipe <= TO_UINT(0, LEN(pipe)); ropcode <= TO_UINT(0, LEN(ropcode));
 				mcause <= cause;
 			ENDIF
 

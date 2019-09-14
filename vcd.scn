@@ -10,6 +10,7 @@ tb:dut:u0_risc_V_core:raw_opcode bin
 tb:dut:u0_risc_V_core:rinstr bin
 tb:dut:u0_risc_V_core:rrinstr bin
 tb:dut:u0_risc_V_core:PC bin
+tb:dut:u0_risc_V_core:mepc bin
 tb:dut:u0_risc_V_core:PCp bin
 tb:dut:u0_risc_V_core:rop1 bin
 tb:dut:u0_risc_V_core:rop2 bin

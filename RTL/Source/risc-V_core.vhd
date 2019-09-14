@@ -13,6 +13,7 @@ signal load_mem : std_logic;
 signal rtrap : std_logic;
 signal alt_op : std_logic;
 signal cpu_wait : std_logic;
+signal cpu_wait_on_write : std_logic;
 signal flush : std_logic;
 signal rimmediate : unsigned ((32 -1) downto 0);
 signal rimmediate_type : unsigned ((3 -1) downto 0);
@@ -68,6 +69,7 @@ begin
 process0 : process(clk_core,reset_n)
 variable instr : unsigned ((32 -1) downto 0);
 variable opcode : unsigned ((7 -1) downto 0);
+variable opcode_is_load : std_logic;
 variable rd : unsigned ((5 -1) downto 0);
 variable wrd : unsigned ((5 -1) downto 0);
 variable rs1 : unsigned ((5 -1) downto 0);
@@ -133,10 +135,12 @@ begin
   priv <= "11";
   load_mem <= '0';
   load_mem0 <= '0';
+  cpu_wait_on_write <= '0';
   elsif ( clk_core'event and (clk_core = '1' ) ) then
    flush <= '0';
    instr := instmem2core_i.data;
    next_PC := PC;
+   opcode_is_load := '0';
    IF ( (pipe(0) = '1' ) and (cpu_wait = '0') and (flush = '0') ) then
      rinstr <= instr;
      opcode := (instr(6 downto 0));
@@ -147,7 +151,11 @@ begin
      funct7 := (instr(31 downto 25));
      IF (opcode = OPI) then
       ropcode <= OP;
-      alt_op <= '0';
+      IF (funct3 = "101") then
+       alt_op <= instr(30);
+      else
+       alt_op <= '0';
+      end if;
      else
       ropcode <= opcode;
       alt_op <= instr(30);
@@ -161,7 +169,7 @@ begin
       when CASE_SYS => immediate_type := I_type;
       when CASE_MEM => immediate_type := I_type;
       when CASE_OPI => immediate_type := I_type;
-      when CASE_LOAD => immediate_type := I_type;
+      when CASE_LOAD => immediate_type := I_type; opcode_is_load := '1' ;
       when CASE_STORE => immediate_type := S_type;
       when CASE_LUI => immediate_type := U_type;
       when CASE_AUIPC => immediate_type := U_type;
@@ -186,7 +194,8 @@ begin
      end if;
      IF (immediate_type = no_type) then
       use_immediate <= '0';
-     elsif ( (immediate_type = J_type) or (immediate_type = B_type) or (opcode = AUIPC) ) then
+     elsif ( (immediate_type = J_type) or (immediate_type = B_type) or (opcode = AUIPC) or
+       ( (opcode = SYS) and ((funct7(6 downto 1)) = "000000" ) ) ) then
       rimmediate <= immediate + PCp;
       use_immediate <= '0';
      else
@@ -199,7 +208,7 @@ begin
       csri <= '0';
      end if;
    end if;
-   IF ( ( (cpu_wait = '0' ) and not (ropcode = LOAD) and (halt = '0') ) or (datamem2core_i.data_en = '1' )) then
+   IF ( ( ( (cpu_wait = '0' ) ) and (not ( (ropcode = LOAD) or (ropcode = STORE) ) ) and (halt = '0') ) or (datamem2core_i.data_en = '1' ) or (cpu_wait_on_write = '1' )) then
     pipe <= ( (pipe(pipe'high-1 downto 0)) & '1' );
     PCp <= PC;
     next_PC := PC + TO_UNSIGNED(4,PC'length);
@@ -244,6 +253,7 @@ begin
     rsub_res <= sub_res;
     rrs1_lt_rs2_u <= rs1_lt_rs2_u;
     rrs1_lt_rs2_s <= rs1_lt_rs2_s;
+    rrs1_eq_rs2 <= rs1_eq_rs2;
     rwb <= "00000";
     rd_val := "10101010010101011010101001010101";
     rjalr <= "00000";
@@ -269,7 +279,12 @@ begin
        when CASE_CSRRWI => csr_val := op1;
        when CASE_CSRRSI => csr_val := csr_val or op1;
        when CASE_CSRRCI => csr_val := csr_val and not op1;
-       when CASE_ECALL => next_PC := mepc; flush <= '1' ; pipe <= TO_UNSIGNED(0,pipe'length);
+       when CASE_ECALL =>
+       IF (use_immediate = '0') then
+        mepc <= rimmediate; cause := ("0000000000000000000000000000" & (not rrs2(0)) & "0" & priv); trap := '1' ;
+        elsif ( ( rfunct7 = "0011000" ) and ( rrs2 = "00010" ) ) then
+        next_PC := mepc; flush <= '1' ; pipe <= TO_UNSIGNED(0,pipe'length); ropcode <= TO_UNSIGNED(0,ropcode'length);
+       end if;
        when others => csr_val := TO_UNSIGNED(0,csr_val'length);
       end case;
       case (rimmediate(11 downto 0)) is
@@ -291,27 +306,30 @@ begin
        when CASE_ADDx => IF (alt_op = '0') then rd_val := RESIZE(add_res, 32); else rd_val := RESIZE(sub_res, 32); end if;
        when CASE_SLLx => rd_val := sll_res;
        when CASE_SRLx => IF (alt_op = '0') then rd_val := srl_res_u; else rd_val := srl_res_s; end if;
-       when CASE_SLTx => IF (alt_op = '1' ) then rd_val := RESIZE(rs1_lt_rs2_s, 32); else rd_val := RESIZE(rs1_lt_rs2_u, 32); end if;
+       when CASE_SLTx => rd_val := RESIZE(rs1_lt_rs2_s, 32);
+       when CASE_SLTU => rd_val := RESIZE(rs1_lt_rs2_u, 32);
        when CASE_ORx => rd_val := or_res;
        when CASE_XORx => rd_val := xor_res;
        when CASE_ANDx => rd_val := and_res;
        when others => trap := '1' ; cause := ILLINSTR;
       end case;
      when CASE_LOAD =>
-      cpu_wait <= '1' ;
-      rwb <= rrd;
-      funct3wb <= rfunct3;
-      rshiftwb <= nshift;
-      if ((add_res(31 downto 28)) = "0000") then
-       load_mem0 <= '1' ;
-       blk2mem_t0.cs_n <= '0';
-      else
-       load_mem0 <= '0';
-       blk2mem_t0.cs_n <= '0';
+      IF (not (rrd = "000")) then
+       cpu_wait <= '1' ;
+       rwb <= rrd;
+       funct3wb <= rfunct3;
+       rshiftwb <= nshift;
+       if ((add_res(31 downto 28)) = "0000") then
+         load_mem0 <= '1' ;
+        blk2mem_t0.cs_n <= '0';
+        else
+        load_mem0 <= '0';
+        blk2mem_t0.cs_n <= '0';
+        end if;
+        blk2mem_t0.addr <= (add_res(blk2mem_t0.addr'length+1 downto 2));
+        blk2mem_t0.wr_n <= '1' ;
+        blk2mem_t0.be <= "1111";
       end if;
-      blk2mem_t0.addr <= (add_res(blk2mem_t0.addr'length+1 downto 2));
-      blk2mem_t0.wr_n <= '1' ;
-      blk2mem_t0.be <= "1111";
      when CASE_STORE =>
       wbe := ( rfunct3(1) & rfunct3(1) & (rfunct3(0) or rfunct3(1)) & '1' );
       wbe := SHIFT_LEFT(wbe, TO_INTEGER(nshift));
@@ -320,17 +338,18 @@ begin
       blk2mem_t0.wr_n <= '0';
       blk2mem_t0.be <= wbe;
       blk2mem_t0.data <= SHIFT_LEFT(regs(TO_INTEGER(rrs2)), TO_INTEGER(nshift & "000"));
+      cpu_wait <= '1' ;
+      cpu_wait_on_write <= '1' ;
      when CASE_LUI => rd_val := rimmediate;
      when CASE_AUIPC => rd_val := rimmediate;
-     when CASE_JAL => next_PC := rimmediate; rd_val := PCp; flush <= '1' ; pipe <= TO_UNSIGNED(0,pipe'length);
+     when CASE_JAL => next_PC := rimmediate; rd_val := PCp; flush <= '1' ; pipe <= TO_UNSIGNED(0,pipe'length);ropcode <= TO_UNSIGNED(0,ropcode'length);
      when CASE_JALR => next_PC := RESIZE( ( (add_res(31 downto 1)) & "0" ), PC'length);
-      rd_val := PCp; flush <= '1' ; pipe <= TO_UNSIGNED(0,pipe'length); rjalr <= rrd;
+      rd_val := PCp; flush <= '1' ; pipe <= TO_UNSIGNED(0,pipe'length); rjalr <= rrd; ropcode <= TO_UNSIGNED(0,ropcode'length);
      when CASE_BRANCH =>
-      taken := ( (rfunct3(1 downto 1)) and (rs1_lt_rs2_u xor (rfunct3(0 downto 0))) ) or
-         ( ((rfunct3(1 downto 1)) xor (rfunct3(2 downto 2)) ) and (rs1_lt_rs2_s xor (rfunct3(0 downto 0))) ) or
-         ( not ((rfunct3(1 downto 1)) and not (rfunct3(2 downto 2)) ) and (rs1_eq_rs2 xor (rfunct3(0 downto 0))) );
+      taken := ( ( ( ( (rfunct3(1 downto 1)) and (rs1_lt_rs2_u) ) or ( (not (rfunct3(1 downto 1))) and (rs1_lt_rs2_s) ) ) and (rfunct3(2 downto 2)) ) or
+         ( rs1_eq_rs2 and not (rfunct3(2 downto 2)) ) ) xor (rfunct3(0 downto 0));
       IF (taken = "1") then
-       next_PC := rimmediate; flush <= '1' ; pipe <= TO_UNSIGNED(0,pipe'length);
+       next_PC := rimmediate; flush <= '1' ; pipe <= TO_UNSIGNED(0,pipe'length); ropcode <= TO_UNSIGNED(0,ropcode'length);
       end if;
      when others => trap := '1' ; cause := ILLINSTR;
     end case;
@@ -346,6 +365,10 @@ begin
     rd_val := "10101010010101011010101001010101";
    end if;
    load_mem <= load_mem0;
+   IF (cpu_wait_on_write = '1' ) then
+    cpu_wait <= '0';
+    cpu_wait_on_write <= '0';
+   end if;
    IF ( not(rwb = TO_UNSIGNED(0,rwb'length)) and (datamem2core_i.data_en = '1' ) ) then
     cpu_wait <= '0';
     load_mem <= '0';
@@ -367,7 +390,7 @@ begin
    IF (load_port_i.wr_n = '0' ) then
     loading <= '1' ;
     inst_cs_n <= '0';
-    next_PC := RESIZE( load_port_i.addr, PC'length );
+    next_PC := RESIZE( ( load_port_i.addr & "00" ), PC'length );
     PCp <= load_port_i.data;
    elsif ( loading = '1' ) then
     -- gprintf("#RCODE LOADED, starting Giorno core");
@@ -386,6 +409,7 @@ begin
      trap_addr_offset := TO_UNSIGNED(0,trap_addr_offset'length);
     end if;
     next_PC := trap_addr_base + trap_addr_offset;
+    flush <= '1' ; pipe <= TO_UNSIGNED(0,pipe'length); ropcode <= TO_UNSIGNED(0,ropcode'length);
     mcause <= cause;
    end if;
    PC <= next_PC;

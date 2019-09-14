@@ -10,6 +10,7 @@ signal reset_n : std_logic;
 signal cmd : blk2mem_t;
 signal gpios : unsigned ((32 -1) downto 0);
 int ncycles = 10000;
+bool success = 1;
 std::ifstream code_file;
 std::ifstream check_file;
 std::ifstream sig_start_file;
