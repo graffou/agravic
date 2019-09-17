@@ -11,7 +11,7 @@ int main()
 {
 	std::ifstream test_list;
 	shell("\\rm test_list;");
-	shell("ls tests/I*.bin >> test_list");
+	shell("ls tests/*.bin >> test_list");
 	test_list.open("test_list");
 	std::ofstream test_results;
 	test_results.open("test_results");

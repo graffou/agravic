@@ -7,8 +7,8 @@ TESTBENCH(tb_t);
 // for clock generation
 
 #ifdef VHDL
-constant c_clock_period : time := 5 ns;
-constant c_reset_length : time := 20 ns;
+constant c_clock_period : time = 5 ns;
+constant c_reset_length : time = 20 ns;
 #else
 
 

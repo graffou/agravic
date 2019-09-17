@@ -177,20 +177,20 @@ BEGIN
 		ELSEIF ( EVENT(clk_core) and (clk_core == BIT(1)) ) THEN
 			// rising edge
 			flush <= BIT(0);
-			instr := PORT_BASE(instmem2core_i).data;
-			next_PC := PC;
-			opcode_is_load := BIT(0);
+			instr = PORT_BASE(instmem2core_i).data;
+			next_PC = PC;
+			opcode_is_load = BIT(0);
 
 			// Instruction decoding -------------------------------------------------------------------
 			IF ( (B(pipe,0) == BIT(1)) and (cpu_wait == BIT(0)) and (flush == BIT(0)) ) THEN 			//IF ( (PORT_BASE(instmem2core_i).data_en == BIT(1)) and (cpu_wait == BIT(0)) ) THEN
 					rinstr <= instr;
-					opcode := RANGE(instr, 6, 0);
+					opcode = RANGE(instr, 6, 0);
 					//gprintf("#MOPCODE %",opcode);
-					rd := RANGE(instr, 11, 7);
-					rs1 := RANGE(instr, 19, 15);
-					rs2 := RANGE(instr, 24, 20);
-					funct3 := RANGE(instr, 14, 12);
-					funct7 := RANGE(instr, 31, 25);
+					rd = RANGE(instr, 11, 7);
+					rs1 = RANGE(instr, 19, 15);
+					rs2 = RANGE(instr, 24, 20);
+					funct3 = RANGE(instr, 14, 12);
+					funct7 = RANGE(instr, 31, 25);
 
 					// Anyway, difference between OP and OPI is held in immediate choice, made one cycle later
 					IF (opcode == OPI) THEN
@@ -213,28 +213,28 @@ BEGIN
 
 					//Decode immediate value
 					SWITCH(opcode) // Determine type of immediate arg.
-						CASE(CASE_SYS) immediate_type := I_type;
-						CASE(CASE_MEM) immediate_type := I_type;
-						CASE(CASE_OPI) immediate_type := I_type;
-						CASE(CASE_LOAD) immediate_type := I_type; opcode_is_load := BIT(1);
-						CASE(CASE_STORE) immediate_type := S_type;
-						CASE(CASE_LUI) immediate_type := U_type;
-						CASE(CASE_AUIPC) immediate_type := U_type;
-						CASE(CASE_JAL) immediate_type := J_type;
-						CASE(CASE_JALR) immediate_type := I_type;
-						CASE(CASE_BRANCH) immediate_type := B_type;
-						DEFAULT immediate_type := no_type;
+						CASE(CASE_SYS) immediate_type = I_type;
+						CASE(CASE_MEM) immediate_type = I_type;
+						CASE(CASE_OPI) immediate_type = I_type;
+						CASE(CASE_LOAD) immediate_type = I_type; opcode_is_load = BIT(1);
+						CASE(CASE_STORE) immediate_type = S_type;
+						CASE(CASE_LUI) immediate_type = U_type;
+						CASE(CASE_AUIPC) immediate_type = U_type;
+						CASE(CASE_JAL) immediate_type = J_type;
+						CASE(CASE_JALR) immediate_type = I_type;
+						CASE(CASE_BRANCH) immediate_type = B_type;
+						DEFAULT immediate_type = no_type;
 					ENDCASE
 					rimmediate_type <= immediate_type;
 
 					// Decode immediate argument. !! USE SLV_RANGE instead of RANGE (returns slv and not unsigned) to generate slices, otherwise a & b does not compile in vhdl
 					SWITCH(immediate_type)
-						CASE(CASE_I_type) immediate := SXT( RANGE(instr, 31, 20), LEN(immediate) );
-						CASE(CASE_S_type) immediate := SXT( SLV_RANGE(instr, 31, 25) & SLV_RANGE(instr, 11, 7), LEN(immediate));
-						CASE(CASE_B_type) immediate := SXT( SLV_RANGE(instr, 31, 31) & SLV_RANGE(instr, 7, 7) & SLV_RANGE(instr, 30,25) & SLV_RANGE(instr,11,8) & BIT(0), LEN(immediate));
-						CASE(CASE_U_type) immediate := SXT( SLV_RANGE(instr, 31, 20) & SLV_RANGE(instr,19,12) & BIN(000000000000), LEN(immediate));
-						CASE(CASE_J_type) immediate := SXT( SLV_RANGE(instr, 31, 31) & SLV_RANGE(instr,19,12) & SLV_RANGE(instr, 20,20) & SLV_RANGE(instr,30,21) & BIN(0), LEN(immediate));
-						DEFAULT immediate := TO_UINT(0, LEN(immediate));
+						CASE(CASE_I_type) immediate = SXT( RANGE(instr, 31, 20), LEN(immediate) );
+						CASE(CASE_S_type) immediate = SXT( SLV_RANGE(instr, 31, 25) & SLV_RANGE(instr, 11, 7), LEN(immediate));
+						CASE(CASE_B_type) immediate = SXT( SLV_RANGE(instr, 31, 31) & SLV_RANGE(instr, 7, 7) & SLV_RANGE(instr, 30,25) & SLV_RANGE(instr,11,8) & BIT(0), LEN(immediate));
+						CASE(CASE_U_type) immediate = SXT( SLV_RANGE(instr, 31, 20) & SLV_RANGE(instr,19,12) & BIN(000000000000), LEN(immediate));
+						CASE(CASE_J_type) immediate = SXT( SLV_RANGE(instr, 31, 31) & SLV_RANGE(instr,19,12) & SLV_RANGE(instr, 20,20) & SLV_RANGE(instr,30,21) & BIN(0), LEN(immediate));
+						DEFAULT immediate = TO_UINT(0, LEN(immediate));
 					ENDCASE
 
 					// Set destination register when available / no one when load/store
@@ -267,7 +267,7 @@ BEGIN
 			IF ( ( ( (cpu_wait == BIT(0) ) ) and (not ( (ropcode == LOAD) or (ropcode == STORE) ) ) and (halt == BIT(0)) ) or (PORT_BASE(datamem2core_i).data_en == BIT(1)) or (cpu_wait_on_write == BIT(1))) THEN
 				pipe <= ( RANGE(pipe, HI(pipe)-1, 0) & BIT(1) );
 				PCp <= PC;
-				next_PC := PC + TO_UINT(4, LEN(PC));
+				next_PC = PC + TO_UINT(4, LEN(PC));
 				inst_cs_n <= BIT(0);
 			ELSE
 				inst_cs_n <= BIT(1);
@@ -280,39 +280,39 @@ BEGIN
 				exec <= BIT(1);
 					rrinstr <= rinstr;
 				IF (csri == BIT(1)) THEN// CSR instruction with immediate arg.
-					op1 := RESIZE(rrs1, LEN(op1));
+					op1 = RESIZE(rrs1, LEN(op1));
 				ELSE
-					op1 := regs(TO_INTEGER(rrs1));
+					op1 = regs(TO_INTEGER(rrs1));
 				ENDIF
 				IF ( use_immediate == BIT(1) ) THEN
-					op2 := rimmediate;
+					op2 = rimmediate;
 				ELSE
-					op2 := regs(TO_INTEGER(rrs2));
+					op2 = regs(TO_INTEGER(rrs2));
 				ENDIF
 				rop1 <= op1;
 				rop2 <= op2;
 
 				// Arithmetic operations and results
-				add_res := EXT(op1, LEN(add_res)) + EXT(op2, LEN(add_res));
-				sub_res := EXT(op1, LEN(add_res)) - EXT(op2, LEN(add_res));
-				rs1_lt_rs2_u := RESIZE(RANGE(sub_res, 32,32),1);
-				rs1_lt_rs2_s := RESIZE(RANGE(sub_res, 32, 32) xor RANGE(op1, 31,31) xor RANGE(op2, 31,31),1);
+				add_res = EXT(op1, LEN(add_res)) + EXT(op2, LEN(add_res));
+				sub_res = EXT(op1, LEN(add_res)) - EXT(op2, LEN(add_res));
+				rs1_lt_rs2_u = RESIZE(RANGE(sub_res, 32,32),1);
+				rs1_lt_rs2_s = RESIZE(RANGE(sub_res, 32, 32) xor RANGE(op1, 31,31) xor RANGE(op2, 31,31),1);
 
 				IF (sub_res == TO_UINT(0, LEN(sub_res))) THEN
-					rs1_eq_rs2 := BIN(1);
+					rs1_eq_rs2 = BIN(1);
 				ELSE
-					rs1_eq_rs2 := BIN(0);
+					rs1_eq_rs2 = BIN(0);
 				ENDIF
 
-				sll_res := SHIFT_LEFT(op1, TO_INTEGER(RESIZE(op2, 5)));
-				srl_res_u := SHIFT_RIGHT(op1, TO_INTEGER(RESIZE(op2, 5)));
-				srl_res_s := UNSIGNED(SHIFT_RIGHT(SIGNED(op1), TO_INTEGER(RESIZE(op2, 5))));
-				and_res := op1 and op2;
-				or_res := op1 or op2;
-				xor_res := op1 xor op2;
-				nshift := RESIZE(add_res, LEN(nshift)); // shift data for LH/LB/SH/SB
-				trap := BIT(0);
-				taken := BIN(0);
+				sll_res = SHIFT_LEFT(op1, TO_INTEGER(RESIZE(op2, 5)));
+				srl_res_u = SHIFT_RIGHT(op1, TO_INTEGER(RESIZE(op2, 5)));
+				srl_res_s = UNSIGNED(SHIFT_RIGHT(SIGNED(op1), TO_INTEGER(RESIZE(op2, 5))));
+				and_res = op1 and op2;
+				or_res = op1 or op2;
+				xor_res = op1 xor op2;
+				nshift = RESIZE(add_res, LEN(nshift)); // shift data for LH/LB/SH/SB
+				trap = BIT(0);
+				taken = BIN(0);
 
 				radd_res <= add_res;
 				rsub_res <= sub_res;
@@ -321,50 +321,50 @@ BEGIN
 				rrs1_eq_rs2 <= rs1_eq_rs2;
 
 				rwb <= BIN(00000);
-				rd_val := BIN(10101010010101011010101001010101); // default
+				rd_val = BIN(10101010010101011010101001010101); // default
 				rjalr <= BIN(00000);
 				load_mem0 <= BIT(0);
 
 				SWITCH(ropcode) // Execute opcode
 					CASE(CASE_SYS) // CSR R/W
 						SWITCH(RANGE(rimmediate,11,0))
-							CASE(CASE_AMSTATUS) csr_val := mstatus;
-							//CASE(AMISA) csr_val := misa;
-							CASE(CASE_AMEDELEG) csr_val := medeleg;
-							CASE(CASE_AMIDELEG) csr_val := mideleg;
-							CASE(CASE_AMIE) csr_val := mie;
-							CASE(CASE_AMTVEC) csr_val := mtvec;
-							//CASE(AMCOUNTEREN) csr_val := mtcounteren;
-							CASE(CASE_AMIP) csr_val := mip;
-							CASE(CASE_AMSCRATCH) csr_val := mscratch;
-							CASE(CASE_AMEPC) csr_val := mepc;
-							CASE(CASE_AMCAUSE) csr_val := mcause;
-							DEFAULT csr_val := TO_UINT(0, LEN(csr_val));
+							CASE(CASE_AMSTATUS) csr_val = mstatus;
+							//CASE(AMISA) csr_val = misa;
+							CASE(CASE_AMEDELEG) csr_val = medeleg;
+							CASE(CASE_AMIDELEG) csr_val = mideleg;
+							CASE(CASE_AMIE) csr_val = mie;
+							CASE(CASE_AMTVEC) csr_val = mtvec;
+							//CASE(AMCOUNTEREN) csr_val = mtcounteren;
+							CASE(CASE_AMIP) csr_val = mip;
+							CASE(CASE_AMSCRATCH) csr_val = mscratch;
+							CASE(CASE_AMEPC) csr_val = mepc;
+							CASE(CASE_AMCAUSE) csr_val = mcause;
+							DEFAULT csr_val = TO_UINT(0, LEN(csr_val));
 						ENDCASE
 						SWITCH(rfunct3) // same for immediate and register: choice of op1 is made previously
-							CASE(CASE_CSRRW) csr_val := op1;
-							CASE(CASE_CSRRS) csr_val := csr_val or op1;
-							CASE(CASE_CSRRC) csr_val := csr_val and not op1;
-							CASE(CASE_CSRRWI) csr_val := op1;
-							CASE(CASE_CSRRSI) csr_val := csr_val or op1;
-							CASE(CASE_CSRRCI) csr_val := csr_val and not op1;
+							CASE(CASE_CSRRW) csr_val = op1;
+							CASE(CASE_CSRRS) csr_val = csr_val or op1;
+							CASE(CASE_CSRRC) csr_val = csr_val and not op1;
+							CASE(CASE_CSRRWI) csr_val = op1;
+							CASE(CASE_CSRRSI) csr_val = csr_val or op1;
+							CASE(CASE_CSRRCI) csr_val = csr_val and not op1;
 							CASE(CASE_ECALL) // ECALL-EBREAK or MRET
 							IF (use_immediate == BIT(0)) THEN // ECALL-EBREAK. strange statement (if not use _imm ... <= rimm.) but this actually uses the immediate reg reuse used for branches
-								//next_PC := mepc; flush <= BIT(1); pipe <= TO_UINT(0, LEN(pipe)); ropcode <= TO_UINT(0, LEN(ropcode));// TODO: Change mepc to appropriate register when not in machine mode
-								mepc <= rimmediate; cause := (BIN(0000000000000000000000000000) & (not B(rrs2, 0)) & BIN(0) & priv); trap := BIT(1);
-								//mepc <= rimmediate; cause := (BIN(000000000000000000000000000010) & priv); trap := BIT(1);
+								//next_PC = mepc; flush <= BIT(1); pipe <= TO_UINT(0, LEN(pipe)); ropcode <= TO_UINT(0, LEN(ropcode));// TODO: Change mepc to appropriate register when not in machine mode
+								mepc <= rimmediate; cause = (BIN(0000000000000000000000000000) & (not B(rrs2, 0)) & BIN(0) & priv); trap = BIT(1);
+								//mepc <= rimmediate; cause = (BIN(000000000000000000000000000010) & priv); trap = BIT(1);
  							ELSEIF ( ( rfunct7 == BIN(0011000) ) and ( rrs2 == BIN(00010) ) ) THEN  // MRET
-								next_PC := mepc; flush <= BIT(1); pipe <= TO_UINT(0, LEN(pipe)); ropcode <= TO_UINT(0, LEN(ropcode));// TODO: Change mepc to appropriate register when not in machine mode
+								next_PC = mepc; flush <= BIT(1); pipe <= TO_UINT(0, LEN(pipe)); ropcode <= TO_UINT(0, LEN(ropcode));// TODO: Change mepc to appropriate register when not in machine mode
 							ENDIF
 							//ELSE
-							//	trap := BIT(1); cause := ILLINSTR;
+							//	trap = BIT(1); cause = ILLINSTR;
 							//ENDIF
 								#ifdef NONREG
 								IF ( B(regs(3), 0) == BIN(1)) THEN  // program end
 										halt <= BIT(1);
 								ENDIF
 #endif
-							DEFAULT csr_val := TO_UINT(0, LEN(csr_val));
+							DEFAULT csr_val = TO_UINT(0, LEN(csr_val));
 						ENDCASE
 						SWITCH(RANGE(rimmediate,11,0))
 							CASE(CASE_AMSTATUS) mstatus <= csr_val;
@@ -372,26 +372,26 @@ BEGIN
 							CASE(CASE_AMIDELEG) mideleg <= csr_val;
 							CASE(CASE_AMIE) mie <= csr_val;
 							CASE(CASE_AMTVEC) mtvec <= csr_val;
-							//CASE(AMCOUNTEREN) csr_val := mtcounteren;
+							//CASE(AMCOUNTEREN) csr_val = mtcounteren;
 							CASE(CASE_AMIP) mip <= csr_val;
 							CASE(CASE_AMSCRATCH) mscratch <= csr_val;
 							CASE(CASE_AMEPC) mepc <= csr_val;
 							CASE(CASE_AMCAUSE) mcause <= csr_val;
-							DEFAULT csr_val := csr_val ;// TODO trap := BIT(1); cause := ILLINSTR;
+							DEFAULT csr_val = csr_val ;// TODO trap = BIT(1); cause = ILLINSTR;
 						ENDCASE
-						rd_val := csr_val;
+						rd_val = csr_val;
 					CASE(CASE_MEM)
 					CASE(CASE_OP)
 						SWITCH(rfunct3)
-							CASE(CASE_ADDx) IF (alt_op == BIT(0)) THEN rd_val := RESIZE(add_res, 32); ELSE rd_val := RESIZE(sub_res, 32); ENDIF
-							CASE(CASE_SLLx) rd_val := sll_res;
-							CASE(CASE_SRLx) IF (alt_op == BIT(0)) THEN rd_val := srl_res_u; ELSE rd_val := srl_res_s; ENDIF
-							CASE(CASE_SLTx) rd_val := RESIZE(rs1_lt_rs2_s, 32);
-							CASE(CASE_SLTU) rd_val := RESIZE(rs1_lt_rs2_u, 32);
-							CASE(CASE_ORx)  rd_val := or_res;
-							CASE(CASE_XORx) rd_val := xor_res;
-							CASE(CASE_ANDx) rd_val := and_res;
-							DEFAULT    trap := BIT(1); cause := ILLINSTR;
+							CASE(CASE_ADDx) IF (alt_op == BIT(0)) THEN rd_val = RESIZE(add_res, 32); ELSE rd_val = RESIZE(sub_res, 32); ENDIF
+							CASE(CASE_SLLx) rd_val = sll_res;
+							CASE(CASE_SRLx) IF (alt_op == BIT(0)) THEN rd_val = srl_res_u; ELSE rd_val = srl_res_s; ENDIF
+							CASE(CASE_SLTx) rd_val = RESIZE(rs1_lt_rs2_s, 32);
+							CASE(CASE_SLTU) rd_val = RESIZE(rs1_lt_rs2_u, 32);
+							CASE(CASE_ORx)  rd_val = or_res;
+							CASE(CASE_XORx) rd_val = xor_res;
+							CASE(CASE_ANDx) rd_val = and_res;
+							DEFAULT    trap = BIT(1); cause = ILLINSTR;
 						ENDCASE
 					CASE(CASE_LOAD)
 						IF (not (rrd == BIN(00000))) THEN
@@ -415,8 +415,8 @@ BEGIN
 								blk2mem_t0.be <= BIN(1111);
 						ENDIF
 					CASE(CASE_STORE)
-						wbe := ( B(rfunct3, 1) & B(rfunct3, 1) & (B(rfunct3, 0) or B(rfunct3, 1)) & BIT(1) ); // use minor opcode bits for wr. byte enable
-						wbe := SHIFT_LEFT(wbe, TO_INTEGER(nshift));
+						wbe = ( B(rfunct3, 1) & B(rfunct3, 1) & (B(rfunct3, 0) or B(rfunct3, 1)) & BIT(1) ); // use minor opcode bits for wr. byte enable
+						wbe = SHIFT_LEFT(wbe, TO_INTEGER(nshift));
 						blk2mem_t0.addr <= RANGE(add_res, LEN(blk2mem_t0.addr)+1, 2);//RESIZE(add_res, LEN(PORT_BASE(core2datamem_o).addr));
 						blk2mem_t0.cs_n <= BIT(0);
 						blk2mem_t0.wr_n <= BIT(0);
@@ -424,19 +424,19 @@ BEGIN
 						blk2mem_t0.data <= SHIFT_LEFT(regs(TO_INTEGER(rrs2)), TO_INTEGER(nshift & BIN(000)));
 						cpu_wait <= BIT(1);//opcode_is_load; //optimize this later on
 						cpu_wait_on_write <= BIT(1);//opcode_is_load;
-					CASE(CASE_LUI) rd_val := rimmediate;
-					CASE(CASE_AUIPC) rd_val := rimmediate; // Pc added at decoding stage
-					CASE(CASE_JAL) next_PC := rimmediate; rd_val := PCp; flush <= BIT(1); pipe <= TO_UINT(0, LEN(pipe));ropcode <= TO_UINT(0, LEN(ropcode));
-					CASE(CASE_JALR) next_PC := RESIZE( ( RANGE(add_res, 31,1) & BIN(0) ), LEN(PC)); // It seems that lsb could be used for stg else: clear lsb
-						rd_val := PCp; flush <= BIT(1); pipe <= TO_UINT(0, LEN(pipe)); rjalr <= rrd; ropcode <= TO_UINT(0, LEN(ropcode));
+					CASE(CASE_LUI) rd_val = rimmediate;
+					CASE(CASE_AUIPC) rd_val = rimmediate; // Pc added at decoding stage
+					CASE(CASE_JAL) next_PC = rimmediate; rd_val = PCp; flush <= BIT(1); pipe <= TO_UINT(0, LEN(pipe));ropcode <= TO_UINT(0, LEN(ropcode));
+					CASE(CASE_JALR) next_PC = RESIZE( ( RANGE(add_res, 31,1) & BIN(0) ), LEN(PC)); // It seems that lsb could be used for stg else: clear lsb
+						rd_val = PCp; flush <= BIT(1); pipe <= TO_UINT(0, LEN(pipe)); rjalr <= rrd; ropcode <= TO_UINT(0, LEN(ropcode));
 					CASE(CASE_BRANCH)
-						taken := ( ( ( ( RANGE(rfunct3, 1,1) and (rs1_lt_rs2_u) ) or ( (not RANGE(rfunct3, 1,1)) and (rs1_lt_rs2_s) ) ) and RANGE(rfunct3,2,2) ) or
+						taken = ( ( ( ( RANGE(rfunct3, 1,1) and (rs1_lt_rs2_u) ) or ( (not RANGE(rfunct3, 1,1)) and (rs1_lt_rs2_s) ) ) and RANGE(rfunct3,2,2) ) or
 								 ( rs1_eq_rs2 and not RANGE(rfunct3,2,2) ) ) xor RANGE(rfunct3, 0,0);
 
 						IF (taken == BIN(1)) THEN
-							next_PC := rimmediate; flush <= BIT(1); pipe <= TO_UINT(0, LEN(pipe)); ropcode <= TO_UINT(0, LEN(ropcode));
+							next_PC = rimmediate; flush <= BIT(1); pipe <= TO_UINT(0, LEN(pipe)); ropcode <= TO_UINT(0, LEN(ropcode));
 						ENDIF
-					DEFAULT trap := BIT(1); cause := ILLINSTR;
+					DEFAULT trap = BIT(1); cause = ILLINSTR;
 
 				ENDCASE
 				rtaken <= taken;
@@ -446,12 +446,12 @@ BEGIN
 					//PORT_BASE(core2datamem_o).cs_n <= BIT(1);
 					blk2mem_t0.cs_n <= BIT(1);
 				ENDIF
-				wrd := rrd;
+				wrd = rrd;
 			ELSE
 				//PORT_BASE(core2datamem_o).cs_n <= BIT(1);
 				blk2mem_t0.cs_n <= BIT(1);
 				exec <= BIT(0);
-				rd_val := BIN(10101010010101011010101001010101);
+				rd_val = BIN(10101010010101011010101001010101);
 			ENDIF
 
 			load_mem <= load_mem0;// Delay so that load_mem is not 1 just after load execution (this would trigger pipeline resume when accessing instruction memory)
@@ -466,17 +466,17 @@ BEGIN
 				cpu_wait <= BIT(0);
 				load_mem <= BIT(0);
 				load_mem0 <= BIT(0);
-				ld_data := PORT_BASE(datamem2core_i).data;
-				ld_data := SHIFT_RIGHT(ld_data, TO_INTEGER( (rshiftwb & BIN(000))));
+				ld_data = PORT_BASE(datamem2core_i).data;
+				ld_data = SHIFT_RIGHT(ld_data, TO_INTEGER( (rshiftwb & BIN(000))));
 				SWITCH(funct3wb)
-					CASE(CASE_LW) rd_val := ld_data;
-					CASE(CASE_LH) rd_val := SXT(RANGE(ld_data, 15, 0), LEN(rd_val));
-					CASE(CASE_LHU) rd_val := EXT(RANGE(ld_data, 15, 0), LEN(rd_val));
-					CASE(CASE_LB) rd_val := SXT(RANGE(ld_data, 7, 0), LEN(rd_val));
-					CASE(CASE_LBU) rd_val := EXT(RANGE(ld_data, 7, 0), LEN(rd_val));
-					DEFAULT rd_val := TO_UINT(0, LEN(rd_val));
+					CASE(CASE_LW) rd_val = ld_data;
+					CASE(CASE_LH) rd_val = SXT(RANGE(ld_data, 15, 0), LEN(rd_val));
+					CASE(CASE_LHU) rd_val = EXT(RANGE(ld_data, 15, 0), LEN(rd_val));
+					CASE(CASE_LB) rd_val = SXT(RANGE(ld_data, 7, 0), LEN(rd_val));
+					CASE(CASE_LBU) rd_val = EXT(RANGE(ld_data, 7, 0), LEN(rd_val));
+					DEFAULT rd_val = TO_UINT(0, LEN(rd_val));
 				ENDCASE
-				wrd := rwb;
+				wrd = rwb;
 			ENDIF
 
 			regs(TO_INTEGER(wrd)) <= rd_val;
@@ -487,11 +487,11 @@ BEGIN
 				//gprintf("#RLOADING CODE");
 				loading <= BIT(1);
 				inst_cs_n <= BIT(0);
-				next_PC := RESIZE( ( PORT_BASE(load_port_i).addr & BIN(00) ), LEN(PC) );
+				next_PC = RESIZE( ( PORT_BASE(load_port_i).addr & BIN(00) ), LEN(PC) );
 				PCp <= PORT_BASE(load_port_i).data; // reuse these regs
 			ELSEIF ( loading == BIT(1) ) THEN
 				gprintf("#RCODE LOADED, starting Giorno core");
-				next_PC := TO_UINT(0, LEN(PC));
+				next_PC = TO_UINT(0, LEN(PC));
 				inst_cs_n <= BIT(0);
 				loading <= BIT(0);
 				flush <= BIT(1);
@@ -501,13 +501,13 @@ BEGIN
 			rtrap <= trap;
 			// TRAP - try to optimize that later
 			IF ((not (loading == BIT(1))) and (trap == BIT(1))) THEN
-				trap_addr_base := mtvec and BIN(11111111111111111111111111111100);
+				trap_addr_base = mtvec and BIN(11111111111111111111111111111100);
 				IF (RANGE(mtvec, 1, 0) == BIN(01) ) THEN
-					trap_addr_offset := RANGE(cause, 31, 2) & BIN(00);
+					trap_addr_offset = RANGE(cause, 31, 2) & BIN(00);
 				ELSE
-					trap_addr_offset := TO_UINT(0, LEN(trap_addr_offset));
+					trap_addr_offset = TO_UINT(0, LEN(trap_addr_offset));
 				ENDIF
-				next_PC := trap_addr_base + trap_addr_offset;
+				next_PC = trap_addr_base + trap_addr_offset;
 				flush <= BIT(1); pipe <= TO_UINT(0, LEN(pipe)); ropcode <= TO_UINT(0, LEN(ropcode));
 				//pipe <= TO_UINT(0, LEN(pipe)); ropcode <= TO_UINT(0, LEN(ropcode));
 				mcause <= cause;

@@ -9,7 +9,7 @@ begin
  gpios_o <= TO_UNSIGNED(0,32);
  elsif ( clk_peri'event and (clk_peri = '1' ) ) then
   IF ( ( core2mem_i.cs_n = '0' ) and ( core2mem_i.wr_n = '0' ) ) then
-   IF (core2mem_i.addr = "1111111111111") then
+   IF (core2mem_i.addr = "1011111111111") then
     gpios_o <= core2mem_i.data;
    end if;
   end if;

@@ -58,15 +58,15 @@ BEGIN
 //		PORT_BASE(mem2core_o).data <= TO_UINT(0, LEN(mem2blk_t0.data));
 //		PORT_BASE(mem2core_o).data_en <= BIT(0);
 	IF ( EVENT(clk_mem) and (clk_mem == BIT(1)) ) THEN
-		baddr := PORT_BASE(core2mem_i).addr;
-		rdata := 	mem3(TO_INTEGER(baddr)) &
+		baddr = PORT_BASE(core2mem_i).addr;
+		rdata = 	mem3(TO_INTEGER(baddr)) &
 					mem2(TO_INTEGER(baddr)) &
 					mem1(TO_INTEGER(baddr)) &
 					mem0(TO_INTEGER(baddr));
 		PORT_BASE(mem2core_o).data <= rdata;
 		IF (PORT_BASE(core2mem_i).cs_n == BIT(0)) THEN
-			//baddr := PORT_BASE(core2mem_i).addr;
-			//rdata := 	mem3(TO_INTEGER(baddr)) &
+			//baddr = PORT_BASE(core2mem_i).addr;
+			//rdata = 	mem3(TO_INTEGER(baddr)) &
 			//			mem2(TO_INTEGER(baddr)) &
 			//			mem1(TO_INTEGER(baddr)) &
 			//			mem0(TO_INTEGER(baddr));
@@ -162,9 +162,9 @@ BLK_END;
 				delayed_write <= BIT(0);
 			ELSEIF ( EVENT(clk_mem) and (clk_mem == BIT(1)) ) THEN
 				IF (PORT_BASE(core2mem_i).cs_n == BIT(0)) THEN
-					baddr := PORT_BASE(core2mem_i).addr;
+					baddr = PORT_BASE(core2mem_i).addr;
 					IF (PORT_BASE(core2mem_i).wr_n == BIT(1)) THEN
-						rdata := 	mem3(TO_INTEGER(baddr)) &
+						rdata = 	mem3(TO_INTEGER(baddr)) &
 									mem2(TO_INTEGER(baddr)) &
 									mem1(TO_INTEGER(baddr)) &
 									mem0(TO_INTEGER(baddr));
@@ -192,16 +192,16 @@ BLK_END;
 				//rmem(TO_INTEGER(PORT_BASE(core2mem_i).addr)) <= PORT_BASE(core2mem_i).data;
 
 					IF ( B(be, 3) == BIT(1) ) THEN
-						mem3[TO_INTEGER(addr)] := (RANGE(data, 31, 24));
+						mem3[TO_INTEGER(addr)] = (RANGE(data, 31, 24));
 					ENDIF
 					IF ( B(be, 2) == BIT(1) ) THEN
-						mem2(TO_INTEGER(addr)) := RANGE(data, 23, 16);
+						mem2(TO_INTEGER(addr)) = RANGE(data, 23, 16);
 					ENDIF
 					IF ( B(be, 1) == BIT(1) ) THEN
-						mem1(TO_INTEGER(addr)) := RANGE(data, 15, 8);
+						mem1(TO_INTEGER(addr)) = RANGE(data, 15, 8);
 					ENDIF
 					IF ( B(be, 0) == BIT(1) ) THEN
-						mem0(TO_INTEGER(addr)) := RANGE(data, 7, 0);
+						mem0(TO_INTEGER(addr)) = RANGE(data, 7, 0);
 					ENDIF
 
 				ENDIF

@@ -35,10 +35,12 @@ struct base_slv
 	{
 		n = x;
 	}
+	 /*
 	constexpr operator int() const
 		{
 			return n;
 		}
+		*/
 	const static int length = N;
 	const static int high = N-1;
 	static const int size = 1;
@@ -299,12 +301,12 @@ struct slv : public base_slv<N>, flop// inherits of flop / useless for combinati
 	{
 		return slv<m>(n);
 	}
-
+/*
 	constexpr operator int() const
 		{
 			return n;
 		}
-
+*/
 };
 
 template<int N>
@@ -508,14 +510,14 @@ struct tree : slv<1>
 		if (*p_en == slv<1>(1))
 		{
 			if ( not (x_i == static_cast<slv<1>>(*this)) )
-				evt = slv<1>(1);
+				evt = 1;//slv<1>(1);
 			else
-				evt = slv<1>(0);
+				evt = 0;//slv<1>(0);
 			slv<1>::operator=(x_i);
 		}
 		else
 		{
-			evt = slv<1>(0);
+			evt = 0;//slv<1>(0);
 			slv<1>::operator=(0);
 		}
 	}
@@ -1102,8 +1104,8 @@ struct array< T1<T,N> > : T1<T,N>, vcd_entry
 		*/ EVAL(DECL_PORTS(get_##ports)) /*
 		*/ ); end type; architecture rtl of type is component dummy_zkw_pouet is port(clk : in std_logic);end component//std::cerr << "CTOR " << name << "\n";}
 
-#define TESTBENCH(type, ...) entity  type is /*
-		*/ ); end type; architecture rtl of type is component dummy_zkw_pouet is port(clk : in std_logic);end component//std::cerr << "CTOR " << name << "\n";}
+#define TESTBENCH(type) entity  type is /*
+		*/ begin end type; architecture rtl of type is component dummy_zkw_pouet is port(clk : in std_logic);end component//std::cerr << "CTOR " << name << "\n";}
 
 #define COMPONENT(type, ports, ...) IF_ELSE(HAS_ARGS(__VA_ARGS__))(template<int dummy0, __VA_ARGS>)(component)  type is port(/*
 		*/ EVAL(DECL_PORTS(get_##ports)) /*

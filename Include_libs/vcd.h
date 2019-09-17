@@ -33,6 +33,7 @@ struct block_desc
 
 static const char noname[5] = "none";
 const char vcd_characters[91] = "!%&'()*+,-./:;<=>?@[]^_`{|}~ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+void clean_vcd();
 
 struct vcd_entry
 {
@@ -100,6 +101,11 @@ struct vcd_entry
 				{
 					gprintf("#GActivating driver");
 					driver->activate();
+					driver->binary = binary; // Driver not activated: copy binary flag to driver
+				}
+				else
+				{
+					binary = driver->binary; // Driver already activated: keep driver binary flag to keep consistency among driven signals
 				}
 				// Copy driving signal ID
 				ID[0] = driver->ID[0];
@@ -334,6 +340,8 @@ struct vcd_file_t : public std::ofstream
 			gprintf(*this, "$enddefinitions $end\n");
 
 		}
+		// Now, can set 0 bits for non-bin entries
+		clean_vcd();
 	}
 
 };
@@ -381,7 +389,7 @@ void activate_vcd(const gstring& x_i)
 
 				if ( (probe == test) or (probe.empty()) ) // and (gmodule::module_list[kk]->vcd_list[i]->nbits > -1024)) )
 				{
-					gmodule::module_list[kk]->vcd_list[i]->activate();
+					//gmodule::module_list[kk]->vcd_list[i]->activate();
 					if (bin)
 					{
 						gprintf("#mActivating %r:%b probe %g in binary mode", gmodule::module_list[kk]->get_full_name(), gmodule::module_list[kk]->vcd_list[i]->name, probe);
@@ -393,6 +401,8 @@ void activate_vcd(const gstring& x_i)
 						//gmodule::module_list[kk]->vcd_list[i]->nbits = 0;
 
 					}
+					gmodule::module_list[kk]->vcd_list[i]->activate();
+
 				}
 
 			}

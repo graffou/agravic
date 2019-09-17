@@ -510,7 +510,10 @@ struct gstring : public string
     	 return true;
      }
      else
-    return false;
+     {
+    	 nn = size();
+    	 return false;
+     }
     }   
     
  template<class T>
@@ -637,6 +640,7 @@ struct gstring : public string
 	 
  }
  
+
 };
 
 //template <class T, class T0>

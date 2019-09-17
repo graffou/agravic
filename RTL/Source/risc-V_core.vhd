@@ -225,7 +225,7 @@ begin
      op1 := regs(TO_INTEGER(rrs1));
     end if;
     IF ( use_immediate = '1' ) then
-      op2 := rimmediate;
+     op2 := rimmediate;
     else
      op2 := regs(TO_INTEGER(rrs2));
     end if;
@@ -236,9 +236,9 @@ begin
     rs1_lt_rs2_u := RESIZE((sub_res(32 downto 32)),1);
     rs1_lt_rs2_s := RESIZE((sub_res(32 downto 32)) xor (op1(31 downto 31)) xor (op2(31 downto 31)),1);
     IF (sub_res = TO_UNSIGNED(0,sub_res'length)) then
-      rs1_eq_rs2 := "1";
+     rs1_eq_rs2 := "1";
     else
-      rs1_eq_rs2 := "0";
+     rs1_eq_rs2 := "0";
     end if;
     sll_res := SHIFT_LEFT(op1, TO_INTEGER(RESIZE(op2, 5)));
     srl_res_u := SHIFT_RIGHT(op1, TO_INTEGER(RESIZE(op2, 5)));
@@ -314,7 +314,7 @@ begin
        when others => trap := '1' ; cause := ILLINSTR;
       end case;
      when CASE_LOAD =>
-      IF (not (rrd = "000")) then
+      IF (not (rrd = "00000")) then
        cpu_wait <= '1' ;
        rwb <= rrd;
        funct3wb <= rfunct3;

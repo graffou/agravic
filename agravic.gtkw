@@ -1,0 +1,144 @@
+[*]
+[*] GTKWave Analyzer v3.3.93 (w)1999-2018 BSI
+[*] Wed Sep 11 13:26:14 2019
+[*]
+[dumpfile] "/home/paganoz/BOULOT/PLAT_GS/dut.vcd"
+[dumpfile_mtime] "Wed Sep 11 13:19:16 2019"
+[dumpfile_size] 1717499
+[savefile] "/home/paganoz/BOULOT/PLAT_GS/agravic.gtkw"
+[timestart] 3352
+[size] 1902 591
+[pos] -1 -1
+*-2.066427 3375 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] tb.
+[treeopen] tb.dut.
+[sst_width] 223
+[signals_width] 290
+[sst_expanded] 1
+[sst_vpaned_height] 185
+@28
+tb.clk
+tb.\cmd.addr
+tb.\cmd.be
+tb.\cmd.cs_n
+tb.\cmd.data
+tb.\cmd.wr_n
+tb.dut.u0_risc_V_core.<reset_n
+tb.dut.<reset_n
+tb.dut.\core2instmem.addr
+tb.dut.\core2instmem.data
+tb.dut.\core2instmem.cs_n
+tb.dut.\core2instmem.wr_n
+@8000022
+tb.dut.u0_risc_V_core.\<instmem2core_i.data
+@28
+tb.dut.u0_risc_V_core.\<instmem2core_i.data_en
+tb.dut.u0_risc_V_core.\<datamem2core_i.data
+tb.dut.u0_risc_V_core.\<datamem2core_i.data_en
+tb.dut.u0_risc_V_core.\<instmem2core_i.data
+tb.dut.u0_risc_V_core.\<instmem2core_i.data_en
+tb.dut.u0_risc_V_core.\>core2instmem_o.addr
+tb.dut.u0_risc_V_core.\>core2instmem_o.cs_n
+tb.dut.u0_risc_V_core.\>core2instmem_o.data
+tb.dut.\core2instmem.addr
+tb.dut.\core2instmem.cs_n
+tb.dut.u0_risc_V_core.\>core2datamem_o.addr
+tb.dut.u0_risc_V_core.\>core2datamem_o.be
+tb.dut.u0_risc_V_core.\>core2datamem_o.cs_n
+tb.dut.u0_risc_V_core.\>core2datamem_o.data
+tb.dut.u0_risc_V_core.\>core2datamem_o.wr_n
+@22
+tb.dut.u0_risc_V_core.ropcode[6:0]
+@28
+tb.dut.u0_risc_V_core.rtrap
+tb.dut.u0_risc_V_core.cpu_wait
+tb.dut.u0_risc_V_core.<clk_core
+tb.dut.u0_risc_V_core.loading
+tb.dut.u0_risc_V_core.rrd
+tb.dut.u0_risc_V_core.rrs1
+tb.dut.u0_risc_V_core.rrs2
+@22
+tb.dut.u0_risc_V_core.raw_opcode[6:0]
+@28
+tb.dut.u0_risc_V_core.flush
+tb.dut.u0_risc_V_core.rsub_res
+tb.dut.u0_risc_V_core.rrs1_lt_rs2_u
+tb.dut.u0_risc_V_core.rrs1_lt_rs2_s
+tb.dut.u0_risc_V_core.alt_op
+tb.dut.u0_risc_V_core.use_immediate
+tb.dut.u0_risc_V_core.rimmediate_type
+tb.dut.u0_risc_V_core.rimmediate
+tb.dut.u0_risc_V_core.csri
+@22
+tb.dut.u0_risc_V_core.rop1[31:0]
+tb.dut.u0_risc_V_core.rop2[31:0]
+@28
+tb.dut.u0_risc_V_core.rrd_val
+tb.dut.u0_risc_V_core.rfunct3
+tb.dut.u0_risc_V_core.\<datamem2core_i.data_en
+tb.dut.u0_risc_V_core.use_immediate
+tb.dut.u0_risc_V_core.cpu_wait
+tb.dut.u0_risc_V_core.cpu_wait2
+@8022
+tb.dut.u0_risc_V_core.PC[31:0]
+@23
+tb.dut.u0_risc_V_core.PCp[31:0]
+@22
+tb.dut.u0_risc_V_core.PC[31:0]
+tb.dut.u0_risc_V_core.rinstr[31:0]
+tb.dut.u0_risc_V_core.ropcode[6:0]
+tb.dut.u0_risc_V_core.rrinstr[31:0]
+@28
+tb.dut.u0_risc_V_core.exec
+@22
+tb.dut.u0_risc_V_core.regs(15)[31:0]
+@28
+tb.dut.u0_risc_V_core.rtaken
+tb.dut.u0_risc_V_core.regs(0)
+@22
+tb.dut.u0_risc_V_core.regs(1)[31:0]
+tb.dut.u0_risc_V_core.regs(2)[31:0]
+tb.dut.u0_risc_V_core.regs(3)[31:0]
+tb.dut.u0_risc_V_core.regs(4)[31:0]
+tb.dut.u0_risc_V_core.regs(5)[31:0]
+tb.dut.u0_risc_V_core.regs(6)[31:0]
+@28
+tb.dut.u0_risc_V_core.regs(7)
+tb.dut.u0_risc_V_core.regs(8)
+tb.dut.u0_risc_V_core.regs(9)
+@22
+tb.dut.u0_risc_V_core.regs(10)[31:0]
+@28
+tb.dut.u0_risc_V_core.regs(11)
+tb.dut.u0_risc_V_core.regs(12)
+tb.dut.u0_risc_V_core.regs(13)
+tb.dut.u0_risc_V_core.regs(14)
+@22
+tb.dut.u0_risc_V_core.regs(15)[31:0]
+@28
+tb.dut.u0_risc_V_core.regs(16)
+tb.dut.u0_risc_V_core.regs(17)
+tb.dut.u0_risc_V_core.regs(18)
+tb.dut.u0_risc_V_core.regs(19)
+tb.dut.u0_risc_V_core.regs(20)
+tb.dut.u0_risc_V_core.regs(21)
+tb.dut.u0_risc_V_core.regs(22)
+tb.dut.u0_risc_V_core.regs(23)
+tb.dut.u0_risc_V_core.regs(24)
+tb.dut.u0_risc_V_core.regs(25)
+tb.dut.u0_risc_V_core.regs(26)
+tb.dut.u0_risc_V_core.regs(27)
+tb.dut.u0_risc_V_core.regs(28)
+tb.dut.u0_risc_V_core.regs(29)
+tb.dut.u0_risc_V_core.regs(30)
+@22
+tb.dut.u0_risc_V_core.regs(31)[31:0]
+@28
+tb.dut.u0_risc_V_core.rwb
+tb.dut.\<load_port_i.addr
+tb.dut.\<load_port_i.be
+tb.\cmd.data
+tb.\cmd.wr_n
+tb.\cmd.addr
+[pattern_trace] 1
+[pattern_trace] 0
