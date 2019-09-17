@@ -1,5 +1,6 @@
 # agravic 
-# agravic make generates the executable file and the rtl files
+# agravic requires gcc 7 or gcc 8
+# agravic make: generates the executable file and the rtl files
 # risc-V core runs and pass many compliance tests (rv32i)
 make
 # launch executable, for example lw instruction test
@@ -18,3 +19,9 @@ make nonreg
 ./nonreg
 more test_results
 
+# Build basic GCC bare metal example (gpio toggling based upon ibex led basic example)
+cd FIRMWARE
+  make
+  cd ..
+  make
+  ./dut -ncycles 200000 -bin_file 'FIRMWARE/led.bin'

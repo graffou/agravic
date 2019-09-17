@@ -1,0 +1,338 @@
+
+.
+                       *    #     #####  ######     #    #     #   ###    #####    .             *
+              +            # #   #     # #     #   # #   #     #    #    #     #           +                .
+        .                 #   #  #       #     #  #   #  #     #    #    #
+                      .  #     # #  #### ######  #     # #     #    #    #		*      .                      +
+         *               ####### #     # #   #   #######  #   #     #    #
+             .           #     # #     # #    #  #     #   # #      #    #     #                         *             
+    +                    #     #  #####  #     # #     #    #      ###    #####                  *
+                    +                                       .                        *                       .
+
+
+What is agravic ?
+-----------------
+
+Agravic is a framework that enables writing VHDL-like code inside a C++ program.
+It uses heavy preprocessor abuse for that, but the counterpart is that synthesizable VHDL code can be preprocessor-generated from the C++ code, just by adding the -DVHDL option to the compiler (and with a light preprocessor output parsing though).
+The syntax has been chosen in order to be able to generate VHDL code, but valid C++ code as well.
+
+THIS MEANS AGRAVIC ENABLES RTL-CODE WRITING AND TESTING WITHOUT THE (HUGE) EXPENSE OF EDA SIMULATION TOOLS.
+Furthermore, C++ simulation of agravic designs is way faster than classical rtl simulation.
+MAPPING THE DESIGN TO FPGA IS FREE USING QUARTUS, AS LONG AS THE INTENDED TARGET IS SUPPORTED FOR FREE. 
+
+Agravic is not a delta-cycle simulator. There is no true combinational logic. The simulator expects that combinational logic is always driven by clocked logic (which is true anyway). 
+So, combinational logic exists in agravic, but in two forms:
+-variables in a synchronous process
+-combinational signals that are evaluated after a given clock event.    
+
+The VHDL-like code structure is very similar to VHDL, though many statements use macros.
+Of course, not all VHDL syntax is available, but you get:
+
+* waveform generation
+---------------------
+This is quite important, since agravic enables writing VHDL-like code.
+Debugging rtl code without waveform traces would be a huge penalty over traditional rtl tools.
+Thankfully, agravic generates vcd files, that you can read for free using gtkwave.
+VCD probes are output to dut.vcd file -> open dut.vcd inside gtkwave.
+
+VCD probes are enabled from vcd.scn file.
+This file contains the names of signals to probe, coded this way:
+top_block:block_1:signal1 	probes signal1 from block top_block:block_1:signal1
+top_block:block_2:		probes all signals in block top_block:block_2
+
+Char ':' delimitates block hierarchy levels.
+
+Default behavior is that signals are probed in integer format, except 1-bit signals, which are in binary format.
+This is nice for vcd generation (and thus simulation) speed, but can be difficult to read in vcd file viewer when bitwise information is important.
+To force signal probing in binary format, keyword bin must be added to signal name (further releases):
+top_block:block_1:signal2 bin
+
+* Executable and VHDL generation
+--------------------------------
+
+Type make.
+
+* General code structure
+------------------------
+
+RTL blocks and packages are defined in .h files, which must be found inside Source directory.
+The makefile converts these .h files into .h files (yes, h to h but with := converted to =), and .h files to .vhd files.
+Generated VHDL files are found in RTL/Source directory.
+
+* Signals and variables, VHDL signed and unsigned types:
+--------------------------------------------------------
+e.g.:
+	SIG(toggle, UINT(1));	-> signal toggle : unsigned(0 downto 0);
+	VAR(x, INT(5));		-> signal x : signed( 4 downto 0);
+
+  As in VHDL, variables must be declared inside a process. Otherwise, the code might work in C++ but will not compile in VHDL.
+  Operator := is used for variable assignment.
+
+	PROCESS(0, clk, reset_n)
+	BEGIN
+		VAR(myvar, UINT(12));	// var declaration
+		IF ( reset_n == BIT(0) ) THEN
+			...
+		ELSEIF ( EVENT(clk) and (clk == BIT(1)) ) THEN
+			myvar := data_i;	// var assignment
+			...
+		ENDIF
+	END_PROCESS;
+
+
+  !!!!! INT() and UINT() types are limited to 64 bits. For ordinary designs, this limitation is not an obstacle for logical or arithmetic use.
+
+  	+ Conversion from INT to UINT is performed using the SIGNED() and UNSIGNED() macros.
+
+  	+ assignment, + and - operations are allowed on integers OF SAME LENGTH AND SAME SIGNEDNESS ONLY.
+  
+	+ Subset of bit vector:
+	RANGE( my_signal, 10, 4 ) --> my_signal(10 downto 4)
+
+  	+ Basic UINT and INT types have some VHDL-like attributes:
+		a <= RESIZE(b, LEN(a)); // -> a <= resize(b, a'length);
+		c <= RANGE(b, HI(b), HI(c) - HI(b)); // c <= b(b'high downto c'high - b'high);
+
+	+ Conversion from integer:
+	a <= TO_UINT(144, LEN(a)); // TO_INT(144, LEN(a)); for signed INT
+
+	+ Conversion to integer (e.g. indexing arrays): 
+	data_o <= mem(TO_INTEGER(addr_i));
+
+	+ Signed to unsigned:
+	a <= UNSIGNED(b);
+
+	+ Unsigned to signed:
+	a <= SIGNED(b);
+
+	+ Casting to different bit-size
+	a <= RESIZE(b, LEN(a));
+
+	Generation from integer / literal
+	a <= TO_UINT(13, LEN(a));
+	a <= BIN(1011100000000);
+	// check for hex value
+
+  Arrays are available as well. Arrays of non-base types is something untested (arrays of arrays, arrays of records).
+  Best practice is to define an array type, which also defines a base type for constants definition:
+	TYPE(my_array_t, ARRAY_TYPE(UINT(5), 4));
+	CONSTANT BASE_ARRAY_TYPE(UINT(5), 4) my_array_t0 = LIST(BIN(00000), BIN(00001), BIN(00010), BIN(00011)); // Use macro for init, so that it translates to bracket/paren
+	SIG(my_array, my_array_t);
+
+  The 64-bit limitation could be a problem when dealing with large busses. Agravic implements VHDL records, which are a far cleaner way of creating busses.
+  In my opinion, busses should always be implemented as records, because they describe busses structures in a non-ambiguous way, that a block-to-block wiring 	only requires a single record wire, and block-to-block connection modifications only require a change to the record definition (no top-level design modification).
+  So, using records for busses is not a limitation and is a good design practice.
+  record example:
+	RECORD(bus_t,
+	DECL_FIELDS(
+		FIELD(addr, UINT(10)),
+		FIELD(data, UINT(16))
+		)
+	); 
+
+	SIG(bus, bus_t);
+	...
+	bus.addr <= addr;
+	data <= bus.data;
+
+Constants
+---------
+
+Agravic enables package declarations, this way:
+
+#include "slv.h"
+START_OF_FILE(structures)
+INCLUDES
+PACKAGE(structures)
+
+RECORD(blk2mem_t,
+...
+);
+
+END_PACKAGE(structures)
+
+Defining constants inside VHDL packages is a good practice.
+Unfortunately, defining signed/unsigned constants outside blocks does not currently work in Agravic. 
+Integer constants should be definable inside packages though, for example package defined bit sizes could bring a kind of genericity.
+
+
+
+* Processes
+-----------
+Currently, only four processes are available per module.
+These processes are either purely synchronous, or pseudo-combinational.
+Synchronous process have a clock and a reset signal as drivers, while pseudo-combinational only have a clock driver. Pseudo-combinational processes are mainly intended at driving block outputs (clock driven pseudo-combinational logic is executed after clock driven flip-flops are setup).
+However, pseudo-combinational logic might be used in purely combinational blocks. One must remind that pseudo-combinational logic IS NOT COMBINATIONAL LOGIC, and as a consequence, a chained hierarchy of pseudo-combinational blocks IS UNPREDICTABLE.
+
+Process declaration is either:
+	PROCESS(#process, clk, reset_n) // pure synchronous
+	BEGIN
+	...
+	END_PROCESS;
+
+	COMB_PROCESS(#process2, clk) // Pseudo-combinational driven by clk
+	BEGIN
+	...
+	END_PROCESS;
+
+* Flip-flops:
+-------------
+  As in VHDL, a signal assigned inside a process that's driven by a clock and a reset is a flip-flop.
+  !! In agravic, combinational processes are not truly combinational. So, they are driven by a clock (no reset), but the assignment of a signal in such a process does not mean this is a flip-flop. It's a regular VHDL signal.
+
+* Combinational logic (pseudo)
+------------------------------
+  As said before, a combinational process in agravic is NOT a process in VHDL. THERE ARE NO SENSITIVITY LIST DRIVEN COMBINATIONAL PROCESSES IN AGRAVIC.
+  A combinational process is driven by a clock, that means it is logic that is executed after (or before in further releases) flip-flop (on this clock tree) outputs have been setup. Typical use of this is the assignment of block outputs.
+  !! The second side effect of this is that the code of pseudo-combinational must be written in order:
+	a <= flop_1;
+	b <= a;
+  will create a cycle delay for a in agravic, though it will evaluate as a <= flop_1 in VHDL.
+  
+
+*Entity declarations:
+---------------------
+Entities are declared as in VHDL, though generic parameters will only be available in further releases.
+Syntax is similar to VHDl, despite the use of C macros:
+
+	ENTITY(entity_name,
+	DECL_PORTS(
+			PORT(clk, CLK_TYPE, IN),
+			PORT(reset_n, RST_TYPE, IN),
+			PORT(foo_i, UINT(5), IN),
+			PORT(foo_o, UINT(5), OUT)
+			)
+	);
+
+Writing to an input port cannot be checked at compilation time. It would require in/out port specialization (in the future ?).
+This can be checked through VHDL generation and compilation (clearly not ideal), or by defining -DCHECK_PORTS_MAPPING: C++ executable will stop when writing to an input port.
+
+
+*Component declarations
+-----------------------
+similar to VHDL, but pay attention to the fact that COMPONENT DECLARATIONS ARE IGNORED IN C++, SO ERRORS IN DECLARATION WILL BE IGNRORED.
+Just cut and paste entity declaration and change ENTITY keyword for COMPONENT:
+
+ 	COMPONENT(entity_name,
+	DECL_PORTS(
+			PORT(clk, CLK_TYPE, IN),
+			PORT(reset_n, RST_TYPE, IN),
+			PORT(foo_i, UINT(5), IN),
+			PORT(foo_o, UINT(5), OUT)
+			)
+	);
+
+* Block instances
+-----------------
+
+Blocks are instantiated using named instantiation ONLY. This is however the best practice available. Each instance port gets its counterpart in the block it is intantiated. As in VHDL, instantiated block ports are mapped to signals or ports. 
+
+Block instance example:
+	BLK_INST(my_entity, entity_name,
+	MAPPING(
+		PM(clk, clk),
+		PM(reset_n, reset_n),
+		PM(foo_i, foo_internal_flop),
+		PM(foo_o, calling_block_foo_o)
+		)
+	); 
+
+IF (...) THEN, CASE(...) statements
+------------------------
+
+if:
+
+IF (condition) THEN
+	...
+ELSEIF (condition2) THEN
+	...
+ELSE
+	...
+ENDIF
+
+case:
+
+SWITCH( integer )
+	CASE(0) statement0;
+	CASE(1) statement1;
+	DEFAULT default_statement;
+ENDCASE
+
+Genericity
+----------
+
+Generic block parameters will come in the future.
+However, named generic mapping (as in VHDL) is unlikely to be available in agravic, since C++ maps generic (template) parameters in order, not by name.
+Therefore, named generic mapping will be the rule for VHDL generation, but won't be actually checked by agravic C++ compilation.
+
+Major differences with VHDL
+===========================
+
+Structure of agravic code is similar to VHDL's.
+However, remind that agravic is just a C++ / C preprocessor hack so that codes is easily translated to VHDL using C preprocessor.
+Even if your code sticks to the VHDL-like structure of agravic, you must be aware of the fundamental differences between agravic (which remains C++ after all) and VHDL. 
+
+What is different from C++ to VHDL and cannot be resolved by the preprocessor
+-----------------------------------------------------------------------------
+
+Summary:
+-Use parenthesis around conditions: if (condition) THEN ...
+-Use := for variable ( VHDL definition, declared VAR(...) ) assignment. Never use =
+-Use == to test equality
+-Use parentheses when assigning to a logical expression ( a<= (b and c); ). Not necessary with a pure arithmetic expression (a <= b + c; )
+
+Developed:
+* if statements must hold boolean condition inside parentheses. No problem, VHDL does not care:
+  if (condition) THEN ... 
+Anyway, C++ code won't compile parentheses are omitted.
+
+* Variable assignment is := in VHDL. This is not a C++ operator, nor can be converted to = operator by the preprocessor.
+Therefore, := assignment must be converted to = using sed prior to C++ compilation.
+Of course, = operator could be directly used in C++, but these statements would create errors during VHDL compilations.
+
+* == operator is used to test equality in C++, = in VHDL code. It would require code analysis to convert = to == for C++ compilation. So, == is used to test equality. During VHDL generation, the preprocessor output is sed'ed to convert it to =.
+
+* The <= operator of C++ has been overloaded to mimic the <= assignment of VHDL. This works fine when performing arithmetic operations (a <= b + c;).
+However, the <= operator is NOT an assignment operator in C++, so , when using logical operators in assignments (and, or not, xor), priority of C++ logical operator prevails.
+e.g. a <= b OR c; will evaluate as (a <= b) or c. This is not what we expect and results in a compilation error (stg like no && operator for bool and slv<N>).
+So, assignments involving logical operators must be held inside parentheses:
+	a <= (b OR c);  // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+What is necessary for VHDL and is actually useless in C++ code
+--------------------------------------------------------------
+
+-Must declare components
+
+* C++ code includes all blocks in main. Previous component declaration is not necessary.
+However, VHDL code is generated from preprocessor output, every block translates into its own vhdl file.
+Therefore, If block A instantiates block B, a component declaration of B is required in A, using the COMPONENT() macro.
+In C++, the COMPONENT macro 
+
+What is necessary for C++  and is useless in VHDL code
+------------------------------------------------------
+
+Summary:
+-When declaring a constant array ot record, use BASE_ARRAY_TYPE or BASE_RECORD_TYPE
+-Sometimes, port casting is necessary
+
+Developed:
+* C++ forbids bracket initialization of complex classes or structures. However, array and record types are complex types, this is required by ports and vcd generation. If a constant array or record declaration is required, use of array or record base type is mandatory. Actually, both of these types are derived from a base type that can be initialized using a bracket statement.
+As a side effect, these constant values cannot be vcd probed. Well, these are constants anyway...
+examples:
+	TYPE(tata_t, ARRAY_TYPE(UINT(5), 4));
+	CONSTANT BASE_ARRAY_TYPE(UINT(5), 4) tata_t0 := LIST(1,2,3,4);
+	RECORD(yeye_t,
+			DECL_FIELDS(
+					FIELD(bobo, UINT(5)),
+					FIELD(baba, UINT(9))
+					)
+	);
+	CONSTANT BASE_RECORD_TYPE(yeye_t) yeye_t0 = LIST(TO_UINT(0,5),TO_UINT(0,9));
+
+* In agravic, ports are not directly derived of a base type. Ports are actually std::reference_wrapper of the base type. Therefore, and despite the fact that several binary operators are defined (enabling type <= port<type> + type operations for example), not all base_type operations are allowed for port<base_type>.
+So, it is sometimes requires to cast the port to the base type, which is not required in VHDL. This is done using the PORT_BASE() macro, for example:
+			my_signal <= SIGNED(PORT_BASE(signal_i));
+
+   
+
