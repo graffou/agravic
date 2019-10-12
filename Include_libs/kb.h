@@ -25,7 +25,7 @@ void gotoxy(int x, int y) { printf("\x1B[%d;%df", y, x); }
 void clrscr() { printf("\x1B[2J\x1B[0;0f"); }
 
 int readch() {
-   register int ch;
+    int ch;
    terminal_lnbuf(0);
    terminal_echo(0);
    ch = getchar();
@@ -35,7 +35,7 @@ int readch() {
 }
 
 int getche() {
-   register int ch;
+    int ch;
    terminal_lnbuf(0);
    ch = getchar();
    terminal_lnbuf(1);
@@ -43,7 +43,7 @@ int getche() {
 }
 
 int kbhit() {
-   register int ret;
+    int ret;
    fd_set fds;
    terminal_lnbuf(0);
    terminal_echo(0);

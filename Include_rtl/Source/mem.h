@@ -73,7 +73,7 @@ BEGIN
 			//PORT_BASE(mem2core_o).data <= rdata;
 			PORT_BASE(mem2core_o).data_en <= BIT(1);
 			IF (PORT_BASE(core2mem_i).wr_n == BIT(0)) THEN
-				gprintf("#MMem write % @ % ", to_hex(PORT_BASE(core2mem_i).data), to_hex(PORT_BASE(core2mem_i).addr), PORT_BASE(core2mem_i).be);
+				//gprintf("#MMem write % @ % ", to_hex(PORT_BASE(core2mem_i).data), to_hex(PORT_BASE(core2mem_i).addr), PORT_BASE(core2mem_i).be);
 				//rmem(TO_INTEGER(PORT_BASE(core2mem_i).addr)) <= PORT_BASE(core2mem_i).data;
 				IF ( B(PORT_BASE(core2mem_i).be, 3) == BIT(1) ) THEN
 					mem3(TO_INTEGER(baddr)) <= RANGE(PORT_BASE(core2mem_i).data, 31, 24);

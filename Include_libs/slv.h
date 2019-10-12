@@ -994,7 +994,7 @@ struct array< T1<T,N> > : T1<T,N>, vcd_entry
 #define REC(a) struct a {
 #define ENDREC };
 #define LIST(...) { __VA_ARGS__ }
-#define EVENT(a) static_cast<tree>(a).event()//CAT_(a,.event())
+#define EVENT(a) static_cast<tree>(a.get()).event()//CAT_(a,.event())
 #define CONSTANT const
 #define OTHERS(a) __others(a)
 #define RESET(a) a <= TO_UINT(0, LEN(a))
@@ -1074,7 +1074,7 @@ struct array< T1<T,N> > : T1<T,N>, vcd_entry
 
 #define END_NOTHING(a) a
 #define ENTITYz(name, ...) entity name is port( EVAL(MAP2(END_SEMICOLON, END_NOTHING, __VA_ARGS__)) ) end
-#define COMPONENT(name, ...) component name is port( EVAL(MAP2(END_SEMICOLON, END_NOTHING, __VA_ARGS__)) ) end component
+//#define COMPONENT(name, ...) component name is port( EVAL(MAP2(END_SEMICOLON, END_NOTHING, __VA_ARGS__)) ) end component
 //#define ENTITY(name, ...)  EVAL(MAP2(END_SEMICOLON, END_NOTHING, __VA_ARGS__))
 #define LIST(...) ( __VA_ARGS__ )
 #define gkprintf(...) --

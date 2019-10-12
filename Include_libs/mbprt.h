@@ -5,7 +5,7 @@
 
 //extern void printf(...);
 //#include <stdio.h>
-#ifdef DEBUG
+#if 1 //def DEBUG
 #include <string>
    using std::string;
 
@@ -451,7 +451,8 @@ struct gstring : public string
 #ifdef DISCO
             pc.printf(os.c_str());
 #else
-            printf(os.c_str());
+            //printf(os.c_str());
+            std::cerr << os;
 
 #endif
             //std::cerr << "//DTE";
@@ -547,6 +548,7 @@ struct gstring : public string
 	 else
 	 {
 		 std::cerr << "ERROR! accessing element " << idx << " of string of size " << std::string::size(); 
+		 return char(0);
 	 }
  }
  
@@ -560,11 +562,32 @@ struct gstring : public string
 		 while ( (c > 32) and ( idx < std::string::size() ) )
 		 {
 			 c = std::string::operator[](idx);
-			 res.append_char(c);
+			 if (c > 32)
+				 res.append_char(c);
+			 idx++;
 		 }
+		 return res;
 	 }
 	 else return(res);
  }
+
+ gstring get_line(int& idx)
+  {
+ 	 gstring res;
+ 	 char c = 33;
+ 	 if (idx < std::string::size())
+ 	 {
+ 		 while ( (c > 13) and ( idx < std::string::size() ) )
+ 		 {
+ 			 c = std::string::operator[](idx);
+ 			 if (c > 13)
+ 				 res.append_char(c);
+ 			 idx++;
+ 		 }
+ 		 return res;
+ 	 }
+ 	 else return(res);
+  }
 
  
  // get string elt
@@ -640,7 +663,18 @@ struct gstring : public string
 	 
  }
  
-
+ friend std::istream& operator>> (std::istream& is, gstring& x)
+ {
+	 char c = 32;
+	 do
+	 {
+		 is.get(c);
+		 //std::cerr << int(c) << " / ";//
+		 x += c;
+	 }
+	 while (not is.eof() and not ( (c == 10) or (c == 13) ));
+	 return is;
+ }
 };
 
 //template <class T, class T0>

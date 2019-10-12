@@ -31,6 +31,7 @@ SIG(regs, reg_file_t);
 SIG(PC, UINT(32));
 SIG(PCp, UINT(32));
 
+
 SIG(loading, BIT_TYPE); // 1 when loading code
 SIG(load_mem0, BIT_TYPE); // 1 when loading from program memory, 0 when loading from data memory
 SIG(load_mem, BIT_TYPE); // 1 when loading from program memory, 0 when loading from data memory
@@ -81,6 +82,8 @@ SIG(blk2mem_t0, blk2mem_t);
 SIG(mem2blk_t0, mem2blk_t);
 SIG(rinstr, UINT(32)); // debug
 SIG(rrinstr, UINT(32)); // debug
+SIG(inst_addr, UINT(13));
+SIG(inst_data, UINT(32));
 
 SIG(radd_res, UINT(33)); // debug
 SIG(rsub_res, UINT(33));// debug
@@ -137,7 +140,7 @@ VAR(csr_val, UINT(32)); // CSR read value
 VAR(csr_addr, UINT(12)); // CSR addr value
 VAR(csr_wb, UINT(32)); // CSR writeback value
 VAR(next_PC, UINT(32));
-
+VAR(load_from_instmem, BIT_TYPE);
 
 BEGIN
 
@@ -180,6 +183,7 @@ BEGIN
 			instr = PORT_BASE(instmem2core_i).data;
 			next_PC = PC;
 			opcode_is_load = BIT(0);
+			load_from_instmem = BIT(0);
 
 			// Instruction decoding -------------------------------------------------------------------
 			IF ( (B(pipe,0) == BIT(1)) and (cpu_wait == BIT(0)) and (flush == BIT(0)) ) THEN 			//IF ( (PORT_BASE(instmem2core_i).data_en == BIT(1)) and (cpu_wait == BIT(0)) ) THEN
@@ -270,7 +274,7 @@ BEGIN
 				next_PC = PC + TO_UINT(4, LEN(PC));
 				inst_cs_n <= BIT(0);
 			ELSE
-				inst_cs_n <= BIT(1);
+				inst_cs_n <= BIT(0); // Set 1 here is wrong when reading from instruction memory!!!! -> no cs_n means no instruction read after read
 			ENDIF
 
 
@@ -351,7 +355,7 @@ BEGIN
 							CASE(CASE_ECALL) // ECALL-EBREAK or MRET
 							IF (use_immediate == BIT(0)) THEN // ECALL-EBREAK. strange statement (if not use _imm ... <= rimm.) but this actually uses the immediate reg reuse used for branches
 								//next_PC = mepc; flush <= BIT(1); pipe <= TO_UINT(0, LEN(pipe)); ropcode <= TO_UINT(0, LEN(ropcode));// TODO: Change mepc to appropriate register when not in machine mode
-								mepc <= rimmediate; cause = (BIN(0000000000000000000000000000) & (not B(rrs2, 0)) & BIN(0) & priv); trap = BIT(1);
+								mepc <= rimmediate; cause = (BIN(0000000000000000000000000000) & (not B(rrs2, 0)) & BIN(0) & priv); trap = BIT(1); gprintf("#VECALL trap addr", to_hex(TO_INTEGER(mepc)));
 								//mepc <= rimmediate; cause = (BIN(000000000000000000000000000010) & priv); trap = BIT(1);
  							ELSEIF ( ( rfunct7 == BIN(0011000) ) and ( rrs2 == BIN(00010) ) ) THEN  // MRET
 								next_PC = mepc; flush <= BIT(1); pipe <= TO_UINT(0, LEN(pipe)); ropcode <= TO_UINT(0, LEN(ropcode));// TODO: Change mepc to appropriate register when not in machine mode
@@ -391,7 +395,7 @@ BEGIN
 							CASE(CASE_ORx)  rd_val = or_res;
 							CASE(CASE_XORx) rd_val = xor_res;
 							CASE(CASE_ANDx) rd_val = and_res;
-							DEFAULT    trap = BIT(1); cause = ILLINSTR;
+							DEFAULT    trap = BIT(1); cause = ILLINSTR; gprintf("#VILLINSTR OP");
 						ENDCASE
 					CASE(CASE_LOAD)
 						IF (not (rrd == BIN(00000))) THEN
@@ -402,12 +406,23 @@ BEGIN
 
 							if (RANGE(add_res,31, 28) == BIN(0000)) THEN // Reading from instruction memory
 #ifndef NONREG // When running risc-V non reg., data is @ 0x2000 -> force it to data memory anyway
+									inst_addr <= RANGE(add_res, LEN(blk2mem_t0.addr)+1, 2);
+									//blk2mem_t0.cs_n <= BIT(0); /// TODO, change this!!!
+									inst_cs_n <= BIT(0);
+									load_from_instmem = BIT(1);
 									load_mem0 <= BIT(1);
+									//gprintf("#Vinstmem");
+									//exit(0);
+#else
+									load_mem0 <= BIT(0);
+									blk2mem_t0.cs_n <= BIT(0);
 #endif
-								blk2mem_t0.cs_n <= BIT(0); /// TODO, change this!!!
+
 								ELSE
-								load_mem0 <= BIT(0);
-								blk2mem_t0.cs_n <= BIT(0);
+									load_mem0 <= BIT(0);
+									blk2mem_t0.cs_n <= BIT(0);
+									//gprintf("#Vdatamem");
+									//exit(0);
 								ENDIF
 
 								blk2mem_t0.addr <= RANGE(add_res, LEN(blk2mem_t0.addr)+1, 2);//RESIZE(add_res, LEN(PORT_BASE(core2datamem_o).addr));
@@ -436,14 +451,13 @@ BEGIN
 						IF (taken == BIN(1)) THEN
 							next_PC = rimmediate; flush <= BIT(1); pipe <= TO_UINT(0, LEN(pipe)); ropcode <= TO_UINT(0, LEN(ropcode));
 						ENDIF
-					DEFAULT trap = BIT(1); cause = ILLINSTR;
+					DEFAULT trap = BIT(1); cause = ILLINSTR; gprintf("ILLINSTR trap opcode");
 
 				ENDCASE
 				rtaken <= taken;
 				rrd_val <= rd_val;
 
-				IF ( not (ropcode == LOAD) and not (ropcode == STORE) ) THEN
-					//PORT_BASE(core2datamem_o).cs_n <= BIT(1);
+				IF ( (not (ropcode == LOAD) and not (ropcode == STORE) ) or ( load_from_instmem == BIT(1) ) ) THEN
 					blk2mem_t0.cs_n <= BIT(1);
 				ENDIF
 				wrd = rrd;
@@ -461,12 +475,17 @@ BEGIN
 				cpu_wait <= BIT(0);
 				cpu_wait_on_write <= BIT(0);
 			ENDIF
+
 			// Register writeback (load) -----------------------------------------------------------------
-			IF ( not(rwb == TO_UINT(0, LEN(rwb))) and (PORT_BASE(datamem2core_i).data_en == BIT(1)) ) THEN
+			IF ( not(rwb == TO_UINT(0, LEN(rwb))) and ( ( (PORT_BASE(datamem2core_i).data_en == BIT(1)) and (load_mem == BIT(0))) or ( (PORT_BASE(instmem2core_i).data_en == BIT(1)) and (load_mem == BIT(1)) ) ) ) THEN
 				cpu_wait <= BIT(0);
 				load_mem <= BIT(0);
 				load_mem0 <= BIT(0);
-				ld_data = PORT_BASE(datamem2core_i).data;
+				IF (load_mem == BIT(0)) THEN // data is expected from data mem
+					ld_data = PORT_BASE(datamem2core_i).data;
+				ELSE // data is expected from inst. mem (ro data)
+					ld_data = PORT_BASE(instmem2core_i).data;
+				ENDIF
 				ld_data = SHIFT_RIGHT(ld_data, TO_INTEGER( (rshiftwb & BIN(000))));
 				SWITCH(funct3wb)
 					CASE(CASE_LW) rd_val = ld_data;
@@ -514,13 +533,19 @@ BEGIN
 			ENDIF
 
 			PC <= next_PC;
+			IF (load_from_instmem == BIT(0)) THEN
+				inst_addr <= RANGE(next_PC, LEN(blk2mem_t0.addr)+1, 2);
+//			ELSE
+				//gprintf("#VALT");
+//				exit(0);
+			ENDIF
 
 	ENDIF
 	END_PROCESS
 
 	// Combinational logic
 	COMB_PROCESS(1, clk_core)
-		PORT_BASE(core2instmem_o).addr <= RANGE(PC, LEN(blk2mem_t0.addr)+1, 2);//RESIZE(PC, LEN(PORT_BASE(core2instmem_o).addr));
+		PORT_BASE(core2instmem_o).addr <= inst_addr;//RANGE(PC, LEN(blk2mem_t0.addr)+1, 2);//RESIZE(PC, LEN(PORT_BASE(core2instmem_o).addr));
 		PORT_BASE(core2instmem_o).data <= PCp;
 		PORT_BASE(core2instmem_o).cs_n <= inst_cs_n;//BIT(0);
 		PORT_BASE(core2instmem_o).wr_n <= not loading;

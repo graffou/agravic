@@ -177,7 +177,7 @@ struct param_base
 	}
 	
 	virtual void set_value(const char* arg){}
-	virtual bool is_bool(){}
+	virtual bool is_bool(){return false;}
 	
 };
 

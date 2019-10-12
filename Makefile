@@ -10,7 +10,7 @@ INCS_conv = ./Include_rtl/Source
 INCLUDES_C = -I./Include_libs -I./Include_rtl/Source -I./Include_rtl/Include
 INCLUDES_VHD = -I./Include_libs -I./Source -I./Include
 
-CC_FLAGS = -O3 -std=gnu++17
+CC_FLAGS = -O3 -std=gnu++17 
 
 INCS = $(wildcard $(DINCS)*.h)
 
@@ -25,6 +25,9 @@ RTL_VHDL = $(patsubst %.h, %.vhd, $(RTL))
 
 
 All: dut
+
+regs: genregs.cpp
+	g++ -IInclude_libs genregs.cpp -o genregs
 
 # Creates executable 
 exe:  $(RTL_CONV) $(CONV) $(SOURCEDIR)main.cpp  

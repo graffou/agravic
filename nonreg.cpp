@@ -25,7 +25,7 @@ int main()
 		if (not test_list.eof() )//and (n < 2))
 		{
 			gkprintf("#MTest % : %", n, s);
-			gkprintf(cmd, "./dut -ncycles 10000 -bin_file '%s' 2>&1 | grep FAILED > result", s);
+			gkprintf(cmd, "./dut -ncycles 10000 -bin_file '%s' 2>&1 | grep FAILED 1> result", s);
 			shell(cmd);
 			std::ifstream result;
 			result.open("result");

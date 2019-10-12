@@ -1,6 +1,8 @@
 
 tb:dut:u0_peripherals:gpios_o bin
 tb:dut:u0_risc_V_core:core2datamem_o.addr bin
+tb:dut:u0_risc_V_core:instmem2core_i.data bin
+tb:dut:u0_risc_V_core:datamem2core_i.data bin
 tb:dut:u0_risc_V_core:ropcode bin
 tb:dut:u0_risc_V_core:raw_opcode bin
 tb:dut:u0_risc_V_core:rinstr bin

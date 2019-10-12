@@ -53,6 +53,8 @@ signal blk2mem_t0 : blk2mem_t;
 signal mem2blk_t0 : mem2blk_t;
 signal rinstr : unsigned ((32 -1) downto 0);
 signal rrinstr : unsigned ((32 -1) downto 0);
+signal inst_addr : unsigned ((13 -1) downto 0);
+signal inst_data : unsigned ((32 -1) downto 0);
 signal radd_res : unsigned ((33 -1) downto 0);
 signal rsub_res : unsigned ((33 -1) downto 0);
 signal rsll_res : unsigned ((32 -1) downto 0);
@@ -104,6 +106,7 @@ variable csr_val : unsigned ((32 -1) downto 0);
 variable csr_addr : unsigned ((12 -1) downto 0);
 variable csr_wb : unsigned ((32 -1) downto 0);
 variable next_PC : unsigned ((32 -1) downto 0);
+variable load_from_instmem : std_logic;
 begin
  IF ( reset_n = '0' ) then
   pipe <= TO_UNSIGNED(0,pipe'length);
@@ -141,6 +144,7 @@ begin
    instr := instmem2core_i.data;
    next_PC := PC;
    opcode_is_load := '0';
+   load_from_instmem := '0';
    IF ( (pipe(0) = '1' ) and (cpu_wait = '0') and (flush = '0') ) then
      rinstr <= instr;
      opcode := (instr(6 downto 0));
@@ -214,7 +218,7 @@ begin
     next_PC := PC + TO_UNSIGNED(4,PC'length);
     inst_cs_n <= '0';
    else
-    inst_cs_n <= '1' ;
+    inst_cs_n <= '0';
    end if;
    IF ( (pipe(1) = '1' ) and (cpu_wait = '0') and (flush = '0') ) then
     exec <= '1' ;
@@ -281,7 +285,7 @@ begin
        when CASE_CSRRCI => csr_val := csr_val and not op1;
        when CASE_ECALL =>
        IF (use_immediate = '0') then
-        mepc <= rimmediate; cause := ("0000000000000000000000000000" & (not rrs2(0)) & "0" & priv); trap := '1' ;
+        mepc <= rimmediate; cause := ("0000000000000000000000000000" & (not rrs2(0)) & "0" & priv); trap := '1' ; -- gprintf("#VECALL trap addr", to_hex(TO_INTEGER(mepc)));
         elsif ( ( rfunct7 = "0011000" ) and ( rrs2 = "00010" ) ) then
         next_PC := mepc; flush <= '1' ; pipe <= TO_UNSIGNED(0,pipe'length); ropcode <= TO_UNSIGNED(0,ropcode'length);
        end if;
@@ -311,7 +315,7 @@ begin
        when CASE_ORx => rd_val := or_res;
        when CASE_XORx => rd_val := xor_res;
        when CASE_ANDx => rd_val := and_res;
-       when others => trap := '1' ; cause := ILLINSTR;
+       when others => trap := '1' ; cause := ILLINSTR; -- gprintf("#VILLINSTR OP");
       end case;
      when CASE_LOAD =>
       IF (not (rrd = "00000")) then
@@ -320,11 +324,13 @@ begin
        funct3wb <= rfunct3;
        rshiftwb <= nshift;
        if ((add_res(31 downto 28)) = "0000") then
+         inst_addr <= (add_res(blk2mem_t0.addr'length+1 downto 2));
+         inst_cs_n <= '0';
+         load_from_instmem := '1' ;
          load_mem0 <= '1' ;
-        blk2mem_t0.cs_n <= '0';
         else
-        load_mem0 <= '0';
-        blk2mem_t0.cs_n <= '0';
+         load_mem0 <= '0';
+         blk2mem_t0.cs_n <= '0';
         end if;
         blk2mem_t0.addr <= (add_res(blk2mem_t0.addr'length+1 downto 2));
         blk2mem_t0.wr_n <= '1' ;
@@ -351,11 +357,11 @@ begin
       IF (taken = "1") then
        next_PC := rimmediate; flush <= '1' ; pipe <= TO_UNSIGNED(0,pipe'length); ropcode <= TO_UNSIGNED(0,ropcode'length);
       end if;
-     when others => trap := '1' ; cause := ILLINSTR;
+     when others => trap := '1' ; cause := ILLINSTR; -- gprintf("ILLINSTR trap opcode");
     end case;
     rtaken <= taken;
     rrd_val <= rd_val;
-    IF ( not (ropcode = LOAD) and not (ropcode = STORE) ) then
+    IF ( (not (ropcode = LOAD) and not (ropcode = STORE) ) or ( load_from_instmem = '1' ) ) then
      blk2mem_t0.cs_n <= '1' ;
     end if;
     wrd := rrd;
@@ -369,11 +375,15 @@ begin
     cpu_wait <= '0';
     cpu_wait_on_write <= '0';
    end if;
-   IF ( not(rwb = TO_UNSIGNED(0,rwb'length)) and (datamem2core_i.data_en = '1' ) ) then
+   IF ( not(rwb = TO_UNSIGNED(0,rwb'length)) and ( ( (datamem2core_i.data_en = '1' ) and (load_mem = '0')) or ( (instmem2core_i.data_en = '1' ) and (load_mem = '1' ) ) ) ) then
     cpu_wait <= '0';
     load_mem <= '0';
     load_mem0 <= '0';
-    ld_data := datamem2core_i.data;
+    IF (load_mem = '0') then
+     ld_data := datamem2core_i.data;
+    else
+     ld_data := instmem2core_i.data;
+    end if;
     ld_data := SHIFT_RIGHT(ld_data, TO_INTEGER( (rshiftwb & "000")));
     case funct3wb is
      when CASE_LW => rd_val := ld_data;
@@ -413,10 +423,13 @@ begin
     mcause <= cause;
    end if;
    PC <= next_PC;
+   IF (load_from_instmem = '0') then
+    inst_addr <= (next_PC(blk2mem_t0.addr'length+1 downto 2));
+   end if;
  end if;
  end process;
 
-  core2instmem_o.addr <= (PC(blk2mem_t0.addr'length+1 downto 2));
+  core2instmem_o.addr <= inst_addr;
   core2instmem_o.data <= PCp;
   core2instmem_o.cs_n <= inst_cs_n;
   core2instmem_o.wr_n <= not loading;

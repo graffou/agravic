@@ -23,7 +23,6 @@ begin
   IF (core2mem_i.cs_n = '0') then
    mem2core_o.data_en <= '1' ;
    IF (core2mem_i.wr_n = '0') then
-    -- gprintf("#MMem write % @ % ", to_hex(core2mem_i.data), to_hex(core2mem_i.addr), core2mem_i.be);
     IF ( core2mem_i.be(3) = '1' ) then
      mem3(TO_INTEGER(baddr)) <= (core2mem_i.data(31 downto 24));
     end if;

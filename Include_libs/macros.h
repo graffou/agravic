@@ -1015,7 +1015,7 @@
 #define IS_PAREN_PROBE(...) PROBE(~)
 
 
-#define CAT(a, ...) PRIMITIVE_CAT(a, __VA_ARGS__)
+//#define CAT(a, ...) PRIMITIVE_CAT(a, __VA_ARGS__)
 #define PRIMITIVE_CAT(a, ...) a ## __VA_ARGS__
 //So now we can write the  IIF  macro(its called  IIF  right now, later we will show how to define a more generalized way of defining an  IF  macro):
 
@@ -1370,14 +1370,14 @@
 #define DEFER32(m) m EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY ()()()() ()()()() ()()()() ()()()()()()()() ()()()() ()()()() ()()()()
 
 #define IS_PROBE(...) SECOND(__VA_ARGS__, 0)
-#define PROBE() ~, 1
+//#define PROBE() ~, 1
 
 #define CAT_(a,b) a ## b
 
-#define NOT(x) IS_PROBE(CAT_(_NOT_, x))
+//#define NOT(x) IS_PROBE(CAT_(_NOT_, x))
 #define _NOT_0 PROBE()
 
-#define BOOL(x) NOT(NOT(x))
+//#define BOOL(x) NOT(NOT(x))
 
 #define IF_ELSE(condition) _IF_ELSE(BOOL(condition))
 #define _IF_ELSE(condition) CAT_(_IF_, condition)
