@@ -10,7 +10,9 @@ INCS_conv = ./Include_rtl/Source
 INCLUDES_C = -I./Include_libs -I./Include_rtl/Source -I./Include_rtl/Include
 INCLUDES_VHD = -I./Include_libs -I./Source -I./Include
 
-CC_FLAGS = -O3 -std=gnu++17 
+# -Wfatal-errors should stop gcc on 1st error
+CC_FLAGS = -O3 -std=gnu++17 -Wfatal-errors
+
 
 INCS = $(wildcard $(DINCS)*.h)
 
@@ -39,7 +41,7 @@ nonreg:  $(RTL_CONV) $(CONV) $(SOURCEDIR)main.cpp
 	g++ -IInclude_libs nonreg.cpp -o nonreg
 # Creates executable and generates VHDL files:;!/
 dut:  $(RTL_VHDL) $(RTL_CONV) $(CONV) $(SOURCEDIR)main.cpp  
-	sed -e 's/:=/=/g' Source/main.cpp | g++ $(CC_FLAGS) $(INCLUDES_C) -o dut -g3 -xc++ - 
+	sed -e 's/:=/=/g' Source/main.cpp | g++ -fdiagnostics-show-option $(CC_FLAGS) $(INCLUDES_C) -o dut -g3 -xc++ - 
 
 # Shows preprocessor output for macro debug
 show:  $(RTL_VHDL) $(RTL_CONV)  $(CONV) $(SOURCEDIR)main.cpp  
@@ -53,7 +55,7 @@ show:  $(RTL_VHDL) $(RTL_CONV)  $(CONV) $(SOURCEDIR)main.cpp
 # Rule for vhdl code generation (in RTL/Source dir.)
 # Gets preprocessor output with -DVHDL option, replaces == with =, Then keeps 100000 lines after the Agravic keyword is found (start of VHDL block)
 %.vhd	: %.h 
-	g++ $(CC_FLAGS) $(INCLUDES_VHD) -I$(RINCS) -E -P -IInclude_libs -DVHDL $< | sed -e 's/==/=/g' -e 's/!=/~=/g' | grep -A 100000 -e 'Agravic' > ./RTL/$@
+	g++ $(CC_FLAGS) $(INCLUDES_VHD) -I$(RINCS) -E -P -w -IInclude_libs -DVHDL $< | sed -e 's/==/=/g' -e 's/!=/~=/g' | grep -A 100000 -e 'Agravic' > ./RTL/$@
 
 clean:
 	rm -f -r  $(RTL_SOURCES)/* $(INCS_conv)/* dut; 
