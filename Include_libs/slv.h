@@ -1044,6 +1044,7 @@ struct array< T1<T,N> > : T1<T,N>, vcd_entry
 #define TOP_SIG(a, t)  t a = gen_sig_desc(#a, gmodule::out_of_hier)
 //#define CONST(a, t)  const t a
 #define SIG(a, t)  t a = gen_sig_desc(#a, this)
+#define DECL_GATED_CLK(name)
 #define GATED_CLK(name, clk_i, gate)  clk_t name = gen_gated_clk_desc(#name, this, clk_i, gate)
 #define GATE_CLK(clk_i, gated_clk, gating_signal) gated_clk.gate_clk(clk_i, gating_signal)
 #define VAR(a, t)  t a //= gen_sig_desc(#a, this)

@@ -2,7 +2,7 @@
 START_OF_FILE(peripherals)
 INCLUDES
 USE_PACKAGE(structures)
-
+USE_PACKAGE(altera)
 #ifndef VHDL
 static std::ofstream dbg_file("dbg_file", std::ios::out);
 #endif
@@ -19,10 +19,12 @@ DECL_PORTS(
 
 SIG(cnt, UINT(32));
 SIG(gate_cell, BIT_TYPE);
-//SIG(clk_g, CLK_TYPE);
+// does nothing in C++, mandatory for VHDL generation
+DECL_GATED_CLK(clk_g);
 
 BEGIN
 
+// Is a declaration in C++, instanciation in VHDL(after begin)
 GATED_CLK(clk_g ,clk_peri, gate_cell);
 
 

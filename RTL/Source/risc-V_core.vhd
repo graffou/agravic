@@ -142,6 +142,7 @@ begin
   load_mem0 <= '0';
   cpu_wait_on_write <= '0';
   elsif ( clk_core'event and (clk_core = '1' ) ) then
+   mcounter <= mcounter + 1;
    flush <= '0';
    instr := instmem2core_i.data;
    next_PC := PC;

@@ -136,6 +136,26 @@
 		EVAL(DECL_FIELDS(get_##ports))\
 		end record
 
+/*
+    component clk_gating_cell is
+        port (
+            inclk  : in  std_logic := 'X'; -- inclk
+            ena    : in  std_logic := 'X'; -- ena
+            outclk : out std_logic         -- outclk
+        );
+    end component clk_gating_cell;
+*/
+
+#define DECL_GATED_CLK(name) signal name : std_logic
+
+#define GATED_CLK(name, clk_i, gate) \
+    name##_gating_cell : component clk_gating_cell  port map ( \
+            inclk  => clk_i,  \
+            ena    => gate,  \
+            outclk => name  \
+        )
+
+
 
 #define EVENT(a) a'event
 

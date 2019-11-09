@@ -181,6 +181,7 @@ BEGIN
 
 		ELSEIF ( EVENT(clk_core) and (clk_core == BIT(1)) ) THEN
 			// rising edge
+			mcounter <= mcounter + 1;
 			flush <= BIT(0);
 			instr := PORT_BASE(instmem2core_i).data;
 			next_PC := PC;
