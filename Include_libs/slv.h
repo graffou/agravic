@@ -306,6 +306,11 @@ _Pragma ("GCC diagnostic pop")
 	{
 		return slv<m>(n);
 	}
+
+	slv<N>& get()
+	{
+		return *this;
+	}
 /*
 	constexpr operator int() const
 		{
@@ -501,6 +506,7 @@ struct tree : slv<1>
 
 	bool event()
 	{
+		//std::cerr << "!";
 		return evt;
 	}
 
@@ -512,6 +518,7 @@ struct tree : slv<1>
 
 	void operator=(const slv<1>& x_i)
 	{
+		//gprintf("@B % val %R en % in % ", pvcd_entry->name, static_cast<slv<1>>(*this), *p_en, x_i);
 		if (*p_en == slv<1>(1))
 		{
 			if ( not (x_i == static_cast<slv<1>>(*this)) )
@@ -529,6 +536,7 @@ struct tree : slv<1>
 
 	void operator<=(const slv<1>& x_i)
 	{
+		//gprintf("@G % val %R en % in % ", pvcd_entry->name, static_cast<slv<1>>(*this), *p_en, x_i);
 		if (*p_en == slv<1>(1))
 		{
 			if ( not (x_i == static_cast<slv<1>>(*this)) )
@@ -542,12 +550,14 @@ struct tree : slv<1>
 			evt = 0;
 			slv<1>::operator<=(0);
 		}
+		//gprintf("#R ->evt % new val %", evt, static_cast<slv<1>>(*this));
+
 	}
 
 	// So that the get method can be called for a tree signal or a port<tree>
 	tree& get()
 	{
-		gprintf("#Vtree get");
+		gprintf("#Vtree get %", pvcd_entry->name);
 		return *this;
 	}
 
@@ -592,6 +602,16 @@ struct tree : slv<1>
 	{
 		std::cerr << "ERROR! calling virtual comb processes method!\n";
 	}
+	virtual void copy_children( tree& x_i)
+	{
+		gprintf("#UIn %Y copying children, count %Y", pvcd_entry->name, children.size());
+		for (int i=0; i < children.size(); i++)
+		{
+			x_i.children.push_back(children[i]);
+			gprintf("#UIn %Y copying child %Y to driving signal %Y", pvcd_entry->name, children[i]->pvcd_entry->name, x_i.pvcd_entry->name);
+		}
+	}
+	virtual void parse_modules(){}
 };
 
 
@@ -625,11 +645,21 @@ struct clk_t : public tree
 
 	clk_t(const gated_clk_desc& x_i) : tree(x_i)
 	{
+		p_en = x_i.gating_signal;
 		x_i.parent_clk->children.push_back(this);
+		gprintf("#BAdding child %R to clk %R", this->pvcd_entry->name, (x_i.parent_clk)->pvcd_entry->name);
 	}
+
+	template<class T9>
+	void gate_clock( clk_t& parent_clk, T9& gating_signal)
+	{
+		(parent_clk.get()).children.push_back(this);
+		p_en = &gating_signal.get();
+	}
+
 	clk_t& get()
 	{
-		gprintf("#Vclk get");
+		//gprintf("#Vclk get %", pvcd_entry->name);
 		return *this;
 	}
 	// set half period in numbers of vcd periods
@@ -694,6 +724,15 @@ struct clk_t : public tree
 				else
 					processes.push_back((std::bind(&gmodule::process3, gmodule::module_list[i])));
 		}
+
+
+#ifdef GATED_CLOCKS
+		for (int i = 0; i < children.size(); i++)
+		{
+			children[i]->parse_modules();
+
+		}
+#endif
 	}
 
 
@@ -736,15 +775,29 @@ struct clk_t : public tree
 		//gprintf("#mclock event val %R", x_i);
 		//vcd_file.set_vcd_time(vcd_file.get_vcd_time() + half_period);
 		//tree::operator=(x_i);
+#ifdef GATED_CLOCKS
+		for (int i = 0; i < children.size(); i++)
+		{
+			//gprintf("#b en %", *(children[i]->p_en) );
+			children[i]->tree::operator<=(x_i);
+			//static_cast<slv<1>>(*children[i])<=(x_i);
+			//gprintf("#Mval %", (*children[i]));
+		}
+#endif
 		if (tree::event())
 		{
 			//gprintf("#ball processes");
 #ifdef GATED_CLOCKS
-			gprintf("#mchidren:%", children.size());
+			//gprintf("#mchidren:%", children.size());
 			for (int i = 0; i < children.size(); i++)
+			{
 				children[i]->exec_processes();
+
+			}
 #endif
+
 			exec_processes();
+
 #ifdef GATED_CLOCKS
 			for (int i = 0; i < children.size(); i++)
 				children[i]->exec_clock();
@@ -991,7 +1044,8 @@ struct array< T1<T,N> > : T1<T,N>, vcd_entry
 #define TOP_SIG(a, t)  t a = gen_sig_desc(#a, gmodule::out_of_hier)
 //#define CONST(a, t)  const t a
 #define SIG(a, t)  t a = gen_sig_desc(#a, this)
-#define GATED_CLK(a, t, c)  t a = gen_gated_clk_desc(#a, this, c)
+#define GATED_CLK(name, clk_i, gate)  clk_t name = gen_gated_clk_desc(#name, this, clk_i, gate)
+#define GATE_CLK(clk_i, gated_clk, gating_signal) gated_clk.gate_clk(clk_i, gating_signal)
 #define VAR(a, t)  t a //= gen_sig_desc(#a, this)
 #define CONST(a, t)   const t a
 #define CASE_CONST(a, t)   const int a
@@ -1157,6 +1211,7 @@ struct array< T1<T,N> > : T1<T,N>, vcd_entry
 		void operator = (const type##_base& x){\
 		EVAL(EQ_FIELDS(get_##ports)) } \
 		static const int length = -2048;\
+		void copy_children(const type& x_i){}\
 		}
 #endif
 #define END_ENTITY //}

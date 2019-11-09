@@ -67,6 +67,8 @@ signal rand_res : unsigned ((32 -1) downto 0);
 signal ror_res : unsigned ((32 -1) downto 0);
 signal rxor_res : unsigned ((32 -1) downto 0);
 signal rjalr : unsigned ((5 -1) downto 0);
+signal rload_from_instmem : std_logic;
+signal rdbg : std_logic;
 begin
 process0 : process(clk_core,reset_n)
 variable instr : unsigned ((32 -1) downto 0);
@@ -212,12 +214,17 @@ begin
       csri <= '0';
      end if;
    end if;
-   IF ( ( ( (cpu_wait = '0' ) ) and (not ( (ropcode = LOAD) or (ropcode = STORE) ) ) and (halt = '0') ) or (datamem2core_i.data_en = '1' ) or (cpu_wait_on_write = '1' )) then
+   IF ( ( ( (cpu_wait = '0' ) ) and (not ( (ropcode = LOAD) or (ropcode = STORE) ) ) and (halt = '0') )
+     or ( (datamem2core_i.data_en = '1' ) and (load_mem = '0') )
+     or ( (instmem2core_i.data_en = '1' ) and (load_mem = '1' ) )
+     or (cpu_wait_on_write = '1' ) ) then
+    rdbg <= '1' ;
     pipe <= ( (pipe(pipe'high-1 downto 0)) & '1' );
     PCp <= PC;
     next_PC := PC + TO_UNSIGNED(4,PC'length);
     inst_cs_n <= '0';
    else
+    rdbg <= '0';
     inst_cs_n <= '0';
    end if;
    IF ( (pipe(1) = '1' ) and (cpu_wait = '0') and (flush = '0') ) then
@@ -423,6 +430,7 @@ begin
     mcause <= cause;
    end if;
    PC <= next_PC;
+   rload_from_instmem <= load_from_instmem;
    IF (load_from_instmem = '0') then
     inst_addr <= (next_PC(blk2mem_t0.addr'length+1 downto 2));
    end if;

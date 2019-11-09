@@ -29,7 +29,7 @@ RTL_VHDL = $(patsubst %.h, %.vhd, $(RTL))
 All: dut
 
 regs: genregs.cpp
-	g++ -IInclude_libs genregs.cpp -o genregs
+	g++ -g3 -IInclude_libs genregs.cpp -o genregs
 
 # Creates executable 
 exe:  $(RTL_CONV) $(CONV) $(SOURCEDIR)main.cpp  

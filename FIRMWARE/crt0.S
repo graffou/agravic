@@ -56,6 +56,29 @@ zero_loop:
 zero_loop_end:
 
 
+
+
+  la x26, _sdata
+  la x27, _edata
+  la x25, _sidata
+
+  bge x26, x27, init_loop_end
+
+init_loop:
+  lw x1, 0(x25)
+  sw x1, 0(x26)
+  addi x26, x26, 4  
+  addi x25, x25, 4
+
+  ble x26, x27, init_loop
+init_loop_end:
+
+
+
+
+
+  call    __libc_init_array
+
 main_entry:
   /* jump to main program entry point (argc = argv = 0) */
   addi x10, x0, 0

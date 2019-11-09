@@ -27,7 +27,11 @@
 struct arg_list
 {
 	std::vector<gstring> args;
-	
+/*	~arg_list()
+	{
+		~args();
+	}
+*/
 	arg_list(int argc, char* argv[])
 	{
 		for(int i = 1; i < argc; i++)

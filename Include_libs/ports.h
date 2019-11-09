@@ -104,6 +104,7 @@ template <class T, bool in>
         {
     		//gprintf("#V % name % mod % ", name, pmodule->name);
     		//gprintf("#V name:: % in % signal %", dummy.pvcd_entry->name, pmodule->name, x.name);
+    		dummy.copy_children(x);
     		gprintf("#V //name:: % in % ptr %Y", dummy.pvcd_entry->name, pmodule->name, this);
             std::reference_wrapper<T> tmp(x); // create reference to that signal
             std::reference_wrapper<T>::operator=(tmp); // copy reference
@@ -271,7 +272,6 @@ template <class T, bool in>
                 //gprintf("2 %\n", x.pvcd_entry->name);
                 //dummy.pvcd_entry->driver = x.pvcd_entry->driver; // Used to trace back the path to dirver signal (and activate it / use its identifiers)
         		gprintf("#BBinding %s:% to drv %R", dummy.pvcd_entry->pmodule->name, dummy.pvcd_entry->name, dummy.pvcd_entry->driver->name);
-
                 //gprintf("#R % ", tmp);
                 //if (pdummy != NULL)
                 //    delete pdummy; //delete dummy

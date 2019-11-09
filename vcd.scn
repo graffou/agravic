@@ -1,6 +1,8 @@
 
 tb:dut:u0_peripherals:gpios_o bin
+tb:dut:u0_peripherals:dbg_o bin
 tb:dut:u0_risc_V_core:core2datamem_o.addr bin
+tb:dut:u0_risc_V_core:core2datamem_o.data bin
 tb:dut:u0_risc_V_core:instmem2core_i.data bin
 tb:dut:u0_risc_V_core:datamem2core_i.data bin
 tb:dut:u0_risc_V_core:ropcode bin
@@ -26,7 +28,9 @@ tb:dut:u0_risc_V_core:regs(11) bin
 tb:dut:u0_risc_V_core:regs(12) bin
 tb:dut:u0_risc_V_core:regs(13) bin
 tb:dut:u0_risc_V_core:regs(14) bin
-tb:dut:u0_risc_V_core:regs(15) bin
+tb:dut:u0_risc_V_core:regs(25) bin
+tb:dut:u0_risc_V_core:regs(26) bin
+tb:dut:u0_risc_V_core:regs(27) bin
 tb:dut:u0_risc_V_core:regs(31) bin
 tb:dut:u0_risc_V_core:
 tb:dut:u0_peripherals:

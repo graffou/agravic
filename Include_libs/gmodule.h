@@ -22,6 +22,7 @@ struct block_desc
 
 };
 struct clk_t;
+template<int N> struct slv;
 // Helper structure used to initialize slvs with macros
 // #define SLV(name, nbits, pmodule) slv<nbits> name = sig_desc(#name, this);
 
@@ -45,13 +46,16 @@ struct gated_clk_desc: public sig_desc
 {
 	//const char* name;
 	clk_t* parent_clk;
+	slv<1>* gating_signal;
 	gated_clk_desc(){}
-	template<class T, class T2>
-	gated_clk_desc(T name_i, gmodule* pmodule_i, const T2& clk_i)
+	template<class T, class T2, class T3>
+	gated_clk_desc(T name_i, gmodule* pmodule_i,  T2& clk_i,  T3& gating_signal_i)
 	{
 		name = name_i;
 		pmodule = pmodule_i;
 		parent_clk = &(clk_i.get());
+		gating_signal = &(gating_signal_i.get());
+		gprintf("#VCreating gated clk %Y from %Y", name_i, parent_clk->pvcd_entry->name);
 	}
 
 };
@@ -61,10 +65,10 @@ sig_desc gen_sig_desc(T name_i, gmodule* pmodule_i)
 {
 	return sig_desc(name_i, pmodule_i);
 }
-template<class T, class T2> //T2 might be clk or port<clk>
-gated_clk_desc gen_gated_clk_desc(T name_i, gmodule* pmodule_i, const T2& clk_i)
+template<class T, class T2, class T3> //T2 might be clk or port<clk>
+gated_clk_desc gen_gated_clk_desc(T name_i, gmodule* pmodule_i, T2& clk_i, T3& gating_signal_i)
 {
-	return gated_clk_desc(name_i, pmodule_i, clk_i);
+	return gated_clk_desc(name_i, pmodule_i, clk_i, gating_signal_i);
 }
 // return type of process
 // null pointers when calling a non-existing one (virtual method called)

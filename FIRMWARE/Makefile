@@ -10,15 +10,24 @@ ARCH = rv32i
 # ARCH = rv32im # to disable compressed instructions
 SRCS = $(PROGRAM).c
 
-CC = /opt/riscv/bin/riscv64-unknown-elf-gcc
+CC = /opt/riscv/bin/riscv64-unknown-elf-g++
+ZZ = /opt/riscv/bin/riscv64-unknown-elf-gcc
+#CPP = /opt/riscv/bin/riscv64-unknown-elf-g++
 
-OBJCOPY ?= $(subst gcc,objcopy,$(wordlist 1,1,$(CC)))
-OBJDUMP ?= $(subst gcc,objdump,$(wordlist 1,1,$(CC)))
+OBJCOPY ?= $(subst gcc,objcopy,$(wordlist 1,1,$(ZZ)))
+OBJDUMP ?= $(subst gcc,objdump,$(wordlist 1,1,$(ZZ)))
+OBJSIZE ?= $(subst gcc,size,$(wordlist 1,1,$(ZZ)))
 
 LINKER_SCRIPT ?= link.ld
 CRT ?= crt0.S
 CFLAGS ?= -march=$(ARCH) -mabi=ilp32 -static -mcmodel=medany \
-	-fvisibility=hidden -nostdlib -nostartfiles $(PROGRAM_CFLAGS)
+	-fvisibility=hidden -nostdlib -nostartfiles -ffunction-sections -fdata-sections $(PROGRAM_CFLAGS)
+#	-fvisibility=hidden --specs=nano.specs  -lnosys -fno-threadsafe-statics -fno-common -fmessage-length=0 -fno-exceptions  -ffunction-sections -fdata-sections $(PROGRAM_CFLAGS)
+
+
+#CFLAGS ?= -march=$(ARCH) -mabi=ilp32 -static -mcmodel=medany \
+#    -std=gnu++17 -Os -Wall -march=$(ARCH) -mabi=ilp32 -mcmodel=medlow -fmessage-length=0 -fsigned-char -ffunction-sections -fdata-sections -fno-common $(PROGRAM_CFLAGS)
+#	-fvisibility=hidden -nostdlib -nostartfiles $(PROGRAM_CFLAGS)
 
 OBJS := ${SRCS:.c=.o} ${CRT:.S=.o}
 DEPS = $(OBJS:%.o=%.d)
@@ -29,7 +38,7 @@ all: $(OUTFILES)
 
 $(PROGRAM).elf: $(OBJS) $(LINKER_SCRIPT)
 	$(CC) $(CFLAGS) -T $(LINKER_SCRIPT) $(OBJS) -o $@ $(LIBS)
-
+	$(OBJSIZE) $@
 %.dis: %.elf
 	$(OBJDUMP) -SD $^ > $@
 

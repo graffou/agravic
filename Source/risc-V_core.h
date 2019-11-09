@@ -97,6 +97,8 @@ SIG(rand_res, UINT(32));// debug
 SIG(ror_res, UINT(32));// debug
 SIG(rxor_res, UINT(32));// debug
 SIG(rjalr, UINT(5));// debug
+SIG(rload_from_instmem, BIT_TYPE);// debug
+SIG(rdbg, BIT_TYPE);// debug
 
 BEGIN
 
@@ -268,12 +270,18 @@ BEGIN
 			ENDIF
 
 			// Basic code memory model: assume every read request is satisfied
-			IF ( ( ( (cpu_wait == BIT(0) ) ) and (not ( (ropcode == LOAD) or (ropcode == STORE) ) ) and (halt == BIT(0)) ) or (PORT_BASE(datamem2core_i).data_en == BIT(1)) or (cpu_wait_on_write == BIT(1))) THEN
+			IF ( ( ( (cpu_wait == BIT(0) ) ) and (not ( (ropcode == LOAD) or (ropcode == STORE) ) ) and (halt == BIT(0)) ) // basic condition for PC progress
+					or ( (PORT_BASE(datamem2core_i).data_en == BIT(1)) and (load_mem == BIT(0)) ) // end of load from data mem
+					or ( (PORT_BASE(instmem2core_i).data_en == BIT(1)) and (load_mem == BIT(1)) ) //end of load from inst mem
+					or (cpu_wait_on_write == BIT(1)) ) THEN // End of extra cycle on write
+//					or (PORT_BASE(datamem2core_i).data_en == BIT(1)) or (cpu_wait_on_write == BIT(1)) ) THEN
+				rdbg <= BIT(1);
 				pipe <= ( RANGE(pipe, HI(pipe)-1, 0) & BIT(1) );
 				PCp <= PC;
 				next_PC := PC + TO_UINT(4, LEN(PC));
 				inst_cs_n <= BIT(0);
 			ELSE
+				rdbg <= BIT(0);
 				inst_cs_n <= BIT(0); // Set 1 here is wrong when reading from instruction memory!!!! -> no cs_n means no instruction read after read
 			ENDIF
 
@@ -533,6 +541,7 @@ BEGIN
 			ENDIF
 
 			PC <= next_PC;
+			rload_from_instmem <= load_from_instmem;
 			IF (load_from_instmem == BIT(0)) THEN
 				inst_addr <= RANGE(next_PC, LEN(blk2mem_t0.addr)+1, 2);
 //			ELSE

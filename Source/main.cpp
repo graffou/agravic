@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <iostream>
 #define DEBUG
+#define GATED_CLOCKS
 //#define NOPRINT
 
 #include <sstream>
