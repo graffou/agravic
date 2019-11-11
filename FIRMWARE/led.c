@@ -75,7 +75,7 @@ dummy* dbg = new dummy;
 // Then, status registers should be volatile, configuration registers should not.
 //#define regs (*(volatile struct reg_test_t *)0x40005f00) 
 #define regs (*( struct reg_test_t *)0x40005f00) 
-volatile uint32_t *dbg = (volatile uint32_t *) 0x40007ff8; 
+volatile uint32_t *dbg = (volatile uint32_t *) 0x40005ff8; 
 
 volatile uint32_t *var = (volatile uint32_t *) 0x40005ffc;
 
