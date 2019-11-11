@@ -100,7 +100,9 @@ For now, only uint32, int32, char and bool arguments are supported.
 Check FIRMWARE/led.c for examples.
 
 To see gprintf outputs, just launch:
+
 	tail -f dbg_file !!in a new terminal!!
+
 where the executable is launched.
 gprintf outputs show up in the terminal as you launch simulations.
 
