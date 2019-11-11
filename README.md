@@ -85,6 +85,25 @@ Adding all signals inside a hierarchy level:
 
 Then navigate inside the hierarchy to watch internal signals.
 This example toggles the GPIO values every 1ms (see gpios signal in the peripherals block).
+### Have a look to printf outputs
+gprintf is a simple printf implementation in C++ language.
+It outputs text using the gpio output, which is hacked in peripherals.h to produce console output.
+It makes use of recursive templates to implement multiple arguments printf, so any gprintf with a new set of argument types has a cost in terms of program memory.
+Since argument types does not need to be specified, the formatting argument is used to specify the output color.
+Basic print colors are black, blue, magenta, cyan, red, green and yellow, respecting the color code of matlab (k, b, m, c, r, g, and y)
+For bold print, color codes must be specified in capital letters (K, B, M etc.)
+Some print codes with background color are T, U, V and W. These are an arbitrary choice of FG/BG colors.
+The base color of any gprintf is specified at the beginning of the formatting string, beginning with '#':
+gprintf("#R Yo! %Y and be %G", "man", "cool");
+will print  the text in the formatting string with default color R (bold red) and the aguments ("man" and "cool") in bold yellow color.
+For now, only uint32, int32, char and bool arguments are supported.
+Check FIRMWARE/led.c for examples.
+
+To see gprintf outputs, just launch:
+	tail -f dbg_file !!in a new terminal!!
+where the executable is launched.
+gprintf outputs show up in the terminal as you launch simulations.
+
 ### Run the non-regression tests:
     make nonreg
     ./nonreg
