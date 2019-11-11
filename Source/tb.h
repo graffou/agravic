@@ -15,12 +15,25 @@ constant c_reset_length : time := 20 ns;
 
 #endif
 
+COMPONENT(sUART,
+DECL_PORTS(
+		PORT(clk_peri, CLK_TYPE, IN),
+		PORT(reset_n, RST_TYPE, IN),
+		PORT(core2mem_i, blk2mem_t, IN),
+		PORT(mem2core_o, mem2blk_t, OUT),
+		PORT(uart_tx_o, BIT_TYPE, OUT),
+		PORT(uart_rx_i, BIT_TYPE, IN)
+		)
+);
+
 COMPONENT(top,
 DECL_PORTS(
 		PORT(clk_top, CLK_TYPE, IN),
 		PORT(reset_n, RST_TYPE, IN),
 		PORT(load_port_i, blk2mem_t, IN),
 		// GPIOs
+		PORT(uart_tx_o, BIT_TYPE, OUT),
+		PORT(uart_rx_i, BIT_TYPE, IN),
 		PORT(gpios_o, UINT(32), OUT)
 		)
 );
@@ -30,6 +43,13 @@ SIG(clk, CLK_TYPE);
 SIG(reset_n, RST_TYPE);// reset_n;
 SIG(cmd, blk2mem_t);
 SIG(gpios, UINT(32));
+SIG(sUART_tx, BIT_TYPE);
+SIG(sUART_rx, BIT_TYPE);
+
+SIG(core2datamem, blk2mem_t);
+SIG(uart2core, mem2blk_t);
+
+
 #ifndef VHDL
 int ncycles = 10000;
 bool success = 1;
@@ -40,11 +60,25 @@ std::ifstream sig_start_file;
 
 BEGIN
 
+
+BLK_INST(u0_sUART, sUART,
+MAPPING(
+		PM(clk_peri, clk),
+		PM(reset_n, reset_n),
+		PM(core2mem_i, core2datamem),
+		PM(mem2core_o, uart2core),
+		PM(uart_tx_o, sUART_rx),
+		PM(uart_rx_i, sUART_tx)
+		)
+);
+
 BLK_INST(dut, top,
 		MAPPING(
 				PM(clk_top, clk),
 				PM(reset_n, reset_n),
 				PM(load_port_i, cmd),
+				PM(uart_tx_o, sUART_tx),
+				PM(uart_rx_i, sUART_rx)	,
 				PM(gpios_o, gpios)
 				)
 			);
@@ -137,6 +171,21 @@ constexpr void run()
 	{
 		//std::cerr << '.';
 		clk <= not clk;
+		//gpios <= BIN(10101010010101011111111100000000);
+
+
+		// Configure TB IPs from FW -------------------
+		// Address range 0x1e00-1eFF
+
+		if ((dut.core2datamem.addr and 0x1f00) == 0x1e00 )
+		{
+			core2datamem <= dut.core2datamem;
+			core2datamem.addr <= core2datamem.addr + 0x100;
+			gprintf("#RYoooooooooooooooooooooooooooo % ", to_hex(TO_INTEGER(dut.core2datamem.addr)), to_hex(TO_INTEGER(dut.core2datamem.data)));
+			//exit(0);
+		}
+		else
+			core2datamem.cs_n = 1;
 	}
 #ifdef NONREG
 	for (int i= 2048; i < 2100;i++)

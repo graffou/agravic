@@ -10,7 +10,7 @@ MEMORY
 {
     rom         : ORIGIN = 0x00000000, LENGTH = 0x6000 /* 24 kB */
     ram       : ORIGIN = 0x40000000, LENGTH = 0x4C00 /* 23 kB */    
-    stack       : ORIGIN = 0x40004C00, LENGTH = 0x1000 /* 23 kB */
+    stack       : ORIGIN = 0x40004C00, LENGTH = 0x1000 /* 4 kB */
 }
 
 /* Stack information variables */

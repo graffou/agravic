@@ -63,8 +63,8 @@ BEGIN
 					mem2(TO_INTEGER(baddr)) &
 					mem1(TO_INTEGER(baddr)) &
 					mem0(TO_INTEGER(baddr));
-		PORT_BASE(mem2core_o).data <= rdata;
-		IF (PORT_BASE(core2mem_i).cs_n == BIT(0)) THEN
+		IF ( ( PORT_BASE(core2mem_i).cs_n == BIT(0) ) and not( RANGE(baddr, 12, 11) == BIN(11) ) ) THEN
+				PORT_BASE(mem2core_o).data <= rdata;
 			//baddr = PORT_BASE(core2mem_i).addr;
 			//rdata = 	mem3(TO_INTEGER(baddr)) &
 			//			mem2(TO_INTEGER(baddr)) &
@@ -91,6 +91,8 @@ BEGIN
 				PORT_BASE(mem2core_o).data_en <= BIT(0);
 			ENDIF
 		ELSE
+			PORT_BASE(mem2core_o).data <= TO_UINT(0, 32);
+
 			PORT_BASE(mem2core_o).data_en <= BIT(0);
 		ENDIF
 	ENDIF
@@ -161,35 +163,13 @@ BLK_END;
 				RESET(be);
 				delayed_write <= BIT(0);
 			ELSEIF ( EVENT(clk_mem) and (clk_mem == BIT(1)) ) THEN
-				IF (PORT_BASE(core2mem_i).cs_n == BIT(0)) THEN
-					baddr = PORT_BASE(core2mem_i).addr;
-					IF (PORT_BASE(core2mem_i).wr_n == BIT(1)) THEN
-						rdata = 	mem3(TO_INTEGER(baddr)) &
-									mem2(TO_INTEGER(baddr)) &
-									mem1(TO_INTEGER(baddr)) &
-									mem0(TO_INTEGER(baddr));
-						PORT_BASE(mem2core_o).data <= rdata;
-						PORT_BASE(mem2core_o).data_en <= BIT(1);
-						delayed_write <= BIT(0);
-					ELSE
 
-
-						delayed_write <= BIT(1);
-						addr <= baddr;
-						data <= PORT_BASE(core2mem_i).data;
-						be <= PORT_BASE(core2mem_i).be;
-
-						PORT_BASE(mem2core_o).data_en <= BIT(0);
-					ENDIF
-				ELSE
-					delayed_write <= BIT(0);
-					PORT_BASE(mem2core_o).data_en <= BIT(0);
-				ENDIF
-
+				// Put that before read process, otherwise it actually delays of two cycles!
+				// And this required a wait cycle in CPU core for consecutive Write/read to the same address
 				IF (delayed_write == BIT(1)) THEN
 
-					gprintf("#MMem write % @ % ", to_hex(TO_INTEGER(data)), to_hex(TO_INTEGER(addr)), be);
-				//rmem(TO_INTEGER(PORT_BASE(core2mem_i).addr)) <= PORT_BASE(core2mem_i).data;
+					//gprintf("#MMem write % @ % ", to_hex(TO_INTEGER(data)), to_hex(TO_INTEGER(addr)), be);
+					//rmem(TO_INTEGER(PORT_BASE(core2mem_i).addr)) <= PORT_BASE(core2mem_i).data;
 
 					IF ( B(be, 3) == BIT(1) ) THEN
 						mem3[TO_INTEGER(addr)] = (RANGE(data, 31, 24));
@@ -205,6 +185,35 @@ BLK_END;
 					ENDIF
 
 				ENDIF
+
+				baddr = PORT_BASE(core2mem_i).addr;
+
+				IF ( (PORT_BASE(core2mem_i).cs_n == BIT(0)) and not ( RANGE(baddr, 12, 11) == BIN(11) ) ) THEN
+					IF (PORT_BASE(core2mem_i).wr_n == BIT(1)) THEN
+						rdata = 	mem3(TO_INTEGER(baddr)) &
+									mem2(TO_INTEGER(baddr)) &
+									mem1(TO_INTEGER(baddr)) &
+									mem0(TO_INTEGER(baddr));
+						PORT_BASE(mem2core_o).data <= rdata;
+						PORT_BASE(mem2core_o).data_en <= BIT(1);
+						delayed_write <= BIT(0);
+					ELSE
+
+
+						delayed_write <= BIT(1);
+						addr <= baddr;
+						data <= PORT_BASE(core2mem_i).data;
+						be <= PORT_BASE(core2mem_i).be;
+						PORT_BASE(mem2core_o).data <= TO_UINT(0, 32);
+						PORT_BASE(mem2core_o).data_en <= BIT(0);
+					ENDIF
+				ELSE
+					delayed_write <= BIT(0);
+					PORT_BASE(mem2core_o).data <= TO_UINT(0, 32);
+					PORT_BASE(mem2core_o).data_en <= BIT(0);
+				ENDIF
+
+
 
 			ENDIF
 		END_PROCESS

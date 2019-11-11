@@ -24,6 +24,7 @@
 
 #include "structures.h"
 #include "spram8kx32.h"
+#include "sUART.h"
 #include "mem.h"
 #include "peripherals.h"
 #include "risc_V_constants.h"

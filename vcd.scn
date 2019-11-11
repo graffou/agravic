@@ -1,7 +1,13 @@
 
-tb:dut:u0_peripherals:gpios_o bin
-tb:dut:u0_peripherals:dbg_o bin
+tb:u0_sUART: bin
+tb:dut: bin
+tb:dut:u0_top: bin
+tb:dut:u0_peripherals: bin
+tb:dut:u0_sUART: bin
+/*
 tb:dut:u0_risc_V_core:core2datamem_o.addr bin
+tb:dut:u0_risc_V_core:core2datamem_o.cs_n bin
+tb:dut:u0_risc_V_core:core2datamem_o.wr_n bin
 tb:dut:u0_risc_V_core:core2datamem_o.data bin
 tb:dut:u0_risc_V_core:instmem2core_i.data bin
 tb:dut:u0_risc_V_core:datamem2core_i.data bin
@@ -34,5 +40,7 @@ tb:dut:u0_risc_V_core:regs(27) bin
 tb:dut:u0_risc_V_core:regs(31) bin
 tb:dut:u0_risc_V_core:
 tb:dut:u0_peripherals:
+*/
+tb:dut:u0_risc_V_core: bin
 tb:
 tb:dut:

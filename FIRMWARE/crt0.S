@@ -59,7 +59,8 @@ zero_loop_end:
 
 
   la x26, _sdata
-  la x27, _edata
+ /* la x27, _edata*/
+  la x27, _bss_start
   la x25, _sidata
 
   bge x26, x27, init_loop_end
@@ -69,8 +70,8 @@ init_loop:
   sw x1, 0(x26)
   addi x26, x26, 4  
   addi x25, x25, 4
-
-  ble x26, x27, init_loop
+/* PG: blt instead of ble avoids overwriting 1st bss data */
+  blt x26, x27, init_loop
 init_loop_end:
 
 

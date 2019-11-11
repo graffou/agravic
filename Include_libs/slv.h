@@ -984,6 +984,7 @@ struct array< T1<T,N> > : T1<T,N>, vcd_entry
 	static const int length = -65536;
 };
 
+#define DIV(a, b) a\b
 
 #define VHDLz
 #ifndef VHDL
@@ -1080,6 +1081,7 @@ struct array< T1<T,N> > : T1<T,N>, vcd_entry
 // template parameters for in and out ports
 #define IN 1
 #define OUT 0
+#define INOUT 0 // in or out ports should be able to accept assignments for either side.
 
 // port definition
 //#define PORT_DEF(name, type, in) port<type, in> name = gen_sig_desc(#name, this);

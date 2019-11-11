@@ -63,6 +63,7 @@
 #define MEMBER(a, t) a : t
 #define PORT_IN(a,t) a : in t
 #define PORT_OUT(a,t) a : out t
+#define PORT_INOUT(a,t) a : inout t
 #define END_SEMICOLON(a) a;
 #define END_COMMA(a) a,
 

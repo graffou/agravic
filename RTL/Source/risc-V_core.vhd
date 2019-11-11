@@ -215,7 +215,8 @@ begin
       csri <= '0';
      end if;
    end if;
-   IF ( ( ( (cpu_wait = '0' ) ) and (not ( (ropcode = LOAD) or (ropcode = STORE) ) ) and (halt = '0') )
+   IF ( ( ( (cpu_wait = '0' ) ) and (not ( (ropcode = LOAD)
+     ) ) and (halt = '0') )
      or ( (datamem2core_i.data_en = '1' ) and (load_mem = '0') )
      or ( (instmem2core_i.data_en = '1' ) and (load_mem = '1' ) )
      or (cpu_wait_on_write = '1' ) ) then
@@ -230,7 +231,7 @@ begin
    end if;
    IF ( (pipe(1) = '1' ) and (cpu_wait = '0') and (flush = '0') ) then
     exec <= '1' ;
-     rrinstr <= rinstr;
+    rrinstr <= rinstr;
     IF (csri = '1' ) then
      op1 := RESIZE(rrs1, op1'length);
     else
@@ -352,8 +353,6 @@ begin
       blk2mem_t0.wr_n <= '0';
       blk2mem_t0.be <= wbe;
       blk2mem_t0.data <= SHIFT_LEFT(regs(TO_INTEGER(rrs2)), TO_INTEGER(nshift & "000"));
-      cpu_wait <= '1' ;
-      cpu_wait_on_write <= '1' ;
      when CASE_LUI => rd_val := rimmediate;
      when CASE_AUIPC => rd_val := rimmediate;
      when CASE_JAL => next_PC := rimmediate; rd_val := PCp; flush <= '1' ; pipe <= TO_UNSIGNED(0,pipe'length);ropcode <= TO_UNSIGNED(0,ropcode'length);

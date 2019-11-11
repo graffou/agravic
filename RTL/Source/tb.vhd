@@ -4,13 +4,19 @@ library work; use work.structures.all;
 entity tb_t is begin end tb_t; architecture rtl of tb_t is component dummy_zkw_pouet is port(clk : in std_logic);end component;
 constant c_clock_period : time := 5 ns;
 constant c_reset_length : time := 20 ns;
-component top is port( clk_top : IN std_logic; reset_n : IN std_logic; load_port_i : IN blk2mem_t; gpios_o : OUT unsigned ((32 -1) downto 0) ); end component;
+component sUART is port( clk_peri : IN std_logic; reset_n : IN std_logic; core2mem_i : IN blk2mem_t; mem2core_o : OUT mem2blk_t; uart_tx_o : OUT std_logic; uart_rx_i : IN std_logic ); end component;
+component top is port( clk_top : IN std_logic; reset_n : IN std_logic; load_port_i : IN blk2mem_t; uart_tx_o : OUT std_logic; uart_rx_i : IN std_logic; gpios_o : OUT unsigned ((32 -1) downto 0) ); end component;
 signal clk : std_logic;
 signal reset_n : std_logic;
 signal cmd : blk2mem_t;
 signal gpios : unsigned ((32 -1) downto 0);
+signal sUART_tx : std_logic;
+signal sUART_rx : std_logic;
+signal core2datamem : blk2mem_t;
+signal uart2core : mem2blk_t;
 begin
-dut : top port map( clk_top => clk, reset_n => reset_n, load_port_i => cmd, gpios_o => gpios);
+u0_sUART : sUART port map( clk_peri => clk, reset_n => reset_n, core2mem_i => core2datamem, mem2core_o => uart2core, uart_tx_o => sUART_rx, uart_rx_i => sUART_tx);
+dut : top port map( clk_top => clk, reset_n => reset_n, load_port_i => cmd, uart_tx_o => sUART_tx, uart_rx_i => sUART_rx, gpios_o => gpios);
 gen_clk: process
 begin
    wait for (c_clock_period / 2);

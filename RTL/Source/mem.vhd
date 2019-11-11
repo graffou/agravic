@@ -19,8 +19,8 @@ begin
      mem2(TO_INTEGER(baddr)) &
      mem1(TO_INTEGER(baddr)) &
      mem0(TO_INTEGER(baddr));
-  mem2core_o.data <= rdata;
-  IF (core2mem_i.cs_n = '0') then
+  IF ( ( core2mem_i.cs_n = '0' ) and not( (baddr(12 downto 11)) = "11" ) ) then
+    mem2core_o.data <= rdata;
    mem2core_o.data_en <= '1' ;
    IF (core2mem_i.wr_n = '0') then
     IF ( core2mem_i.be(3) = '1' ) then
@@ -38,6 +38,7 @@ begin
     mem2core_o.data_en <= '0';
    end if;
   else
+   mem2core_o.data <= TO_UNSIGNED(0,32);
    mem2core_o.data_en <= '0';
   end if;
  end if;

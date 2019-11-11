@@ -4,6 +4,11 @@
 // Written using the Agravic simulation and rtl generation platform
 
 #include "slv.h"
+
+// To add a CPU wait cycle when doing stores
+// Should not be needed, but sometimes helps for debug
+//#define STORE_CPU_WAIT
+
 START_OF_FILE(risc-V_core)
 INCLUDES
 USE_PACKAGE(structures)
@@ -271,7 +276,11 @@ BEGIN
 			ENDIF
 
 			// Basic code memory model: assume every read request is satisfied
-			IF ( ( ( (cpu_wait == BIT(0) ) ) and (not ( (ropcode == LOAD) or (ropcode == STORE) ) ) and (halt == BIT(0)) ) // basic condition for PC progress
+			IF ( ( ( (cpu_wait == BIT(0) ) ) and (not ( (ropcode == LOAD)
+#ifdef STORE_CPU_WAIT
+					or (ropcode == STORE)
+#endif
+					) ) and (halt == BIT(0)) ) // basic condition for PC progress
 					or ( (PORT_BASE(datamem2core_i).data_en == BIT(1)) and (load_mem == BIT(0)) ) // end of load from data mem
 					or ( (PORT_BASE(instmem2core_i).data_en == BIT(1)) and (load_mem == BIT(1)) ) //end of load from inst mem
 					or (cpu_wait_on_write == BIT(1)) ) THEN // End of extra cycle on write
@@ -291,7 +300,7 @@ BEGIN
 			// Execute instruction ----------------------------------------------------------------------
 			IF ( (B(pipe, 1) == BIT(1)) and (cpu_wait == BIT(0)) and (flush == BIT(0)) ) THEN
 				exec <= BIT(1);
-					rrinstr <= rinstr;
+				rrinstr <= rinstr;
 				IF (csri == BIT(1)) THEN// CSR instruction with immediate arg.
 					op1 = RESIZE(rrs1, LEN(op1));
 				ELSE
@@ -446,8 +455,10 @@ BEGIN
 						blk2mem_t0.wr_n <= BIT(0);
 						blk2mem_t0.be <= wbe;
 						blk2mem_t0.data <= SHIFT_LEFT(regs(TO_INTEGER(rrs2)), TO_INTEGER(nshift & BIN(000)));
+#ifdef STORE_CPU_WAIT
 						cpu_wait <= BIT(1);//opcode_is_load; //optimize this later on
 						cpu_wait_on_write <= BIT(1);//opcode_is_load;
+#endif
 					CASE(CASE_LUI) rd_val = rimmediate;
 					CASE(CASE_AUIPC) rd_val = rimmediate; // Pc added at decoding stage
 					CASE(CASE_JAL) next_PC = rimmediate; rd_val = PCp; flush <= BIT(1); pipe <= TO_UINT(0, LEN(pipe));ropcode <= TO_UINT(0, LEN(ropcode));
@@ -543,11 +554,9 @@ BEGIN
 
 			PC <= next_PC;
 			rload_from_instmem <= load_from_instmem;
+
 			IF (load_from_instmem == BIT(0)) THEN
 				inst_addr <= RANGE(next_PC, LEN(blk2mem_t0.addr)+1, 2);
-//			ELSE
-				//gprintf("#VALT");
-//				exit(0);
 			ENDIF
 
 	ENDIF
