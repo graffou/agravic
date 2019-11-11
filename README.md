@@ -14,7 +14,7 @@ Furthermore, C++ simulation of agravic designs should be faster than classical r
     - Use in-process variables for intermediate calculations
     - Use clock-driven combinational processes for output assignments
     - The risc-V SoC example shows how to do this
-* For now, a single clock signal is supported. Though, gated clocks can be created, but only inside the hierarchy level where the main clock is created.
+* For now, a single clock signal is supported. Though, gated clocks can be created, check the gated clock example in peripherals.h.
 
 ## Requirements
 * A linux distribution, with a recent gcc ( > 7.4 ).
@@ -24,15 +24,18 @@ Furthermore, C++ simulation of agravic designs should be faster than classical r
 ## Provided example (small risc-V SoC based on Giorno core)
 A risc-V SoC example is provided to demonstrate the platform capabilities, for simulation and rtl generation as well.
 
-The SoC is composed of the Giorno risc-V core (custom design based on rv32i instruction set), two 24kB RAMs (instruction and data) and a peripheral block (just 32 GPIOs for now).
+The SoC is composed of the Giorno risc-V core (custom design based on rv32i instruction set), two 24kB RAMs (instruction and data), a peripheral block (just 32 GPIOs ouput-only and the printf port for now), and a very simple UART interface (no DMA, half duplex).
+
+* The Giorno core does not support interruptions and timers yet. 
+* However, building binaries using a standard bare-metal gcc toolchain seems to be working so far.
 
 **93 verification tests are provided** (the rv32i subset of the risc-V compliance tests), which all pass except of the CSR, FENCE and MISALIGN ones.
 
 Running the non-regression suite is statisfyingly fast: it obviously deserves being run every time you change a single line of the rtl code. 
 
-A very simple bare-metal gcc example C-code can be found in the FIRMWARE directory.
+A simple bare-metal gcc C++ code can be found in the FIRMWARE directory.
 
-The generated rtl synthesizes in quartus, and should run at 48MHz on an Arduino Vidor board (using 25% of the Cyclone10LP Logic elements).
+The generated rtl synthesizes in quartus, and should run at 48MHz on an Arduino Vidor board (using 27% of the Cyclone10LP Logic elements).
 
 ## Directory organization
 
@@ -46,7 +49,7 @@ The generated rtl synthesizes in quartus, and should run at 48MHz on an Arduino 
 
 * Tests contains the non-regression tests (binaries and references). 
 
-* FIRMWARE contains the c-code and utilities for firmware development. This c example is based on the ibex core bare-metal example.
+* FIRMWARE contains the c++ sample code and utilities for firmware development. 
 
 ## Run the risc-V SoC example
 ### Generate executable and rtl:
@@ -56,10 +59,26 @@ The generated rtl synthesizes in quartus, and should run at 48MHz on an Arduino 
     make nonreg
 
 The non-regression executable differs from the previous one by its ability to abort at the end of the test and check the results (it compares memory content to the reference one, which is expected by the risc-V compliance tests).
-### Build the bare-metal C example:
+### Build the bare-metal C++ example:
+
+The C++ example shows the features that seem to work on this platform:
+
+* C++ classes and methods
+* C++ templates (and recursive ones as well)
+* A C++ printf clone that enables color printing on terminals from inside the simulation platform
+* Bit field structures manipulation -hardware configuration API will be based on bit field structures in the future- 
+* Global and static variables initialization, function calls...
+
+To build the example:
+
     cd FIRMWARE
     make
     cd ..
+To run the example:
+
+    make
+    ./dut -ncycles 200000 -bin_file 'FIRMWARE/led.bin'   
+        
 ### Select internal signals to be probed in dut.vcd:
 edit vcd.scn file.
 
@@ -87,16 +106,23 @@ Then navigate inside the hierarchy to watch internal signals.
 This example toggles the GPIO values every 1ms (see gpios signal in the peripherals block).
 ### Have a look to printf outputs
 gprintf is a simple printf implementation in C++ language.
+
 It outputs text using the gpio output, which is hacked in peripherals.h to produce console output.
+
 It makes use of recursive templates to implement multiple arguments printf, so any gprintf with a new set of argument types has a cost in terms of program memory.
+
 Since argument types does not need to be specified, the formatting argument is used to specify the output color.
+
 Basic print colors are black, blue, magenta, cyan, red, green and yellow, respecting the color code of matlab (k, b, m, c, r, g, and y)
 For bold print, color codes must be specified in capital letters (K, B, M etc.)
 Some print codes with background color are T, U, V and W. These are an arbitrary choice of FG/BG colors.
+
 The base color of any gprintf is specified at the beginning of the formatting string, beginning with '#':
-gprintf("#R Yo! %Y and be %G", "man", "cool");
+
+    gprintf("#R Yo! %Y and be %G", "man", "cool");
 will print  the text in the formatting string with default color R (bold red) and the aguments ("man" and "cool") in bold yellow color.
 For now, only uint32, int32, char and bool arguments are supported.
+
 Check FIRMWARE/led.c for examples.
 
 To see gprintf outputs, just launch:
@@ -104,6 +130,7 @@ To see gprintf outputs, just launch:
 	tail -f dbg_file !!in a new terminal!!
 
 where the executable is launched.
+
 gprintf outputs show up in the terminal as you launch simulations.
 
 ### Run the non-regression tests:
