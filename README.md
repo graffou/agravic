@@ -1,4 +1,57 @@
-# agravic 
+# Agravic 
+
+HW development platform in C++, NOT HLS but hardware-level C++ (VHDL generation via C preprocessor, HW simulation in C++).
+Arduino Vidor target (with HDMI console output).
+Risc-V small SoC.
+Video demo of the SoC running on the Arduino Vidor: https://youtu.be/4wAXtRFF0tc
+(blurry video and awful speech inside ;)
+
+## Agravic has reached some level of maturity
+The Risc-V tiny SoC HW can now be downloaded to the Arduino Vidor FPGA development platform and is running properly so far.
+HDMI console mode (with programmable fonts) available via the micro-HDMI connector
+The test firmware runs on the risc-V core on the cyclone-10 FPGA.
+The HW HDMI console offers some means of SW and HW debug. 
+Basic version of the "agravic invaders" FW, with pacific invaders who don't even drop a bomb. Anyway, you can't send them any missile either ;)
+You just can move your ship  right to left using 's' and 'd' keys (with a Putty terminal open for serial ccommunication w/ the Vidor board).
+
+###To build the HW
+* A linux system is preferred
+* You need a native g++ compiler, verions 7.4 to 8
+* You need to have quartus installed
+* You need the Arduino IDE
+* Download and install quartus prime lite (this is free from Intel website. This requires creating an account) 
+* In agravic folder, run make. This builds the linux executable and VHDL files as well
+* Go to the RTL/Source folder. You should find the quartus project (top.qpf)
+* Open top.qpf in quartus and run compilation flow (hit start compilation button)
+    After a few minutes (depending on HW configuration), compilation should complete with generation of a top.ttf file
+* Go to the ARDUINO/Agravic folder
+* Install the GO language package (this is just for the Arduino ttf->.h converter. This is Arduino's choice, I don't approve using an extra language to generate this kind of files: sudo apt-get install golang)
+* Generate .h files for the arduino project :
+    go run make_composite_binary.go  -i ../../RTL/Source/top.ttf:1:512 -o app.h -t 1 > signature.h   
+* In the same directory, open Agravic.ino in Arduino IDE
+* Make sure you have the Arduino libraries for the Arduino mkr4000 Vidor board. If not, run the Arduino IDE board manager and download them. 
+* The HW 
+* When done, select the Arduino mkr4000 vidor board, /dev/ttyACM0 port (or whatever), and programme USBAsp. Then, download the code.
+* You should see the GIORNO CORE prompt out of the Vidor HDMI interface (requires a micro HDMI -> HDMI cable)
+
+###To build and load the risc-V firmware
+* Go to the FIRMWARE folder
+* Edit the Makefile to set the actual path of your risc-V toolchain
+* Type make
+* The led.bin firware binary is available
+* Alternatively, build the invader example. Type:
+* make -f Makefile_invaders
+* Install putty (sudo apt-get install putty on ubuntu platforms)
+* Open putty. Configure putty for a Serial, 115200 bauds session using /dev/ttyACM0 device (the Vidor board might show up as the /dev/ttyACM1 or /dev/ttyUSB* device). Opening putty seems to be required for proper serial configuration.
+* The FW is loaded via the USB serial port of the Arduino Vidor (the arduino FW mirrors it to the HW UART of the Risc-V SoC)
+* from the FIRMWARE directory:
+* sudo dd if=led.bin of=/dev/ttyACM0
+* or sudo dd if=invaders.bin of=/dev/ttyACM0 for the agravic invaders
+* The HDMI console screen should turn blue during code download
+* The code is loaded: it displays a few stange messages then waits for serial transactions. Type characters in the putty console, they should show up in the HDMI console. If loading did not went well, the console might turn blue for a while, and you will see some hex data (this is the risc-V trace in case of trap).
+* Alternatively, you should see the agravic invaders
+* Code can be reloaded without resetting the Vidor board. However, I am aware that there might be some glitches (the HW is not properly resetted after code loading)
+
 ## What is Agravic ?
 Agravic is a framework that enables writing VHDL-like code inside a C++ program.
 It uses heavy preprocessor abuse for that, but the counterpart is that synthesizable VHDL code can be preprocessor-generated from the C++ code!
@@ -7,14 +60,19 @@ The syntax has been chosen to enable VHDL and C++ code generation using the C pr
 
 **So, agravic enables rtl code writing without the expense of EDA tools.**
 Furthermore, C++ simulation of agravic designs should be faster than classical rtl simulation. 
+But the platform is not optimized yet, and it is is sure that designs with low flip-flop activity are slower than necessary.
+This is why memory models are not the same for simulation as for VHDL generation (altera memory inferring requires describing memories as wide arrays of flip-flops, with inherently low toggling rate). 
 
 ### Limitations
-* Unlike mentor ac_int types, arbitrary length types in Agravic only cover the 1-64 bits range. This is generally enough for most designs.
+* Unlike mentor ac_int types, arbitrary length types in Agravic only cover the 1-64 bits range. This is generally enough for most designs and enables using native int64 types as a base type.
+* Agravic does not make a true difference between bit-types and vector bit-types with size 1. So, some designs might compile in C++, but not the auto-generated VHDL files.
 * True combinational logic does not exist in Agravic. Traditional uses of combinational logic can be achieved this way:
     - Use in-process variables for intermediate calculations
+    - Be careful of the non-retained nature of agravic variables. VHDL variables are retained, this can lead to a different behavior betwwen simulation and generated VHDL.
     - Use clock-driven combinational processes for output assignments
     - The risc-V SoC example shows how to do this
-* For now, a single clock signal is supported. Though, gated clocks can be created, check the gated clock example in peripherals.h.
+* For now, a single clock signal is supported. Though, gated clocks can be created.
+=> The SoC runs on three clocks, all derived from the master clock (240MHz) using a gating clock technique in simulation. The HW makes use of true clocks (24MHz pixel clk, 48MHz core clk, and 120MHz HDMI clk, all derived from the master 48MHz clk of the Arduino Vidor)
 
 ## Requirements
 * A linux distribution, with a recent gcc ( > 7.4 ).
@@ -24,7 +82,8 @@ Furthermore, C++ simulation of agravic designs should be faster than classical r
 ## Provided example (small risc-V SoC based on Giorno core)
 A risc-V SoC example is provided to demonstrate the platform capabilities, for simulation and rtl generation as well.
 
-The SoC is composed of the Giorno risc-V core (custom design based on rv32i instruction set), two 24kB RAMs (instruction and data), a peripheral block (just 32 GPIOs ouput-only and the printf port for now), and a very simple UART interface (no DMA, half duplex).
+The SoC is composed of the Giorno risc-V core (custom design based on rv32i instruction set), two 24kB RAMs (instruction and data), a peripheral block (used as printf port for now), a very simple UART interface (half duplex), DMA controller (for the UART only) and an HDMI console.
+An SDRAM controller is provided but is not functional yet, its projected use is for HDMI bitmap mode.
 
 * The Giorno core does not support interruptions and timers yet. 
 * However, building binaries using a standard bare-metal gcc toolchain seems to be working so far.
@@ -45,13 +104,18 @@ The generated rtl synthesizes in quartus, and should run at 48MHz on an Arduino 
 
 * Include_rtl contains the C++ compilable versions of the rtl blocks found in Source. These are generated by the Makefile.
 
-* RTL contains the VHDL versions of the rtl blocks found in Source. These are generated by the Makefile. You'll find a (basic) quartus project as well.
+* RTL contains the VHDL versions of the rtl blocks found in Source. These are generated by the Makefile. You'll find the quartus project as well.
 
 * Tests contains the non-regression tests (binaries and references). 
 
 * FIRMWARE contains the c++ sample code and utilities for firmware development. 
 
-## Run the risc-V SoC example
+* ARDUINO/Agravic contains the arduino project that loads the SoC FPGA image and the firmware binary to the risc-V core.
+
+* ARDUINO/Agravic contains the arduino 'go' code that generates the *.h file that contains the FPGA image.
+
+
+## Run the risc-V SoC example1
 ### Generate executable and rtl:
 
     make
@@ -68,13 +132,18 @@ The C++ example shows the features that seem to work on this platform:
 * A C++ printf clone that enables color printing on terminals from inside the simulation platform
 * Bit field structures manipulation -hardware configuration API will be based on bit field structures in the future- 
 * Global and static variables initialization, function calls...
+* Floating point operations and displaying
+* UART transfers
+* DMA UART transfers
 
 To build the example:
 
+    install the risc-V gcc toolchain (riscv-gnu-toolchain on github, compile the newlib toolchain)
     cd FIRMWARE
-    make
+    !! change risc-V compiler path in the Makefile according to your settings (default is /opt/riscv... )
+    make (-f Makefile_invaders for the invaders demo)
     cd ..
-To run the example:
+To run the example (simulation):
 
     make
     ./dut -ncycles 200000 -bin_file 'FIRMWARE/led.bin'   
@@ -123,7 +192,7 @@ The base color of any gprintf is specified at the beginning of the formatting st
 will print  the text in the formatting string with default color R (bold red) and the aguments ("man" and "cool") in bold yellow color.
 For now, only uint32, int32, char and bool arguments are supported.
 
-Check FIRMWARE/led.c for examples.
+Check FIRMWARE/led.c or FIRMWARE/invaders.cpp for examples.
 
 To see gprintf outputs, just launch:
 
@@ -132,6 +201,8 @@ To see gprintf outputs, just launch:
 where the executable is launched.
 
 gprintf outputs show up in the terminal as you launch simulations.
+gprintf ouputs show up in the HDMI console as well, but anything but chars is ignored (colors and other types).
+This explains the slightly corrupt output seens on the HDMI console.
 
 ### Run the non-regression tests:
     make nonreg

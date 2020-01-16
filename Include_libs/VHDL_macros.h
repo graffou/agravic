@@ -4,6 +4,8 @@
 #define SLV(a, n) conv_std_logic_vector(a, n)
 #define SLV_TYPE(n) std_logic_vector((n-1) downto 0)
 #define TO_SLV(a) std_logic_vector(a)
+#define TO_LOGIC(a) a(0)
+
 #define CLK_TYPE std_logic
 #define RST_TYPE std_logic
 #define BIT_TYPE std_logic
@@ -15,6 +17,9 @@
 #define UNSIGNED_TYPE(n) unsigned ((n-1) downto 0)
 #define INT(n) signed ((n-1) downto 0)
 #define UINT(n) unsigned ((n-1) downto 0)
+#define TRISTATE(n) unsigned ((n-1) downto 0)
+
+//#define BOOL boolean
 // OK for vhdl
 //#define RESIZE(a,n) a.resize<n>()
 
@@ -31,7 +36,9 @@
 #define STRING(a) #a
 #define BIN(a) #a
 #define CASE_BIN(a) #a
-#define HEX(a) x##a
+
+#define HEX(a) x ## Z@Z ## a ## Z@Z//STRING(a)
+//#define BIN(a) slv<sizeof(STRING(a))-1>(0b##a)
 
 #define BIT(a) IF_ELSE(a) ('1')('0')
 #define EQ(a,b) (a=b)
@@ -39,6 +46,10 @@
 // added unsigned since vhdl find an ambiguity to & operator when array types are defined as well ??????!!!!!!
 #define TYPE_UNSIGNED_CONV UNSIGNED'
 #define RANGE(a,b,c) (a(b downto c)) //a.range<b,c>()
+#define SUBVECTOR(a,b,c) (a(b+c-1 downto c)) // IN C++: Version with cst len return slv from variable position (use e.g. in foor loops)
+#define VAR_SET_BIT(a, b, c) a(b) := c //ONLY VARIABLES !!!!!!!!!!!!!!!!!!!!
+#define SIG_SET_BIT(a, b, c) a(b) <= c //ONLY COMB !!!!!!!!!!!!!!!!!!!!
+
 #define SLV_RANGE(a,b,c) std_logic_vector(a(b downto c)) //a.range<b,c>()
 #define B(a,b) a(b)
 #define HI(a) a'high
@@ -51,8 +62,11 @@
 #define CASE(b) when b =>
 #define DEFAULT when others =>
 #define ENDCASE end case;
+#define FOR(a,b,c) for a in b to c loop
+#define ENDLOOP end loop;
 #define VA =
 #define ARRAY_TYPE(t, n) array(0 to (n-1)) of t
+#define BASE_ARRAY_TYPE(t, n) array(0 to (n-1)) of t
 #define TYPE(a, t) type a is t
 #define SIG(a, t) signal a : t
 #define VAR(a, t) variable a : t
@@ -136,6 +150,10 @@
 #define RECORD(typename, ports)	type typename is record \
 		EVAL(DECL_FIELDS(get_##ports))\
 		end record
+
+// base type does not exist in rtl (this is for c++ records mainly)
+#define BASE_TYPE(type) type
+
 
 /*
     component clk_gating_cell is

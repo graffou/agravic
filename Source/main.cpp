@@ -23,15 +23,29 @@
 #include "input_parms.h"
 
 #include "structures.h"
-#include "spram8kx32.h"
+#include "slv_utils.h"
+#include "spram6144x8.h"
 #include "sUART.h"
 #include "mem.h"
 #include "peripherals.h"
+#include "dbg_mem.h"
 #include "risc_V_constants.h"
+#include "register_file.h"
 #include "risc-V_core.h"
+#include "clk_gen.h"
+#include "ddio.h"
+#include "sdram_ctrl.h"
+
+
+#include "spram_font.h"
+#include "spram_4800x8.h"
+
+#include "hdmi.h"
+#include "dma.h"
+
 #include "top.h"
 #include "tb.h"
-
+#include "screen_model.h"
 
 int main(int argc, char* argv[])
 {
@@ -63,12 +77,12 @@ int main(int argc, char* argv[])
 	tb.clk.parse_modules();
 	gprintf("#CActivate vcd");
 
-	vcd_file.set_timebase_ps(10000);// 10ns <=> 50MHz clk
+	//vcd_file.set_timebase_ps(10000);// 10ns <=> 50MHz clk
+	vcd_file.set_timebase_ps(2083);// 2.8ns <=> 240MHz clk
 	vcd_file.activate();
 	tb.dut.check();
 
 	gprintf("#CRunning testbench");
-
 	tb.run();
 
 	// Obligatory order !!
@@ -80,7 +94,7 @@ int main(int argc, char* argv[])
 #endif
 
 
-	gprintf("#VEnd of simulation, time is % ps", vcd_file.vcd_time * vcd_file.timebase_ps);
+	gprintf("#VEnd of simulation, time is % ps % ms", vcd_file.vcd_time * vcd_file.timebase_ps, (vcd_file.vcd_time * vcd_file.timebase_ps)/1000000000.0);
 #ifdef NONREG
 	if (tb.success)
 	{

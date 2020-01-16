@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include <stdint.h>
-#include <string.h>
+//#include <cmath>
 
 
 
@@ -35,17 +35,51 @@ struct reg_test_t
 
 
 
-
-#define INT32_TYPE 0x00000100
-#define INT16_TYPE 0x00000200
-#define INT8_TYPE 0x00000400
+/*
+#define INT32_TYPE 0x80800100
+#define INT16_TYPE 0x80800200
+#define INT8_TYPE 0x80800400
 #define UINT32_TYPE 0x80000100
 #define UINT16_TYPE 0x80000200
 #define UINT8_TYPE 0x80000400
+#define FLOAT_TYPE 0x80001000
 #define BOOL_TYPE 0x80000800
 #define COLOR_TYPE 0xFFFFFF00
 #define END_PRINT 0x88000000
+*/
+#define INT32_TYPE  0x80000000
+#define INT16_TYPE  0x81000000
+#define INT8_TYPE   0x82000000
+#define UINT32_TYPE 0x83000000
+#define UINT16_TYPE 0x84000000
+#define UINT8_TYPE  0x85000000
+#define BOOL_TYPE   0x86000000
+#define FLOAT_TYPE  0x87000000
+#define COLOR_TYPE  0xE0000000
+#define END_PRINT   0xF0000000
+#define TOGGLE_BLINK   0x03000000
+#define PRINT_AT_XY   0x0F000000
+#define CLS   0x02000000
+#define FONT   0x01000000
 
+//char test_font[12] = {0xAA,0x55,0x11,0x22,0x33,0x44,0xAA,0x55,0x11,0x22,0x33,0x44};
+char test_font[12] = {0xfe,0x82,0x82,0x82,0x82,0x82,0x82,0x82,0x82,0x82,0x82,0xfe};
+
+char alien1[12]={
+	0b00110000,
+	0b00001000,
+	0b00011111,
+	0b00110111,
+	0b01111011,
+	0b11111111,
+	0b11111100,
+	0b00011000,
+	0b00100111,
+	0b01000000,
+	0b10000000,
+	0b00000000};
+
+#define BIT_REVERSE(a) ( ((a&0x80)>>7) | ((a&0x40)>>5) | ((a&0x20)>>3) | ((a&0x10)>>1) | ((a&8)<<1) | ((a&4)<<3) | ((a&2)<<5) | ((a&1)<<7) )
 
 #ifdef LINUX //----------------------------------------
 // To debug this code in linux env.
@@ -78,7 +112,7 @@ dummy* dbg = new dummy;
 volatile uint32_t *dbg = (volatile uint32_t *) 0x40005ff8; 
 
 volatile uint32_t *var = (volatile uint32_t *) 0x40005ffc;
-
+volatile uint32_t *timer = (volatile uint32_t *) 0x40005ff0;
 // simple uart register:
 // Write: 16b(division_factor) 7b(0) 1b(rx_not_tx) 8b(tx_byte)
 // Read:  16b(division_factor) 7b(0) 1b(ready)     8b(rx_byte) 
@@ -89,6 +123,7 @@ volatile uint32_t *uart = (volatile uint32_t *) 0x40007fc0;
 // this verification hack is found in tb.h
 volatile uint32_t *tb_uart = (volatile uint32_t *) 0x40007Bc0;
 
+volatile uint32_t *dma = (volatile uint32_t *) 0x40007f80;
 
 /**
  * Delay loop executing within 8 cycles on ibex
@@ -121,7 +156,6 @@ static int usleep(unsigned long usec) {
 #endif //----------------------------------------
 
 
-
 void dbg_write(const char *ptr)
 {
    while( (*ptr != 0) )
@@ -142,6 +176,12 @@ struct color_type
 };
 
 // Hoping that all signed and unsigned types will automatically cast to one of these (including char)
+void dbg_write(float x)
+{
+    *dbg = FLOAT_TYPE;
+    *dbg = *reinterpret_cast<uint32_t*>(&x);
+}
+
 void dbg_write(uint32_t x)
 {
     *dbg = UINT32_TYPE;
@@ -159,6 +199,10 @@ void dbg_write(color_type x)
     *dbg = COLOR_TYPE | uint32_t(x.code);
 }
 
+void dbg_write( char c)
+{
+    *dbg = c; 
+}
 
 void recurse_print(const char* toto)
 {
@@ -198,6 +242,9 @@ void recurse_print(const char* toto, const T& first, const Args&... args)
 }
 
 
+#define PRINT_AT(a, b, c) *dbg = (PRINT_AT_XY | (b << 8) | ((a) << 16) | (c));
+
+
 #define gprintf(...) recurse_print(__VA_ARGS__)
 
 
@@ -223,7 +270,9 @@ int main(int argc, char **argv) {
   uint8_t cnt = 0;
   *var = 0xffffffff; 
   titi tata;  
-
+  
+  
+ 
   gprintf("#VGiorno core running %Y %Y\n", *var, uint32_t(127));    
 
   while (cnt < 10) {
@@ -276,15 +325,123 @@ int main(int argc, char **argv) {
   while ( (*uart & 0x100) == 0); 
    *uart = 0x00B20026;     
   while ( (*uart & 0x100) == 0); 
-  *uart = 0x00B20100;   
+  *uart = 0x00B30100;   
+  
+ 
   
   // Now test uart rx using the verif. uart in tb
   *tb_uart = 0x00B20091;
   while ( (*uart & 0x100) == 0); 
   gprintf("#VRead %Y from UART\n", uint32_t(*uart & 0xff));  
-     
-  
-  
-  
    
+  // Test DMA with UART  
+   *uart = 0x00B20100;   
+   *uart = 0x00040100;   
+   
+   
+   gprintf("CONF DMA\n");
+   uint8_t dma_sink[16];
+  // Configure DMA
+  *dma = 0; // channel 0
+  *(dma+1) = reinterpret_cast<uint32_t>(dma_sink);// addr
+  *(dma+2) = 16;// tsfr sz
+  *(dma+3) = 1000;// no timeout
+  *(dma+4) = ( (8) | (0 << 4) | (1 << 8) | (3 << 12) | (0 << 14) | (1 << 16) ) ;//  source (en & src) | sink | addr inc | periph mask | data mask | priority
+  
+   gprintf("TB UART\n");
+ /*
+	for (uint32_t i = 0; i < 15; i++)
+	{
+		//*tb_uart = 0x00B20000 | i;
+		*tb_uart = 0x00040000 | i;
+		while ( (*tb_uart & 0x100) == 0);//{gprintf("#Vwait");}; 
+		
+	}
+ */
+ gprintf("#UDMA transfer result: ");
+ 	for (uint32_t i = 0; i < 16; i++)
+	{
+		
+		 gprintf("#U	%: ", uint32_t(dma_sink[i]));
+
+	} 
+	
+  *(dma+1) = reinterpret_cast<uint32_t>(dma_sink);// addr	
+  *(dma+4) = ( (0) | (0 << 4) | (1 << 8) | (3 << 12) | (0 << 14) | (1 << 16) ) ;//  source (en & src) | sink | addr inc | periph mask | data mask | priority
+  *(dma+2) = 16;// tsfr sz
+
+ gprintf("#VStarting float operations\n");   
+  float a,b,c,d;
+   
+  a = 3.14159E0;
+  b = .99;  
+  c = a;
+  *timer = 10000;
+  for (int i = 0; i < 5; i++)
+  { 
+    c = c * b;
+    // This works with include<cmath> and linking with -lm, however this is a +18kB 
+    // in rom size and sin(x) takes 650µs with rv32i instruction set
+    //d = sin(float(i)/10.0);
+    gprintf("Le resultat c = %R\n", c); 
+    //*var = 1000 + int32_t(d * 1000);
+  }
+  	*dbg = TOGGLE_BLINK;
+   //while ( (*uart & 0x100) == 0); 
+ 	//*dbg = CLS;
+ 	//while ( (*uart & 0x100) == 0); 
+
+	for (int i = 0; i < 12; i++)
+ 	{
+		*dbg = FONT | (((128-32)*12+i) << 8) | test_font[i];
+		*dbg = FONT | (((65-32)*12+i) << 8) | alien1[i];
+		*dbg = FONT | (((66-32)*12+i) << 8) | BIT_REVERSE(alien1[i]);
+	}
+ 	
+ 	 //while ( (*uart & 0x100) == 0); 
+	gprintf("\x80\x80\x80\n");
+  while (1) {
+   *uart = 0x01A10100;   
+   while ( (*uart & 0x100) == 0); 
+	char c = char(*uart);
+	if (c == 13) c = 10;
+	if (c == 0xA3) 
+	{
+		*dbg = CLS;
+		/*
+		for (int i = 0; i < 80;i++)
+		{
+			for (int j = 0; j < 40;j++)
+			{
+				*dbg = (PRINT_AT_XY | (i << 8) | ((j) << 16) | (i+j+64));
+			}	
+		}	
+		*/
+		PRINT_AT(20,0,128);
+	}
+	else
+	dbg_write(c);
+	
+	
+
+  /*
+   for (int i = 0; i < 80;i++)
+   {
+		for (int j = 0; j < 40;j++)
+		{
+			*dbg = (PRINT_AT | (i << 8) | (j << 16) | (i+j));
+		}	
+	}
+	*/
+/*
+	gprintf("\n");	
+	char c = static_cast<char>(*uart);
+	for (int i = 7; i >= 0; i--)
+		if ( c >>i )
+			gprintf("1");
+		else
+			gprintf("0");
+*/	
+	//gprintf("popo %\n", char(*uart));
+   }
 }

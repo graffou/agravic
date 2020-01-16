@@ -47,8 +47,31 @@ struct base_slv
 
 };
 
+template <int P, int Q, class T>
+struct range_t
+{
+	T& val;
+	range_t( T& x_i) : val(x_i)
+	{
+		//ptr = &x_i;
+	}
+	operator slv<P-Q+1>()
+	{
+		return slv<P-Q+1>( (val.n) >> Q );
+	}
+
+	bool operator==(const slv<P-Q+1>& x_i)
+	{
+		return (slv<P-Q+1>(*this) == x_i);
+	}
+
+};
+
+// Forward declarations
+template <class T> int conv_integer(const T& x_i);
+template<int N > int conv_integer(const slv<N>& x_i);
 // SLV unsigned -------------------------------------------------------------------------------------------------------------
-// was originally intended to mimmic std_logic_vector, but finally is equivalent to signed(N-1 downto 0) of numeric_std package
+// was originally intended to mimic std_logic_vector, but finally is equivalent to signed(N-1 downto 0) of numeric_std package
 template<int N>
 struct slv : public base_slv<N>, flop// inherits of flop / useless for combinational logic or variables, but much simpler (and little overhead)
 {
@@ -57,7 +80,7 @@ struct slv : public base_slv<N>, flop// inherits of flop / useless for combinati
 	uint8_t init = 0; // Is set at first <= assignment. 1 -> flip-flop, 2-> combinational
 
 _Pragma ("GCC diagnostic push")
-_Pragma ("GCC diagnostic ignored \"-Wshift-count-overflow\"")
+_Pragma ("GCC diagnostic ignored \"-Wshift-count-overflow\"") // avoids warning when N = 64; situation is normal
 	const uint64_t mask = (1ull << N) - 1; // Mask to keep N bits
 _Pragma ("GCC diagnostic pop")
 
@@ -88,6 +111,12 @@ _Pragma ("GCC diagnostic pop")
 		//std::cerr << "!!" << n << "!!\n";
 	}
 
+	void conf_vcd_entry(sig_desc x_i)
+	{
+		pvcd_entry = create_vcd_entry(x_i.name, x_i.pmodule, N);
+		gprintf("#BNew slv name % slv ptr % vcd ptr % module ptr %R",pvcd_entry->name, this, pvcd_entry, pvcd_entry->pmodule);
+	}
+
 	uint64_t conv_int() const
 	{
 		return n;
@@ -97,6 +126,8 @@ _Pragma ("GCC diagnostic pop")
 	{
 		n &= mask;
 	}
+
+
 
 	constexpr const int get_const() const
 	{
@@ -163,12 +194,7 @@ _Pragma ("GCC diagnostic pop")
 		{
 			//gprintf("#gFF % out % in", pvcd_entry->name, n, x_i);
 			_d = x_i.n; // assign flip-flop input
-			/*
-			if ( (pvcd_entry->ID[0] != '#') and (x_i.n != n) )
-			{
-				vcd_file.vcd_dump_ull((_d), &pvcd_entry->ID[0], pvcd_entry->binary);
-			}
-			*/
+			// vcd dump occurs when calling clk()
 		}
 		else if (init == 2) // combinational
 		{
@@ -232,22 +258,58 @@ _Pragma ("GCC diagnostic pop")
 	}
 	// bit vector concatenation
 	template<int P>
-	slv<N+P> operator&(const slv<P>& x_i)
+	slv<N+P> operator&(const slv<P>& x_i) const
 	{
 		//std::cerr << n << " " << "x " << x_i.n << " " <<((n<<P)|(x_i.n));
 		return slv<N+P>( (n<<P) | x_i.n );
 	}
 	// extract bit range toto.range<8,6>() <=> toto(8 downto 6)
+#if 1
 	template <int P, int Q>
 	slv<P-Q+1> range()
 	{
 		return slv<P-Q+1>(n>>Q);
 	}
 
+	// Version which returns constant size vector from variable position (to use in loops e.g.)
+	template <int P>
+	slv<P> range(int Q)
+	{
+		return slv<P>(n>>Q);
+	}
+#else
+	template <int P, int Q>
+	range_t<P,Q, slv<N>> range()
+	{
+		return range_t<P,Q,slv<N>>(*this);
+	}
+#endif
+
+
+
 	// extract bit from bit vector
 	slv<1> get_bit(int i)
 	{
 		return slv<1>(n >> i);
+	}
+
+	// !!!!!!!!!!!!!!!!!!!!!!!! USE THIS ON VARIABLES or COMB LOGIC ONLY !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	//template <class T>
+	inline void set_bit(unsigned int pos, slv<1> val) //const T& val)
+	{
+		uint64_t bitmask = (1 << (pos));
+		// if (bitmask == 0) {gprintf("#RERROR, setting bit % of slv<%d> named %", pos, N, pvcd_entry->name);exit(0);} //  check index
+		//gprintf("#B setting bit % with % bitmask %R n = %M adj mask %R", pos, conv_integer(val), bitmask, n, (bitmask and mask));
+		if (conv_integer(val) == 1) // set to 1
+		{
+			n |= (bitmask & mask); // Avoid setting bit which does not belong to bitvector
+		}
+		else //set to 0
+		{
+			n &= (~bitmask);
+		}
+		//gprintf("#G setting bit % with % bitmask %R n = %M", pos, conv_integer(val), bitmask, n);
+
 	}
 
 	friend std::ostream& operator<< (std::ostream& os, const slv<N>& x)
@@ -264,9 +326,17 @@ _Pragma ("GCC diagnostic pop")
 		{
 			return slv<N>(n << x_i);
 		}
+	slv<N> sla(int x_i)
+		{
+			return slv<N>( (n << x_i) | (n >> (32 - x_i)) );
+		}
 	slv<N> srl(int x_i)
 		{
 			return slv<N>(n >> x_i);
+		}
+	slv<N> sra(int x_i)
+		{
+			return slv<N>( (n >> x_i) | (n << (32 - x_i)) );
 		}
 	//bitwise not
 	slv<N> operator!()
@@ -411,18 +481,14 @@ struct Signed:slv<N>
 	//This is utterly ugly, but I can't see any efficient way of sharing the code, except letting it in slv and use a function pointer for vcd_dump_ll / vcd_dump_ull
 	// or add a member that flags a signed slv ?
 	//Maybe I'll fix that in the future
+
 	inline void operator<=(const Signed<N>& x_i)
 	{
 		//gprintf("#C<=");
 		if (slv<N>::init == 1) // flip flop
 		{
 			slv<N>::_d = x_i.n; // assign flip-flop input
-/*
-			if ( (slv<N>::pvcd_entry->ID[0] != '#') and (x_i.n != slv<N>::n) )
-			{
-				vcd_file.vcd_dump_ll(_d_conv_int(), &slv<N>::pvcd_entry->ID[0], slv<N>::pvcd_entry->binary);
-			}
-			*/
+			// vcd dump occurs when calling clk()
 		}
 		else if (slv<N>::init == 2) // combinational
 		{
@@ -468,6 +534,233 @@ struct Signed:slv<N>
 	}
 
 };
+
+
+// tristate version of slv -----------------------------------------------
+// required for e.g. SDRAM output, IS VERY INCOMPLETE, WORK IN PROGRESS
+template<int N>
+struct tristate:slv<N>
+{
+
+	uint64_t z_flags;
+	uint64_t z_flags_d;
+	tristate()
+	{}
+
+	tristate(sig_desc x_i) : slv<N>(x_i)
+		{
+			z_flags = 0xffffffffffffffff;
+		}
+
+	tristate(int64_t x_i) : slv<N>(x_i)
+		{
+			z_flags = 0xffffffffffffffff;
+		}
+
+
+
+	void clock()
+	{
+		if ( (slv<N>::pvcd_entry->ID[0] != '#') and ( (slv<N>::_d != slv<N>::n) or (z_flags_d != z_flags) ) )
+		{
+			//gprintf("#VDUMP ZZZ % % % % %", slv<N>::pvcd_entry->name, slv<N>::_d, slv<N>::n, z_flags_d, z_flags);
+			vcd_file.vcd_dump_tristate(slv<N>::_d, z_flags_d, &slv<N>::pvcd_entry->ID[0], slv<N>::pvcd_entry->nbits);
+			slv<N>::n = slv<N>::_d;
+			z_flags = z_flags_d;
+		}
+		//else
+			//gprintf("#VNODUMP ZZZ %y % % % %", slv<N>::pvcd_entry->name, slv<N>::_d, slv<N>::n, z_flags_d, z_flags);
+
+	}
+
+	// !!!!!!!!!!!!!!!!!!!!!!!! USE THIS ON VARIABLES or COMB LOGIC ONLY !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	//template <class T>
+	inline void set_bit(unsigned int pos, char val) //const T& val)
+	{
+		uint64_t bitmask = (1 << (pos));
+		// if (bitmask == 0) {gprintf("#RERROR, setting bit % of slv<%d> named %", pos, N, pvcd_entry->name);exit(0);} //  check index
+		//gprintf("#B setting bit % with % bitmask %R n = %M adj mask %R", pos, conv_integer(val), bitmask, n, (bitmask and mask));
+		if (val == 'Z')
+			z_flags |= (bitmask & slv<N>::mask); // Avoid setting bit which does not belong to bitvector
+		else if ((val) == '1') // set to 1
+		{
+			slv<N>::n |= (bitmask & slv<N>::mask); // Avoid setting bit which does not belong to bitvector
+			z_flags &= (~bitmask);
+		}
+		else //set to 0
+		{
+			slv<N>::n &= (~bitmask);
+			z_flags &= (~bitmask);
+		}
+		//gprintf("#G setting bit % with % bitmask %R n = %M", pos, conv_integer(val), bitmask, n);
+
+	}
+
+	//template <class T>
+	inline void set_bit_d(unsigned int pos, char val) //const T& val)
+	{
+		uint64_t bitmask = (1 << (pos));
+		// if (bitmask == 0) {gprintf("#RERROR, setting bit % of slv<%d> named %", pos, N, pvcd_entry->name);exit(0);} //  check index
+		//gprintf("#B setting bit % with % bitmask %R n = %M adj mask %R", pos, conv_integer(val), bitmask, n, (bitmask and mask));
+		if (val == 'Z')
+		{
+			z_flags_d |= (bitmask & slv<N>::mask); // Avoid setting bit which does not belong to bitvector
+		}
+		else if ((val) == '1') // set to 1
+		{
+			slv<N>::_d |= (bitmask & slv<N>::mask); // Avoid setting bit which does not belong to bitvector
+			z_flags_d &= (~bitmask);
+		}
+		else //set to 0
+		{
+			slv<N>::_d &= (~bitmask);
+			z_flags_d &= (~bitmask);
+		}
+		//gprintf("#G setting bit % with % bitmask %R n = %M", pos, conv_integer(val), bitmask, n);
+
+	}
+
+	bool bit_d_eq(unsigned int i, char val)
+	{
+		return ( (val == 'Z') ? ( (z_flags_d >> i) & 1 == 1) : ( (slv<N>::_d >> i & 1) == (val - 48) ) );
+	}
+
+	bool bit_eq(unsigned int i, char val)
+	{
+		return ( (val == 'Z') ? ( (z_flags >> i) & 1 == 1) : ( (slv<N>::n >> i & 1) == (val - 48) ) );
+	}
+
+	bool eq(const char x_i[N])
+	{
+		int i = 0;
+		while (i < N)
+		{
+			if (not bit_eq(i, x_i[i]))
+				return false;
+		}
+		return true;
+	}
+
+	// for toto <= "11zz00";
+	inline void set_d(const char x_i[N])
+	{
+		for (int i = 0; i < N; i++)
+			set_bit_d(i, x_i[i]);
+		//gprintf("#RZZZ % %", slv<N>::n, z_flags_d);
+	}
+
+	inline void set_q(const char x_i[N])
+	{
+		for (int i = 0; i < N; i++)
+			set_bit(i, x_i[i]);
+	}
+
+	inline void operator<=(const slv<N>& x_i)
+	{
+		//gprintf("#C<=");
+		if (slv<N>::init == 1) // flip flop
+		{
+			slv<N>::_d = x_i.n; // assign flip-flop input
+			z_flags_d = 0;
+			//gprintf("#UAssigning % %", slv<N>::_d, z_flags_d);
+			// vcd dump occurs when calling clk()
+		}
+		else if (slv<N>::init == 2) // combinational
+		{
+			//gprintf("#comb vcd n % in % name % ID", n, x_i.n, pvcd_entry->name, pvcd_entry->ID);
+			if ( (slv<N>::pvcd_entry->ID[0] != '#') and ( (x_i.n != slv<N>::n) or (z_flags != 0) ) )
+			{
+				slv<N>::n = x_i.n; // assign signal
+				vcd_file.vcd_dump_ll(slv<N>::n, &slv<N>::pvcd_entry->ID[0], slv<N>::pvcd_entry->nbits);
+			}
+			else
+				slv<N>::n = x_i.n; // assign signal
+
+		}
+		else // do not know yet
+		{
+			// In platform GS, combinational processes have a clock (pre or post clock, only post for the moment), but only synchronous ones have a reset!
+			gprintf("#RRegistering, reset id = % clk ID = %", __control_signals__.reset_n, __control_signals__.clk);
+			gprintf("#bflop % in %", slv<N>::pvcd_entry->name, slv<N>::pvcd_entry->pmodule->name);
+			if (__control_signals__.reset_n != -1) // not combinational
+			{
+				slv<N>::init = 1;
+				gprintf("#rTo clk");
+				slv<N>::_d = x_i.n; // reset value
+				slv<N>::n = x_i.n; // reset value
+
+				if (slv<N>::pvcd_entry->ID[0] != '#')
+					vcd_file.vcd_dump_tristate(slv<N>::_d, z_flags, &slv<N>::pvcd_entry->ID[0], slv<N>::pvcd_entry->nbits);
+				register_flop(__control_signals__.clk, static_cast<flop*>(this));
+			}
+			else
+			{
+				gprintf("#rTo clk comb");
+				slv<N>::init = 2;
+				slv<N>::n = x_i.n;
+				if (slv<N>::pvcd_entry->ID[0] != '#')
+					vcd_file.vcd_dump_tristate(slv<N>::n, z_flags, &slv<N>::pvcd_entry->ID[0], slv<N>::pvcd_entry->nbits);
+			}
+		}
+	}
+
+	// for toto <= "11ZZ11";
+	inline void operator<=(const char x_i[N])
+	{
+		//gprintf("#C<=");
+		if (slv<N>::init == 1) // flip flop
+		{
+			set_d(x_i);
+			// vcd dump occurs when calling clk()
+		}
+		else if (slv<N>::init == 2) // combinational
+		{
+			//gprintf("#comb vcd n % in % name % ID", n, x_i.n, pvcd_entry->name, pvcd_entry->ID);
+			if ( (slv<N>::pvcd_entry->ID[0] != '#') and (not eq(x_i)) )
+			{
+				set_q(x_i); // assign signal
+				vcd_file.vcd_dump_ll(slv<N>::n, &slv<N>::pvcd_entry->ID[0], slv<N>::pvcd_entry->nbits);
+			}
+			else
+				set_q(x_i); // assign signal
+
+		}
+		else // do not know yet
+		{
+			// In platform GS, combinational processes have a clock (pre or post clock, only post for the moment), but only synchronous ones have a reset!
+			gprintf("#RRegistering, reset id = % clk ID = %", __control_signals__.reset_n, __control_signals__.clk);
+			gprintf("#bflop % in %", slv<N>::pvcd_entry->name, slv<N>::pvcd_entry->pmodule->name);
+			if (__control_signals__.reset_n != -1) // not combinational
+			{
+				slv<N>::init = 1;
+				gprintf("#rTo clk");
+				set_q(x_i);
+				set_d(x_i);
+
+				if (slv<N>::pvcd_entry->ID[0] != '#')
+					vcd_file.vcd_dump_tristate(slv<N>::_d, z_flags, &slv<N>::pvcd_entry->ID[0], slv<N>::pvcd_entry->nbits);
+				register_flop(__control_signals__.clk, static_cast<flop*>(this));
+			}
+			else
+			{
+				gprintf("#rTo clk comb");
+				slv<N>::init = 2;
+				set_q(x_i);
+				if (slv<N>::pvcd_entry->ID[0] != '#')
+					vcd_file.vcd_dump_tristate(slv<N>::n, z_flags, &slv<N>::pvcd_entry->ID[0], slv<N>::pvcd_entry->nbits);
+			}
+		}
+	}
+
+	friend std::ostream& operator<< (std::ostream& os, const tristate<N>& x)
+	{
+		for (int i = N-1; i >= 0; i--)
+			os << ( (x.z_flags >> i) & 1) ? 'Z' : char( 48 + ((slv<N>::n >> i) & 1));
+	    return os;
+	}
+
+};
+// \tristate-----------------------------------
 
 // special derivation for clocktrees, reset trees...
 struct tree : slv<1>
@@ -766,15 +1059,19 @@ struct clk_t : public tree
 
 	void operator<=(const slv<1>& x_i)
 	{
+		//gprintf("#m***********clock <= val %R", x_i);
 		tree::operator<=(x_i);
+		//gprintf("#mclock tree <= val %R", x_i);
 		operator=(x_i);
+		//gprintf("#mEND clock <= val %R", x_i);
 	}
 
 	void operator=(const slv<1>& x_i)
 	{
-		//gprintf("#mclock event val %R", x_i);
+		//gprintf("#mclock = val %R", x_i);
 		//vcd_file.set_vcd_time(vcd_file.get_vcd_time() + half_period);
 		//tree::operator=(x_i);
+
 #ifdef GATED_CLOCKS
 		for (int i = 0; i < children.size(); i++)
 		{
@@ -791,7 +1088,11 @@ struct clk_t : public tree
 			//gprintf("#mchidren:%", children.size());
 			for (int i = 0; i < children.size(); i++)
 			{
-				children[i]->exec_processes();
+				if (children[i]->event())
+					{
+					//gprintf("#BExec processes for clk %R", children[i]->pvcd_entry->name);
+						children[i]->exec_processes();
+					}
 
 			}
 #endif
@@ -800,12 +1101,16 @@ struct clk_t : public tree
 
 #ifdef GATED_CLOCKS
 			for (int i = 0; i < children.size(); i++)
-				children[i]->exec_clock();
+			{
+				if (children[i]->event()) children[i]->exec_clock();
+			}
 #endif
 			exec_clock();
 #ifdef GATED_CLOCKS
 			for (int i = 0; i < children.size(); i++)
-				children[i]->exec_comb_processes();
+			{
+				if (children[i]->event()) children[i]->exec_comb_processes();
+			}
 #endif
 			exec_comb_processes();
 
@@ -855,6 +1160,7 @@ reset_t no_reset;
 
 template<int N>
 Signed<N> conv_signed(const slv<N>& x_i)
+//Signed<N> conv_signed( slv<N> x_i)
 {
 	return Signed<N>(x_i.n);
 }
@@ -866,14 +1172,23 @@ slv<N> conv_unsigned(const slv<N>& x_i)
 	return slv<N>(x_i.n);
 }
 
-// should work
-template<class T>
- int conv_int(const T& x_i)
+// Conv to int, general case  !!!!!!!!!! Called conv_integer for disambiguating when is called from within slv<> (set_bit method)
+template <class T>
+int conv_integer(const T& x_i)
+{
+
+	return int(x_i);
+}
+
+// Conv to int, slv<N> case
+template<int N >
+ int conv_integer(const slv<N>& x_i)
 {
 	uint64_t nn = x_i.conv_int();
 	//Signed<32> r = Signed<32>(x_i.n);
 	return int(nn);
 }
+
 // For case statements
 template<int N>
 const constexpr inline int const_conv_int(const slv<N> x_i)
@@ -883,17 +1198,18 @@ const constexpr inline int const_conv_int(const slv<N> x_i)
 	return int(x_i.n);
 }
 
-
 template <class T, int N>
 struct array_base
 {
 	T v[N];
 	T& operator()(int n)
 	{
+		if (n >= N) { gprintf("R#ERROR: accessing element % of array 0 to %", n, N-1); exit(0);}
 		return array_base<T,N>::v[n];
 	}
 	T& operator[](int n)
 	{
+		if (n >= N) { gprintf("R#ERROR: accessing element % of array 0 to %", n, N-1); exit(0);}
 		return array_base<T,N>::v[n];
 	}
 };
@@ -949,8 +1265,16 @@ struct array< T1<T,N> > : T1<T,N>, vcd_entry
 
 		for (int i = 0; i < N; i++)
 		{
+#if 0
 			std::string name = x_i.name + '(' + std::to_string(i) + ')';
 			array_base<T,N>::v[i].pvcd_entry = create_vcd_entry(name, x_i.pmodule, (*this).length + array_base<T,N>::v[i].length);
+#else // trying to make arrays of records possible
+			std::string name = x_i.name + '(' + std::to_string(i) + ')';
+			int nbits = (*this).length + array_base<T,N>::v[i].length;
+			array_base<T,N>::v[i].conf_vcd_entry(gen_sig_desc(name, x_i.pmodule));//, (*this).length + array_base<T,N>::v[i].length);
+			array_base<T,N>::v[i].pvcd_entry->nbits = nbits; //gen_sig_desc(name, x_i.pmodule);//, (*this).length + array_base<T,N>::v[i].length);
+#endif
+
 		}
 	}
 
@@ -991,14 +1315,16 @@ struct array< T1<T,N> > : T1<T,N>, vcd_entry
 #define SIGNED(a) conv_signed(a)
 #define UNSIGNED(a) conv_unsigned(a)
 #define SLV(a, n) slv<n>(a)
-
+#define BOOLEAN bool
 #define SLV_TYPE(n) slv<n>
 #define TO_SLV(a) a
+#define TO_LOGIC(a) slv<1>(a)
 #define PORT_BASE(a) a.base_type()  // Required to perform something that is not supported by the std:reference_wrapper used for port class ex: SIGNED(PORT_BASE(data_i))
 #define SIGNED_TYPE(n) Signed<n>
 #define UNSIGNED_TYPE(n) slv<n>
 #define INT(n) Signed<n>
 #define UINT(n) slv<n>
+#define TRISTATE(n) tristate<n>
 
 #define RESIZE(a,n) a.resize<n>()
 
@@ -1006,7 +1332,7 @@ struct array< T1<T,N> > : T1<T,N>, vcd_entry
 #define TO_SIGNED(a,n) Signed<n>(a)
 #define TO_UINT(a,n) slv<n>(a)
 #define TO_INT(a,n) Signed<n>(a)
-#define TO_INTEGER(a) conv_int(a)
+#define TO_INTEGER(a) conv_integer(a)
 
 #define CLK_TYPE clk_t
 #define RST_TYPE reset_t
@@ -1015,16 +1341,19 @@ struct array< T1<T,N> > : T1<T,N>, vcd_entry
 #define STRING(a) #a
 #define BIN(a) slv<sizeof(STRING(a))-1>(0b##a)
 #define CASE_BIN(a) (0b##a)
-#define HEX(a) slv<sizeof(STRING(a))*4-1>(0x##a)
+#define HEX(a) slv<(sizeof(STRING(a))-1)*4>(0x##a)
 #define BIT(a) slv<sizeof(STRING(a))-1>(0b##a)
 #define EQ(a,b) (a==b)
-#define EXT(a,b) slv<b>(a.n)
+#define EXT(a,b) slv<b>((a).n)
 #define SXT(a,b) slv<b>(conv_signed(a).conv_int())
 #define SIGNED(a) conv_signed(a)
 #define UNSIGNED(a) conv_unsigned(a)
 #define RANGE(a,b,c) (a.template range<b,c>())
+#define SUBVECTOR(a,b,c) (a.template range<b>(c)) // Version of RANGE which extracts a vector of len b from pos c
 #define SLV_RANGE(a,b,c) a.range<b,c>() // for further concatenation in vhdl
-#define B(a,b) a.get_bit(b)
+#define B(a,b) (a).get_bit(b)
+#define VAR_SET_BIT(a, b, c) a.set_bit(b, c) //ONLY VARIABLES !!!!!!!!!!!!!!!!!!!!
+#define SIG_SET_BIT(a, b, c) a.set_bit(b, c) //ONLY COMB !!!!!!!!!!!!!!!!!!!!
 #define HI(a) a.high
 #define LEN(a) a.length
 #define IF if
@@ -1048,7 +1377,8 @@ struct array< T1<T,N> > : T1<T,N>, vcd_entry
 #define DECL_GATED_CLK(name)
 #define GATED_CLK(name, clk_i, gate)  clk_t name = gen_gated_clk_desc(#name, this, clk_i, gate)
 #define GATE_CLK(clk_i, gated_clk, gating_signal) gated_clk.gate_clk(clk_i, gating_signal)
-#define VAR(a, t)  t a //= gen_sig_desc(#a, this)
+//#define VAR(a, t)  t a //= gen_sig_desc(#a, this)
+#define VAR(a, t) t a // More like VHDL behavior, however static vars might generate latches
 #define CONST(a, t)   const t a
 #define CASE_CONST(a, t)   const int a
 #define MEMBER(a, t) t a
@@ -1061,9 +1391,12 @@ struct array< T1<T,N> > : T1<T,N>, vcd_entry
 #define RESET(a) a <= TO_UINT(0, LEN(a))
 #define shift_left(a, b) a.sll(b)
 #define shift_right(a, b) a.srl(b)
+#define ROTATE_LEFT(a, b) a.sla(b)
+#define ROTATE_RIGHT(a, b) a.sra(b)
 #define SHIFT_LEFT(a, b) a.sll(b)
 #define SHIFT_RIGHT(a, b) a.srl(b)
-
+#define FOR(a,b,c) for (int a = b; a <= c; a++) {
+#define ENDLOOP }
 #else
 #include "VHDL_macros.h"
 
@@ -1164,6 +1497,8 @@ struct array< T1<T,N> > : T1<T,N>, vcd_entry
 #define EQ_FIELDS(...) EVAL(MAP(EQ_FIELD, __VA_ARGS__))
 #define EQ_FIELD(a) FIELD_EQ(EVAL1(get1_##a))
 
+#define BASE_TYPE(type) type##_base
+
 // Block and ports declaration
 //#define ENTITY(type, ports, ...) IF_ELSE(HAS_ARGS(__VA_ARGS__))(template<int dummy0, __VA_ARGS>)(template<int dummy0>) struct type : gmodule {/*
 #define ENTITY(type, ports, ...) IF_ELSE(HAS_ARGS(__VA_ARGS__))(template<int dummy##type, __VA_ARGS>)(template<int dummy##type>) struct type : gmodule {/*
@@ -1192,14 +1527,24 @@ struct array< T1<T,N> > : T1<T,N>, vcd_entry
 #else
 #define RECORD(type, ports)	struct type##_base{\
 		EVAL(DECL_FIELDS(get_##ports))};\
-		struct type : type##_base, vcd_entry{\
+		struct type : type##_base, vcd_entry{/*\
 		~type() = default; \
-		vcd_entry* pvcd_entry = static_cast<vcd_entry*>(this);\
+*/		vcd_entry* pvcd_entry = static_cast<vcd_entry*>(this);\
 		EVAL(USING_FIELDS(type,get_##ports)) \
 		type() {}\
+		~type(){gprintf("#RDestroying record %", pvcd_entry->name);}\
 		type(const sig_desc& x) : vcd_entry(x){\
 		gprintf("#VNew record : %", x.name);\
 		vcd_entry::nbits = -2048; /* marks record */\
+		x.pmodule->vcd_list.push_back(static_cast<vcd_entry*>(this)); \
+		std::string rec_name = x.name; \
+		EVAL(VCD_FIELDS(get_##ports)) }\
+		void conf_vcd_entry(const sig_desc& x){\
+		gprintf("#VNew record VCD configuration: %", x.name);\
+		pvcd_entry->name = x.name;\
+		pvcd_entry->pmodule = x.pmodule;\
+		pvcd_entry->driver = this;\
+		pvcd_entry->nbits = -2048;\
 		x.pmodule->vcd_list.push_back(static_cast<vcd_entry*>(this)); \
 		std::string rec_name = x.name; \
 		EVAL(VCD_FIELDS(get_##ports)) }\
@@ -1260,6 +1605,14 @@ struct array< T1<T,N> > : T1<T,N>, vcd_entry
 #define BEGIN
 //#define INCLUDES #include "slv.h"
 #define INCLUDES
+
+
+
+
 #else
 
 #endif
+
+// Include here all constants (slv sizes)
+#include "../Source/constants.hpp"
+

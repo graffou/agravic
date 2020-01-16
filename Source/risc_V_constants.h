@@ -33,6 +33,7 @@ CONST(LOAD, UINT(7))   := BIN(0000011);// I-immediate
 CONST(STORE, UINT(7))  := BIN(0100011);// S-immediate
 CONST(OPI, UINT(7))    := BIN(0010011); // I-immediate
 CONST(OP, UINT(7))     := BIN(0110011); // reg-to-reg
+CONST(OP_MULDIV, UINT(7))     := BIN(0110010); // reg-to-reg // !!!!!!!!!!!!!!! trick with bit 0
 CONST(SYS, UINT(7))     := BIN(1110011);// I-immediate
 CONST(MEM, UINT(7))     := BIN(0001111);// I-immediate
 CASE_CONST(CASE_LUI, UINT(7))    := CASE_BIN(0110111); // U-immediate
@@ -44,6 +45,7 @@ CASE_CONST(CASE_LOAD, UINT(7))   := CASE_BIN(0000011);// I-immediate
 CASE_CONST(CASE_STORE, UINT(7))  := CASE_BIN(0100011);// S-immediate
 CASE_CONST(CASE_OPI, UINT(7))    := CASE_BIN(0010011); // I-immediate
 CASE_CONST(CASE_OP, UINT(7))     := CASE_BIN(0110011); // reg-to-reg
+CASE_CONST(CASE_OP_MULDIV, UINT(7))     := CASE_BIN(0110010); // reg-to-reg // !!!!!!!!!!!!!!! trick with bit 0
 CASE_CONST(CASE_SYS, UINT(7))     := CASE_BIN(1110011);// I-immediate
 CASE_CONST(CASE_MEM, UINT(7))     := CASE_BIN(0001111);// I-immediate
 
@@ -85,9 +87,29 @@ CONST(SLLI, UINT(3)) := BIN(001);
 CONST(SRLI, UINT(3)) := BIN(101);
 CONST(SLAI, UINT(3)) := BIN(101); // same as above ? Yes, check funct7(5)
 
+CONST(MUL, UINT(3))    := BIN(000);
+CONST(MULH, UINT(3))   := BIN(001);
+CONST(MULHSU, UINT(3)) := BIN(010);
+CONST(MULHU, UINT(3))  := BIN(011);
+CONST(DIV, UINT(3))    := BIN(100);
+CONST(DIVU, UINT(3))   := BIN(101);
+CONST(REMS, UINT(3))    := BIN(110);
+CONST(REMU, UINT(3))   := BIN(111);
+
+
+CASE_CONST(CASE_MUL, UINT(3))    := CASE_BIN(000);
+CASE_CONST(CASE_MULH, UINT(3))   := CASE_BIN(001);
+CASE_CONST(CASE_MULHSU, UINT(3)) := CASE_BIN(010);
+CASE_CONST(CASE_MULHU, UINT(3))  := CASE_BIN(011);
+CASE_CONST(CASE_DIV, UINT(3))    := CASE_BIN(100);
+CASE_CONST(CASE_DIVU, UINT(3))   := CASE_BIN(101);
+CASE_CONST(CASE_REMS, UINT(3))    := CASE_BIN(110);
+CASE_CONST(CASE_REMU, UINT(3))   := CASE_BIN(111);
+
 // Register-register operations
 CONST(ADDx, UINT(3))  := BIN(000);
 CONST(SUBx, UINT(3))  := BIN(000); // same as above ? Yes, check funct7(5)
+
 CONST(SLLx, UINT(3))  := BIN(001);
 CONST(SLTx, UINT(3))  := BIN(010);
 CONST(SLTU, UINT(3))  := BIN(011);
@@ -96,6 +118,8 @@ CONST(SRLx, UINT(3))  := BIN(101);
 CONST(SRAx, UINT(3))  := BIN(101); // same as above ? Yes, check funct7(5)
 CONST(ORx, UINT(3))   := BIN(110);
 CONST(ANDx, UINT(3))  := BIN(111);
+
+
 CASE_CONST(CASE_ADDx, UINT(3))  := CASE_BIN(000);
 CASE_CONST(CASE_SUBx, UINT(3))  := CASE_BIN(000); // same as above ? Yes, check funct7(5)
 CASE_CONST(CASE_SLLx, UINT(3))  := CASE_BIN(001);
@@ -163,6 +187,8 @@ CASE_CONST(CASE_AMEPC, UINT(12))  := CASE_BIN(001101000001);
 CASE_CONST(CASE_AMCAUSE, UINT(12))  := CASE_BIN(001101000010);
 //
 CASE_CONST(CASE_AMIP, UINT(12))  := CASE_BIN(001101000100);
+//CASE_CONST(CASE_AMIE, UINT(12))  := CASE_BIN(001100000100);
+
 // CSR addresses
 // Machine trap setup
 CONST(AMSTATUS, UINT(12))  := BIN(001100000000);

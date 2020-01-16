@@ -1,10 +1,30 @@
 
+tb: bin
 tb:u0_sUART: bin
 tb:dut: bin
 tb:dut:u0_top: bin
+tb:dut:u0_clk_gen: bin
 tb:dut:u0_peripherals: bin
+tb:dut:u0_dma: bin
 tb:dut:u0_sUART: bin
+tb:dut:u0_risc_V_core:u0_register_file: bin
+tb:dut:u0_risc_V_core:u0_dbg_mem: bin
+tb:dut:u0_mem: bin
+tb:dut:u0_mem:ram3:data_o bin
+tb:dut:u0_mem:addr bin
+tb:dut:u1_mem: bin
+
+tb:dut:u0_sdram_ctrl: bin
+
+tb:dut:u0_hdmi: bin
+tb:dut:u0_hdmi:u0_char_buf: bin
+tb:dut:u0_hdmi:u0_font: bin
+tb:dut:u0_hdmi:u0_ddio: bin
+
+tb:dut:u0_risc_V_core: bin
+
 /*
+tb:dut:u0_risc_V_core:u0_register_file: bin
 tb:dut:u0_risc_V_core:core2datamem_o.addr bin
 tb:dut:u0_risc_V_core:core2datamem_o.cs_n bin
 tb:dut:u0_risc_V_core:core2datamem_o.wr_n bin
@@ -40,7 +60,5 @@ tb:dut:u0_risc_V_core:regs(27) bin
 tb:dut:u0_risc_V_core:regs(31) bin
 tb:dut:u0_risc_V_core:
 tb:dut:u0_peripherals:
+tb:dut:u0_hdmi: 
 */
-tb:dut:u0_risc_V_core: bin
-tb:
-tb:dut:

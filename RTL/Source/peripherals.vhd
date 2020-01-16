@@ -2,22 +2,34 @@
 library ieee;use ieee.std_logic_1164.all;use IEEE.NUMERIC_STD.ALL;
 library work; use work.structures.all;
 library work; use work.altera.all;
-entity peripherals is port( clk_peri : IN std_logic; reset_n : IN std_logic; core2mem_i : IN blk2mem_t; dbg_o : OUT unsigned ((8 -1) downto 0); gpios_o : OUT unsigned ((32 -1) downto 0) ); end peripherals; architecture rtl of peripherals is component dummy_zkw_pouet is port(clk : in std_logic);end component;
+entity peripherals is port( clk_peri : IN std_logic; reset_n : IN std_logic; core2mem_i : IN blk2mem_t; timer_IT_o : OUT std_logic; dbg_o : OUT unsigned ((8 -1) downto 0); gpios_o : OUT unsigned ((32 -1) downto 0) ); end peripherals; architecture rtl of peripherals is component dummy_zkw_pouet is port(clk : in std_logic);end component;
 signal cnt : unsigned ((32 -1) downto 0);
-signal gate_cell : std_logic;
-signal clk_g : std_logic;
+signal cnt_cmp : unsigned ((32 -1) downto 0);
+signal cnt_started : std_logic;
 begin
-clk_g_gating_cell : component clk_gating_cell port map ( inclk => clk_peri, ena => gate_cell, outclk => clk_g );
 process0 : process(clk_peri,reset_n)
 variable DBG : unsigned ((8 -1) downto 0);
 begin
  IF ( reset_n = '0' ) then
- gpios_o <= TO_UNSIGNED(0,32);
- gate_cell <= '1' ;
+  gpios_o <= TO_UNSIGNED(0,32);
+  cnt <= TO_UNSIGNED(0,cnt'length);
+  cnt_cmp <= TO_UNSIGNED(0,cnt_cmp'length);
+  timer_IT_o <= '0';
+  cnt_started <= '0';
  elsif ( clk_peri'event and (clk_peri = '1' ) ) then
+  IF ( not ( cnt = TO_UNSIGNED(0,32) ) ) then
+   cnt <= cnt - TO_UNSIGNED(1,32);
+   cnt_started <= '1' ;
+  elsif (cnt_started = '1' ) then
+   timer_IT_o <= '1' ;
+  end if;
   IF ( ( core2mem_i.cs_n = '0' ) and ( core2mem_i.wr_n = '0' ) ) then
+   IF (core2mem_i.addr = "1011111111100") then
+    cnt <= core2mem_i.data;
+    cnt_started <= '0';
+    timer_IT_o <= '0';
+   end if;
    IF (core2mem_i.addr = "1011111111111") then
-    gate_cell <= core2mem_i.data(0);
     gpios_o <= core2mem_i.data;
    end if;
    IF (core2mem_i.addr = "1011111111110") then
@@ -25,14 +37,6 @@ begin
     dbg_o <= DBG;
    end if;
   end if;
- end if;
-end process;
-process1 : process(clk_g,reset_n)
-begin
- IF ( reset_n = '0' ) then
-  cnt <= TO_UNSIGNED(0,32);
- elsif ( clk_g'event and (clk_g = '1' ) ) then
-  cnt <= cnt + 1;
  end if;
 end process;
 end rtl;

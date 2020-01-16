@@ -74,6 +74,7 @@ void init_vcd()
 	{
 		for (int j = 0; j < gmodule::module_list[i]->vcd_list.size(); j++)
 		{
+			gprintf("#Mptr %", gmodule::module_list[i]->vcd_list[j]);
 			bool is_port = ( gmodule::module_list[i]->vcd_list[j]->name[0] == '>' or gmodule::module_list[i]->vcd_list[j]->name[0] == '<' );
 			bool is_self_driven = ( gmodule::module_list[i]->vcd_list[j]->driver == gmodule::module_list[i]->vcd_list[j] );
 			// If no mistake, only top entries of arrays/records have these nbits values
@@ -102,8 +103,12 @@ void init_vcd()
 						gprintf("#RERROR! driver of array/record % not found", gmodule::module_list[i]->vcd_list[j]->name);
 					}
 					in_port = 1;
-					gprintf("#Ucopying array or record drivers % drv %", gmodule::module_list[i]->vcd_list[j]->driver->name);
+					gprintf("#Ucopying array or record drivers % drv %", gmodule::module_list[i]->vcd_list[j]->driver->name, pdrv_module);
 
+				}
+				else
+				{
+					in_port = 0; //PG: forgot that! Why do I have a self driven record port? (s0_sUART, uart_dma_i)
 				}
 			}
 			else if ( (not is_port) or (is_regular_entry) ) // current array / record finished
@@ -117,7 +122,7 @@ void init_vcd()
 				vcd_drv_idx++; //
 				if (vcd_drv_idx >= pdrv_module->vcd_list.size()) // Overflow, this should not occur so there is a bug
 				{
-					gprintf("#RERROR! OVF in vcd list of driver signal when reporting drivers"); exit(0);
+					gprintf("#RERROR! OVF in vcd list of driver signal when reporting drivers idx % sz % here % there %", vcd_drv_idx, pdrv_module->vcd_list.size(), gmodule::module_list[i]->name, pdrv_module->name); exit(0);
 				}
 				gmodule::module_list[i]->vcd_list[j]->driver = pdrv_module->vcd_list[vcd_drv_idx];
 			}

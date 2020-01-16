@@ -46,6 +46,9 @@ struct vcd_entry
 	//bool initialized = 0;
 	char ID[3] = "##"; // Non initialized vcd_entry -> no probing
 	bool binary = 0;
+
+	~vcd_entry(){gprintf("#VDestroying vcd entry %Y %Y ptr %!y", pmodule->name, name, this);}
+
 	vcd_entry(){name = noname; driver = this;}
 	vcd_entry(sig_desc x_i)
 	{
@@ -195,6 +198,42 @@ struct vcd_file_t : public std::ofstream
 
 	}
 
+	void vcd_dump_tristate(const uint64_t& val, const uint64_t& z_flags,char* id, const uint8_t& bin)
+	{
+
+	  if (not dummy)
+	    {
+	      if (not time_written)
+		{
+		  *ptr++ = '#';
+		  ptr = ulltoa(ptr, vcd_time);
+		  *ptr++ = '\n';
+		  time_written = 1;
+		}
+	      // always bin
+		{
+		  *ptr++ = 'b';
+		  for (int i = bin-1; i >=0; i--)
+		  {
+			  if ( (z_flags >> i) & 1)
+				  *ptr++ = 'Z';
+			  else
+				  *ptr++ = char(((val >> i) & 1)+48);
+		  }
+		  *ptr++ = ' ';
+		  *ptr++ = id[0];
+		  *ptr++ = id[1];
+		  *ptr++ = '\n';
+		}
+
+	      if ((ptr-buf)>3600)
+		{
+		  write(buf, (ptr-buf));
+		  ptr = buf;
+		}
+	    }
+
+	}
 
 	void vcd_dump_ll(const uint64_t& val, char* id, const uint8_t& bin)
 	{
@@ -325,6 +364,9 @@ struct vcd_file_t : public std::ofstream
 									gmodule::module_list[kk]->vcd_list[jj]->ID[1], gmodule::module_list[kk]->vcd_list[jj]->name);
 						}
 					}
+					//else
+					//	gprintf("#UAlready Probed %", gmodule::module_list[kk]->vcd_list[jj]->name);
+
 				}
 			}
 
@@ -447,6 +489,7 @@ vcd_entry* create_vcd_entry(T name_i, gmodule* pmodule_i, int nbits_i)
 	if (nbits_i == 1)
 		pvcd_entry->binary = 1;
 	(pmodule_i->vcd_list).push_back(pvcd_entry);
+	gprintf("#CCreate vcd entry %R %R ptr %R", pmodule_i->name, name_i, pvcd_entry);
 	//gprintf("<CVE\n");
 	return pvcd_entry;
 }

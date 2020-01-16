@@ -4,11 +4,14 @@
 #
 # Generate a baremetal application
 
-PROGRAM ?= led
-PROGRAM_CFLAGS = -Wall -g -Os
+
+# -munaligned-access -mno-unaligned-access
+
+PROGRAM ?= invaders
+PROGRAM_CFLAGS = -Wall -g -Os -Warray-bounds
 ARCH = rv32i
 # ARCH = rv32im # to disable compressed instructions
-SRCS = $(PROGRAM).c
+SRCS = $(PROGRAM).cpp
 
 CC = /opt/riscv/bin/riscv64-unknown-elf-g++
 ZZ = /opt/riscv/bin/riscv64-unknown-elf-gcc
@@ -29,7 +32,7 @@ LIBS = -lm
 #    -std=gnu++17 -Os -Wall -march=$(ARCH) -mabi=ilp32 -mcmodel=medlow -fmessage-length=0 -fsigned-char -ffunction-sections -fdata-sections -fno-common $(PROGRAM_CFLAGS)
 #	-fvisibility=hidden -nostdlib -nostartfiles $(PROGRAM_CFLAGS)
 
-OBJS := ${SRCS:.c=.o}  ${CRT:.S=.o}
+OBJS := ${SRCS:.cpp=.o}  ${CRT:.S=.o}
 DEPS = $(OBJS:%.o=%.d)
 
 OUTFILES = $(PROGRAM).elf $(PROGRAM).bin $(PROGRAM).dis
@@ -55,7 +58,7 @@ $(PROGRAM).elf: $(OBJS) $(LINKER_SCRIPT)
 %.bin: %.elf
 	$(OBJCOPY) -O binary $^ $@
 
-%.o: %.c
+%.o: %.cpp
 	$(CC) $(CFLAGS) -MMD -c $(INCS) -o $@ $<
 
 %.o: %.S

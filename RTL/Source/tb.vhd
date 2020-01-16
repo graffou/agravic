@@ -5,18 +5,33 @@ entity tb_t is begin end tb_t; architecture rtl of tb_t is component dummy_zkw_p
 constant c_clock_period : time := 5 ns;
 constant c_reset_length : time := 20 ns;
 component sUART is port( clk_peri : IN std_logic; reset_n : IN std_logic; core2mem_i : IN blk2mem_t; mem2core_o : OUT mem2blk_t; uart_tx_o : OUT std_logic; uart_rx_i : IN std_logic ); end component;
-component top is port( clk_top : IN std_logic; reset_n : IN std_logic; load_port_i : IN blk2mem_t; uart_tx_o : OUT std_logic; uart_rx_i : IN std_logic; gpios_o : OUT unsigned ((32 -1) downto 0) ); end component;
+component top is port( clk_top : IN std_logic; reset_n : IN std_logic; bmkrD_io : INOUT unsigned ((15 -1) downto 0); bmkrA_io : INOUT unsigned ((7 -1) downto 0); pclk_o : OUT std_logic; red_o : OUT std_logic; green_o : OUT std_logic; blue_o : OUT std_logic ); end component;
 signal clk : std_logic;
 signal reset_n : std_logic;
 signal cmd : blk2mem_t;
 signal gpios : unsigned ((32 -1) downto 0);
-signal sUART_tx : std_logic;
-signal sUART_rx : std_logic;
+signal blue : std_logic;
+signal red : std_logic;
+signal green : std_logic;
+signal pclk : std_logic;
+signal bmkrD : unsigned ((15 -1) downto 0);
+signal bmkrA : unsigned ((7 -1) downto 0);
 signal core2datamem : blk2mem_t;
 signal uart2core : mem2blk_t;
+signal sdram_addr : unsigned ((12 -1) downto 0);
+signal sdram_ba : unsigned ((2 -1) downto 0);
+signal sdram_cke : std_logic;
+signal sdram_cs : std_logic;
+signal sdram_we : std_logic;
+signal sdram_ras : std_logic;
+signal sdram_cas : std_logic;
+signal sdram_dQm : unsigned ((2 -1) downto 0);
+signal sdram_dQ : unsigned ((16 -1) downto 0);
+signal uart_rx : std_logic;
+signal uart_tx : std_logic;
 begin
-u0_sUART : sUART port map( clk_peri => clk, reset_n => reset_n, core2mem_i => core2datamem, mem2core_o => uart2core, uart_tx_o => sUART_rx, uart_rx_i => sUART_tx);
-dut : top port map( clk_top => clk, reset_n => reset_n, load_port_i => cmd, uart_tx_o => sUART_tx, uart_rx_i => sUART_rx, gpios_o => gpios);
+dut : top port map( clk_top => clk, reset_n => reset_n, bmkrD_io => bmkrD, bmkrA_io => bmkrA, blue_o => blue, red_o => red, green_o => green, pclk_o => pclk, sdram_addr_o => sdram_addr, sdram_ba_o => sdram_ba, sdram_cke_o => sdram_cke, sdram_cs_o => sdram_cs, sdram_we_o => sdram_we, sdram_ras_o => sdram_ras, sdram_cas_o => sdram_cas, sdram_dQm_o => sdram_dQm, sdram_dQ_io => sdram_dQ);
+u0_sUART : sUART port map( clk_peri => dut.clk_mcu, reset_n => reset_n, core2mem_i => core2datamem, mem2core_o => uart2core, uart_tx_o => uart_tx, uart_rx_i => uart_rx);
 gen_clk: process
 begin
    wait for (c_clock_period / 2);

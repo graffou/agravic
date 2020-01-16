@@ -11,7 +11,7 @@ INCLUDES_C = -I./Include_libs -I./Include_rtl/Source -I./Include_rtl/Include
 INCLUDES_VHD = -I./Include_libs -I./Source -I./Include
 
 # -Wfatal-errors should stop gcc on 1st error
-CC_FLAGS = -O3 -std=gnu++17 -Wfatal-errors
+CC_FLAGS = -Os -std=gnu++17 -Wfatal-errors
 
 
 INCS = $(wildcard $(DINCS)*.h)
@@ -55,7 +55,7 @@ show:  $(RTL_VHDL) $(RTL_CONV)  $(CONV) $(SOURCEDIR)main.cpp
 # Rule for vhdl code generation (in RTL/Source dir.)
 # Gets preprocessor output with -DVHDL option, replaces == with =, Then keeps 100000 lines after the Agravic keyword is found (start of VHDL block)
 %.vhd	: %.h 
-	g++ $(CC_FLAGS) $(INCLUDES_VHD) -I$(RINCS) -E -P -w -IInclude_libs -DVHDL $< | sed -e 's/==/=/g' -e 's/!=/~=/g' | grep -A 100000 -e 'Agravic' > ./RTL/$@
+	g++ $(CC_FLAGS) $(INCLUDES_VHD) -I$(RINCS) -E -P -w -IInclude_libs -DVHDL $< | sed -e 's/==/=/g' -e 's/!=/~=/g' -e 's/Z@Z/\"/g' | grep -A 100000 -e 'Agravic' > ./RTL/$@
 
 clean:
 	rm -f -r  $(RTL_SOURCES)/* $(INCS_conv)/* dut; 

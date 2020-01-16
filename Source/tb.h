@@ -6,6 +6,8 @@ TESTBENCH(tb_t);
 // For now, just implement vhdl and C++ codes separately
 // for clock generation
 
+#define UART_LOADING 1
+
 #ifdef VHDL
 constant c_clock_period : time := 5 ns;
 constant c_reset_length : time := 20 ns;
@@ -14,6 +16,8 @@ constant c_reset_length : time := 20 ns;
 
 
 #endif
+
+
 
 COMPONENT(sUART,
 DECL_PORTS(
@@ -30,11 +34,19 @@ COMPONENT(top,
 DECL_PORTS(
 		PORT(clk_top, CLK_TYPE, IN),
 		PORT(reset_n, RST_TYPE, IN),
-		PORT(load_port_i, blk2mem_t, IN),
+		//PORT(load_port_i, blk2mem_t, IN),
 		// GPIOs
+		/*
 		PORT(uart_tx_o, BIT_TYPE, OUT),
 		PORT(uart_rx_i, BIT_TYPE, IN),
-		PORT(gpios_o, UINT(32), OUT)
+		*/
+		PORT(bmkrD_io, UINT(15), INOUT),
+		PORT(bmkrA_io, UINT(7), INOUT),
+		PORT(pclk_o, BIT_TYPE, OUT),
+		PORT(red_o, BIT_TYPE, OUT),
+		PORT(green_o, BIT_TYPE, OUT),
+		PORT(blue_o, BIT_TYPE, OUT)//,
+		//PORT(gpios_o, UINT(32), OUT)
 		)
 );
 
@@ -43,12 +55,30 @@ SIG(clk, CLK_TYPE);
 SIG(reset_n, RST_TYPE);// reset_n;
 SIG(cmd, blk2mem_t);
 SIG(gpios, UINT(32));
-SIG(sUART_tx, BIT_TYPE);
-SIG(sUART_rx, BIT_TYPE);
+
+SIG(blue, BIT_TYPE);
+SIG(red, BIT_TYPE);
+SIG(green, BIT_TYPE);
+SIG(pclk, BIT_TYPE);
+SIG(bmkrD, UINT(15));
+SIG(bmkrA, UINT(7));
 
 SIG(core2datamem, blk2mem_t);
 SIG(uart2core, mem2blk_t);
 
+SIG(sdram_addr, UINT(12));
+SIG(sdram_ba, UINT(2));
+SIG(sdram_cke, BIT_TYPE);
+SIG(sdram_cs, BIT_TYPE);
+SIG(sdram_we, BIT_TYPE);
+SIG(sdram_ras, BIT_TYPE);
+SIG(sdram_cas, BIT_TYPE);
+SIG(sdram_dQm, UINT(2));
+SIG(sdram_dQ, TRISTATE(16));
+
+
+SIG(uart_rx, BIT_TYPE);
+SIG(uart_tx, BIT_TYPE);
 
 #ifndef VHDL
 int ncycles = 10000;
@@ -56,32 +86,53 @@ bool success = 1;
 std::ifstream code_file;
 std::ifstream check_file;
 std::ifstream sig_start_file;
+
+
 #endif
 
 BEGIN
 
 
-BLK_INST(u0_sUART, sUART,
-MAPPING(
-		PM(clk_peri, clk),
-		PM(reset_n, reset_n),
-		PM(core2mem_i, core2datamem),
-		PM(mem2core_o, uart2core),
-		PM(uart_tx_o, sUART_rx),
-		PM(uart_rx_i, sUART_tx)
-		)
-);
+
 
 BLK_INST(dut, top,
 		MAPPING(
 				PM(clk_top, clk),
 				PM(reset_n, reset_n),
-				PM(load_port_i, cmd),
+				/*
 				PM(uart_tx_o, sUART_tx),
 				PM(uart_rx_i, sUART_rx)	,
-				PM(gpios_o, gpios)
+				*/
+				PM(bmkrD_io, bmkrD),
+				PM(bmkrA_io, bmkrA),
+				PM(blue_o, blue),
+				PM(red_o, red),
+				PM(green_o, green),
+				PM(pclk_o, pclk),
+				PM(sdram_addr_o,sdram_addr),
+				PM(sdram_ba_o,sdram_ba),
+				PM(sdram_cke_o,sdram_cke),
+				PM(sdram_cs_o,sdram_cs),
+				PM(sdram_we_o,sdram_we),
+				PM(sdram_ras_o,sdram_ras),
+				PM(sdram_cas_o,sdram_cas),
+				PM(sdram_dQm_o,sdram_dQm),
+				PM(sdram_dQ_io,sdram_dQ)				//PM(gpios_o, gpios)
 				)
 			);
+
+// Instantiate this block AFTER top, because dut.mcu must exist before we can map it to clk_peri !!!!!!!!!!!!!!!!!!!!!!!!!!!!
+BLK_INST(u0_sUART, sUART,
+MAPPING(
+		PM(clk_peri, dut.clk_mcu),
+		PM(reset_n, reset_n),
+		PM(core2mem_i, core2datamem),
+		PM(mem2core_o, uart2core),
+		PM(uart_tx_o, uart_tx),
+		PM(uart_rx_i, uart_rx)
+		)
+);
+
 
 #ifdef VHDL
 gen_clk: process
@@ -98,8 +149,13 @@ begin
 end process gen_reset_n;
 #else
 
+//#define LOAD_PORT cmd //(&top)->load_port
+#define LOAD_PORT dut.load_port //(&top)->load_port
+
+
 void init_clk_rst()
 {
+	bmkrD = 0xFFFF; // also init ports
 	clk <= BIT(0);
 	reset_n <= BIT(0);
 }
@@ -117,6 +173,8 @@ void init_file( T& name_i)
 	gprintf("#VOpening check file %Y open %Y", name.c_str(), check_file.is_open());
 }
 
+#define WAIT_5_CLK clk <= not clk;	clk <= not clk;clk <= not clk;	clk <= not clk;clk <= not clk;	clk <= not clk;clk <= not clk;	clk <= not clk;clk <= not clk;	clk <= not clk;
+
 constexpr void run()
 {
 	reset_n <= BIN(0);
@@ -124,45 +182,128 @@ constexpr void run()
 	clk <= BIN(0);
 	clk <= BIN(1);
 	reset_n <= BIN(1);
-	cmd.cs_n <= BIT(0);
-	cmd.wr_n <= BIT(0);
-	cmd.addr <= TO_UINT(0, LEN(cmd.addr));
-	cmd.be <= BIN(1111);
+	SIG_SET_BIT(bmkrD,14, BIT(1));
+for (int k = 0; k < 1; k++)
+{
+	for (int i = 0; i < 300; i++) {WAIT_5_CLK} // wait for giorno core hdmi msg
+	SIG_SET_BIT(bmkrD,8, BIT(0));// reset boot mode
+	//SIG_SET_BIT(bmkrD,14, BIT(1));
+
+#ifndef UART_LOADING
+	LOAD_PORT.cs_n <= BIT(0);
+	LOAD_PORT.wr_n <= BIT(0);
+	LOAD_PORT.addr <= TO_UINT(0, LEN(LOAD_PORT.addr));
+	LOAD_PORT.be <= BIN(1111);
+#else
+	for (int i = 0; i < 300; i++) {WAIT_5_CLK} // wait for giorno core hdmi msg
+	LOAD_PORT.cs_n <= BIT(1);
+	LOAD_PORT.wr_n <= BIT(1);
+	SIG_SET_BIT(bmkrD,8, BIT(0));// set boot mode
+	for (int i = 0; i < 32; i++)
+		clk <= not clk;
+	SIG_SET_BIT(bmkrD,8, BIT(1));// set boot mode
+	for (int i = 0; i < 32; i++)
+		clk <= not clk;
+	//SIG_SET_BIT(bmkrD,14, BIT(1));
+
+#endif
 	clk <= not clk;
+	clk <= not clk;	clk <= not clk; // add cycles so that the 48MHz clk can toggle (clk is 240MHz clk)
+	clk <= not clk;	clk <= not clk;
+	clk <= not clk;	clk <= not clk;
 	clk <= not clk;
+
+	for (int i = 0; i < 32; i++) {WAIT_5_CLK}
+
 	uint32_t addr = 0;
 	uint32_t end_addr = 0;
-	while (not code_file.eof() and not(cmd.addr == BIN(1011111111111) ))
+	while (not code_file.eof() and not(LOAD_PORT.addr == BIN(1011111111111) ))
 	{
-		gprintf("% % \n", cmd.addr, BIN(101111111111100));
+		gprintf("% % \n", LOAD_PORT.addr, BIN(101111111111100));
 		__control_signals__.clk = -1;
 		__control_signals__.reset_n = -1;
 
 		uint32_t data;
 		code_file.read ((char*)&data, sizeof(data)); //>> data;
-		cmd.data <= slv<32>(data);
+
+		LOAD_PORT.data <= slv<32>(data); // don't care for uart loading, cs_n is 1
 		//printf("%x\n", data)
-		if (cmd.addr < BIN(0000000011100) ) {
-			gprintf("#Maddr : %R write %R %Y", to_hex(TO_INTEGER(cmd.addr)), to_hex(TO_INTEGER(cmd.data)), code_file.tellg());
+		if (LOAD_PORT.addr < BIN(0000000011100) ) {
+			gprintf("#Maddr : %R write %R %Y", to_hex(TO_INTEGER(LOAD_PORT.addr)), to_hex(TO_INTEGER(LOAD_PORT.data)), code_file.tellg());
 		}
-		cmd.addr <= TO_UINT(addr/4, LEN(cmd.addr));//cmd.addr + TO_UINT(4, LEN(cmd.addr));
-#ifdef NONREG // for risc-v compliance test, copy init data to data memory
+#ifdef NONREG // for risc-v compliance test, copy init data to data memory ALWAYS USE LOAD PORT
 		if (addr >= 8192)
 		{
 			dut.u1_mem.set(addr/4, data);
 			gprintf("#MLoading data mem % %", to_hex(addr/4), to_hex(data));
 			gprintf("#Cmem content % %", to_hex(addr/4), to_hex(dut.u1_mem.get(addr/4)));
 		}
+#else
+
+		for (int i = 0; i < 4; i++)
+		{
+			uint8_t byte = (data >> (i<<3)) & 0xFF;
+			while (not (dut.clk_mcu.event()))
+			{
+				clk <= not clk;
+				clk <= not clk;
+			}
+			core2datamem.addr <= 0x1ff0;
+			//core2datamem.data <= (0x01A10000 | byte);
+			core2datamem.data <= (0x00010000 | byte);
+			core2datamem.cs_n <= BIT(0);
+			core2datamem.wr_n <= BIT(0);
+
+			WAIT_5_CLK
+
+			core2datamem.cs_n <= BIT(1);
+
+			WAIT_5_CLK
+
+			while (not u0_sUART.ready == BIT(1))
+			{
+				clk <= not clk;
+				clk <= not clk;
+				SIG_SET_BIT(bmkrD,14, uart_tx);
+			}
+		}
+
+		gprintf("#Cmem content % %", to_hex(addr/4), to_hex(dut.u1_mem.get(addr/4)));
 
 #endif
-		addr = addr + 4;
 		std::cerr << '>';
+		// Take care of top clk being not the one that drives the risc-V core
+		while (not (dut.clk_mcu.event()))
+		{
+			LOAD_PORT.addr <= TO_UINT(addr/4, LEN(LOAD_PORT.addr));//LOAD_PORT.addr + TO_UINT(4, LEN(LOAD_PORT.addr));
+			clk <= not clk;
+			clk <= not clk;
+		}
+		addr = addr + 4;
 		clk <= not clk;
 		clk <= not clk;
+
 		std::cerr << '/';
 	}
-	cmd.cs_n <= BIT(1);
-	cmd.wr_n <= BIT(1);
+
+	for (int i = 0; i < 32; i++) {WAIT_5_CLK}
+	SIG_SET_BIT(bmkrD,8, BIT(0));// reset boot mode
+	//code_file.close();
+	code_file.clear();
+	code_file.seekg( 0, std::ios::beg );
+	if (code_file.eof())
+	{
+		gprintf("#Rcode file not reopen");
+		exit(0);
+	};
+	addr = 0;
+	LOAD_PORT.addr = 0;
+}
+#ifndef UART_LOADING
+	gprintf("#VEnded code loading addr % eof % ", LOAD_PORT.addr, code_file.eof());
+	LOAD_PORT.cs_n <= BIT(1);
+	LOAD_PORT.wr_n <= BIT(1);
+#endif
 	clk <= not clk;
 	clk <= not clk;
 
@@ -177,15 +318,24 @@ constexpr void run()
 		// Configure TB IPs from FW -------------------
 		// Address range 0x1e00-1eFF
 
-		if ((dut.core2datamem.addr and 0x1f00) == 0x1e00 )
+
+		if ( (dut.core2datamem.addr and 0x1f00) == 0x1e00 )
 		{
 			core2datamem <= dut.core2datamem;
 			core2datamem.addr <= core2datamem.addr + 0x100;
-			gprintf("#RYoooooooooooooooooooooooooooo % ", to_hex(TO_INTEGER(dut.core2datamem.addr)), to_hex(TO_INTEGER(dut.core2datamem.data)));
+			//gprintf("#RYoooooooooooooooooooooooooooo % ", to_hex(TO_INTEGER(dut.core2datamem.addr)), to_hex(TO_INTEGER(dut.core2datamem.data)));
 			//exit(0);
+
 		}
 		else
 			core2datamem.cs_n = 1;
+
+		uart_rx <= B(bmkrD, 13);
+		SIG_SET_BIT(bmkrD,14, uart_tx);
+		//bmkrD <= bmkrD;
+		dut.tb2core = uart2core;
+
+
 	}
 #ifdef NONREG
 	for (int i= 2048; i < 2100;i++)

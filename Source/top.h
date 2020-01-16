@@ -8,11 +8,65 @@ ENTITY(top,
 DECL_PORTS(
 		PORT(clk_top, CLK_TYPE, IN),
 		PORT(reset_n, RST_TYPE, IN),
-		PORT(load_port_i, blk2mem_t, IN),
+		//PORT(load_port_i, blk2mem_t, IN),
 		// GPIOs
-		PORT(uart_tx_o, BIT_TYPE, OUT),
-		PORT(uart_rx_i, BIT_TYPE, IN),
-		PORT(gpios_o, UINT(32), OUT)
+		//PORT(uart_tx_o, BIT_TYPE, OUT),
+		//PORT(uart_rx_i, BIT_TYPE, IN),
+		PORT(bmkrD_io, UINT(15), INOUT),
+		PORT(bmkrA_io, UINT(7), INOUT),
+		PORT(pclk_o, BIT_TYPE, OUT),
+		PORT(red_o, BIT_TYPE, OUT),
+		PORT(green_o, BIT_TYPE, OUT),
+		PORT(blue_o, BIT_TYPE, OUT),
+
+		PORT(sdram_addr_o, UINT(12), OUT),
+		PORT(sdram_ba_o, UINT(2), OUT),
+		PORT(sdram_cke_o, BIT_TYPE, OUT),
+		PORT(sdram_cs_o, BIT_TYPE, OUT),
+		PORT(sdram_we_o, BIT_TYPE, OUT),
+		PORT(sdram_cas_o, BIT_TYPE, OUT),
+		PORT(sdram_ras_o, BIT_TYPE, OUT),
+		PORT(sdram_dQm_o, UINT(2), OUT),
+
+		PORT(sdram_dQ_io, TRISTATE(16), INOUT)
+		//PORT(gpios_o, UINT(32), OUT)
+		//,
+		//PORT(debug_o, UINT(10), OUT)
+		)
+);
+
+COMPONENT(hdmi,
+DECL_PORTS(
+		PORT(clk_hdmi, CLK_TYPE, IN),
+		PORT(clk_core, CLK_TYPE, IN),
+		PORT(clk_pix, CLK_TYPE, IN),
+		PORT(boot_mode_i, BIT_TYPE, IN),
+		PORT(trap_i, BIT_TYPE, IN), //
+		PORT(dbg_i, UINT(33), IN), // for code loading
+		PORT(reset_n, RST_TYPE, IN),
+		PORT(core2mem_i, blk2mem_t, IN), // reg access
+		PORT(pclk_o, BIT_TYPE, OUT),
+		PORT(red_o, BIT_TYPE, OUT),
+		PORT(green_o, BIT_TYPE, OUT),
+		PORT(blue_o, BIT_TYPE, OUT)
+		)
+);
+
+COMPONENT(dma,
+DECL_PORTS(
+		PORT(clk_dma, CLK_TYPE, IN),
+		PORT(reset_n, RST_TYPE, IN),
+		PORT(boot_mode_i, BIT_TYPE, IN),
+		PORT(core2mem_i, blk2mem_t, IN), // reg access
+		PORT(mem2core_o, mem2blk_t, OUT), // reg access
+		PORT(mem2dma_i, mem2blk_t, IN),
+
+		// UART
+		PORT(uart_dma_i, p2d_8_t, IN),
+		PORT(uart_dma_o, d2p_8_t, OUT),
+
+		PORT(core_grant_i, BIT_TYPE, IN),
+		PORT(core_request_o, blk2mem_t, OUT)
 		)
 );
 
@@ -20,8 +74,11 @@ COMPONENT(sUART,
 DECL_PORTS(
 		PORT(clk_peri, CLK_TYPE, IN),
 		PORT(reset_n, RST_TYPE, IN),
+		PORT(boot_mode_i, BIT_TYPE, IN), // have to reset the UART for DMA
 		PORT(core2mem_i, blk2mem_t, IN),
 		PORT(mem2core_o, mem2blk_t, OUT),
+		PORT(uart_dma_i, d2p_8_t, IN),
+		PORT(uart_dma_o, p2d_8_t, OUT),
 		PORT(uart_tx_o, BIT_TYPE, OUT),
 		PORT(uart_rx_i, BIT_TYPE, IN)
 		)
@@ -31,12 +88,18 @@ COMPONENT(risc_V_core,
 DECL_PORTS(
 		PORT(clk_core, CLK_TYPE, IN),
 		PORT(reset_n, RST_TYPE, IN),
+		PORT(boot_mode_i, BIT_TYPE, IN), // for code loading
+		PORT(trap_o, BIT_TYPE, OUT), // for code loading
+		PORT(dbg_o, UINT(33), OUT), // for code loading
 		// core to instruction memory
 		PORT(load_port_i, blk2mem_t, IN),
 		PORT(core2instmem_o, blk2mem_t, OUT),
 		PORT(instmem2core_i, mem2blk_t, IN),
 		// core to data memory
 		PORT(core2datamem_o, blk2mem_t, OUT),
+		//PORT(dma2core_i, blk2mem_t, IN), // These are DMA write requests from peripherals / are transmitted when mem bus is not used by core
+		PORT(dma_request_i, blk2mem_t, IN),
+		PORT(dma_grant_o, BIT_TYPE, OUT),
 		PORT(datamem2core_i, mem2blk_t, IN)
 		// GPIOs
 		//PORT(gpios_o, UINT(32), OUT)
@@ -62,37 +125,160 @@ DECL_PORTS(
 		)
 );
 
+COMPONENT( clk_gen,
+	DECL_PORTS
+	(
+		PORT(areset, RST_TYPE, IN),// 		: IN STD_LOGIC  := '0';
+		PORT(inclk0, CLK_TYPE, IN),	//	: IN STD_LOGIC  := '0';
+		PORT(c0, CLK_TYPE, OUT),	//	: OUT STD_LOGIC ;
+		PORT(c1, CLK_TYPE, OUT),	//	: OUT STD_LOGIC ;
+		PORT(c2, CLK_TYPE, OUT),	//	: OUT STD_LOGIC ;
+		PORT(locked, BIT_TYPE, OUT)	//	: OUT STD_LOGIC
+	)
+);
+
+
+COMPONENT(sdram_ctrl,
+DECL_PORTS(
+		PORT(clk_sdram, CLK_TYPE, IN),
+		PORT(reset_n, RST_TYPE, IN),
+		PORT(req0_i, sdram_req_t, IN),
+		PORT(req1_i, sdram_req_t, IN),
+		PORT(data_i, UINT(16), IN),
+		PORT(addr_o, UINT(12), OUT),
+		PORT(ba_o, UINT(2), OUT),
+		PORT(data_o, UINT(16), OUT),
+		PORT(cke_o, BIT_TYPE, OUT),
+		PORT(cs_o, BIT_TYPE, OUT),
+		PORT(we_o, BIT_TYPE, OUT),
+		PORT(cas_o, BIT_TYPE, OUT),
+		PORT(ras_o, BIT_TYPE, OUT),
+		PORT(en0_o, BIT_TYPE, OUT), // either data _en or data_request to initiator
+		PORT(en1_o, BIT_TYPE, OUT),
+		PORT(dQm_o, UINT(2), OUT),
+
+		PORT(dQ_io, TRISTATE(16), INOUT)
+
+		)
+);
+SIG(boot_mode, BIT_TYPE);
+
+SIG(load_port, blk2mem_t);
 SIG(core2instmem, blk2mem_t);
 SIG(instmem2core, mem2blk_t);
 SIG(core2datamem, blk2mem_t);
 SIG(datamem2core, mem2blk_t);
 SIG(all2core, mem2blk_t);
 SIG(uart2core, mem2blk_t);
+SIG(dma2core, mem2blk_t);
 SIG(dbg, UINT(8));
+SIG(gpios, UINT(32));
+SIG(gate_cell, BIT_TYPE);
+SIG(clk_mcu, CLK_TYPE);
+SIG(clk_24, CLK_TYPE);
+SIG(clk_120, CLK_TYPE);
+// use this to force a response from tb blocks
+SIG(tb2core, mem2blk_t);
+// SAMD21 I/F
+SIG(bmkrD, UINT(15));
+SIG(bmkrA, UINT(6));
+SIG(uart_rx, BIT_TYPE);
+SIG(uart_tx, BIT_TYPE);
+
+SIG(uart2dma, p2d_8_t);
+SIG(dma2uart, d2p_8_t);
+SIG(dma_request, blk2mem_t);
+SIG(dma_grant, BIT_TYPE);
+SIG(trap, BIT_TYPE);
+
+SIG(sdram_req0, sdram_req_t);
+SIG(sdram_req1, sdram_req_t);
+
+SIG(sdram_en0, BIT_TYPE);
+SIG(sdram_en1, BIT_TYPE);
+
+SIG(hdmi2sdram_data, UINT(16));
+SIG(sdram2hdmi_data, UINT(16));
+SIG(dbg33, UINT(33));
+
+
 //SIG(sUART_tx, BIT_TYPE);
 //SIG(sUART_rx, BIT_TYPE);
-
+//CONST(ZERO, RST_TYPE) := BIT(0);
 BEGIN
+
+BLK_INST(u0_clk_gen, clk_gen,
+MAPPING(
+		PM(areset, reset_n), // PG is forced to zero in VHDL code
+		PM(inclk0, clk_top),
+		PM(c0, clk_mcu),
+		PM(c1, clk_24),
+		PM(c2, clk_120)
+		)
+);
+
+BLK_INST(u0_hdmi, hdmi,
+MAPPING(
+		PM(clk_hdmi, clk_120),
+		PM(clk_core, clk_mcu),
+		PM(clk_pix, clk_24),
+		PM(reset_n, reset_n),
+		PM(boot_mode_i, boot_mode),
+		PM(trap_i, trap),
+		PM(dbg_i, dbg33),
+		PM(core2mem_i, core2datamem),
+		//PM(debug, debug_o)
+		PM(blue_o, blue_o),
+		PM(green_o, green_o),
+		PM(red_o, red_o),
+		PM(pclk_o, pclk_o)
+		)
+);
+
+
+BLK_INST(u0_dma, dma,
+MAPPING(
+		PM(clk_dma, clk_mcu),
+		PM(reset_n, reset_n),
+		PM(boot_mode_i, boot_mode),
+		PM(core2mem_i, core2datamem),
+		PM(mem2core_o, dma2core),
+		PM(mem2dma_i, datamem2core),
+		PM(uart_dma_i, uart2dma),
+		PM(uart_dma_o, dma2uart),
+		PM(core_grant_i, dma_grant),
+		PM(core_request_o, dma_request)
+	)
+);
+
 
 BLK_INST(u0_sUART, sUART,
 MAPPING(
-		PM(clk_peri, clk_top),
+		PM(clk_peri, clk_mcu),
 		PM(reset_n, reset_n),
+		PM(boot_mode_i, boot_mode),
 		PM(core2mem_i, core2datamem),
 		PM(mem2core_o, uart2core),
-		PM(uart_tx_o, uart_tx_o),
-		PM(uart_rx_i, uart_rx_i)
+		PM(uart_dma_o, uart2dma),
+		PM(uart_dma_i, dma2uart),
+		PM(uart_tx_o, uart_tx),
+		PM(uart_rx_i, uart_rx)
 		)
 );
 
 BLK_INST(u0_risc_V_core, risc_V_core,
 		MAPPING(
-				PM(clk_core, clk_top),
+				PM(clk_core, clk_mcu),
 				PM(reset_n, reset_n),
-				PM(load_port_i, load_port_i),
+				PM(boot_mode_i, boot_mode),
+				PM(trap_o, trap),
+				PM(dbg_o, dbg33),
+				PM(load_port_i, load_port),
 				PM(core2instmem_o,core2instmem),
 				PM(instmem2core_i, instmem2core),
 				PM(core2datamem_o,core2datamem),
+				PM(dma_request_i, dma_request),
+				PM(dma_grant_o, dma_grant),
 				PM(datamem2core_i, all2core),
 				)
 		);
@@ -100,7 +286,7 @@ BLK_INST(u0_risc_V_core, risc_V_core,
 // Instruction RAM (ROM)
 BLK_INST(u0_mem, mem,
 		MAPPING(
-				PM(clk_mem, clk_top),
+				PM(clk_mem, clk_mcu),
 				PM(reset_n, reset_n),
 				PM(core2mem_i,core2instmem),
 				PM(mem2core_o, instmem2core)
@@ -110,7 +296,7 @@ BLK_INST(u0_mem, mem,
 // Data RAM
 BLK_INST(u1_mem, mem,
 		MAPPING(
-				PM(clk_mem, clk_top),
+				PM(clk_mem, clk_mcu),
 				PM(reset_n, reset_n),
 				PM(core2mem_i,core2datamem),
 				PM(mem2core_o, datamem2core)
@@ -122,19 +308,54 @@ BLK_INST(u1_mem, mem,
 // TODO This will change
 BLK_INST(u0_peripherals, peripherals,
 		MAPPING(
-				PM(clk_peri, clk_top),
+				PM(clk_peri, clk_mcu),
 				PM(reset_n, reset_n),
 				PM(core2mem_i,core2datamem),
 				PM(dbg_o, dbg),
-				PM(gpios_o, gpios_o)
+				PM(gpios_o, gpios)
+				)
+		);
+
+
+BLK_INST( u0_sdram_ctrl, sdram_ctrl,
+		MAPPING(
+				PM(clk_sdram, clk_120),
+				PM(reset_n, reset_n),
+				PM(req0_i, sdram_req0),
+				PM(req1_i, sdram_req1),
+				PM(data_i, hdmi2sdram_data),
+				PM(data_o, sdram2hdmi_data),
+				PM(addr_o,sdram_addr_o),
+				PM(ba_o,sdram_ba_o),
+				PM(cke_o,sdram_cke_o),
+				PM(cs_o,sdram_cs_o),
+				PM(we_o,sdram_we_o),
+				PM(ras_o,sdram_ras_o),
+				PM(cas_o,sdram_cas_o),
+				PM(dQm_o,sdram_dQm_o),
+				PM(dQ_io,sdram_dQ_io)
 				)
 		);
 
 // Combine responses of memory and peripherals (for now sUART) ----------
-COMB_PROCESS(1, clk_top)
+COMB_PROCESS(1, clk_mcu)
 
-	all2core.data <= ( datamem2core.data or uart2core.data );
-	all2core.data_en <= ( datamem2core.data_en or uart2core.data_en );
+#ifdef VHDL
+	tb2core.data <= TO_UINT(0, 32);
+	tb2core.data_en <= BIT(0);
+#endif
+
+	all2core.data <= ( datamem2core.data or uart2core.data or dma2core.data or tb2core.data);
+	all2core.data_en <= ( datamem2core.data_en or uart2core.data_en or dma2core.data_en or tb2core.data_en);
+
+
+	// A bit tricky for inouts
+	boot_mode <= B(PORT_BASE(bmkrD_io), 8); // available ?
+	uart_rx <= B(PORT_BASE(bmkrD_io), 14);
+	SIG_SET_BIT(PORT_BASE(bmkrD_io),13, uart_tx);
+#ifdef VHDL
+	load_port.wr_n <= BIT(1);
+#endif
 
 END_COMB_PROCESS
 

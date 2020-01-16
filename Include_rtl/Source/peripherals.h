@@ -10,16 +10,29 @@ static int base_color = 0;
 static uint32_t codep = 0;
 
 static gstring dummy;
-
-#define INT32_TYPE 0x00000100
-#define INT16_TYPE 0x00000200
-#define INT8_TYPE 0x00000400
+/*
+#define INT32_TYPE  0x80800100
+#define INT16_TYPE  0x80800200
+#define INT8_TYPE   0x80800400
 #define UINT32_TYPE 0x80000100
 #define UINT16_TYPE 0x80000200
-#define UINT8_TYPE 0x80000400
-#define BOOL_TYPE 0x80000800
-#define COLOR_TYPE 0xFFFFFF00
-#define END_PRINT 0x88000000
+#define UINT8_TYPE  0x80000400
+#define BOOL_TYPE   0x80000800
+#define FLOAT_TYPE  0x80001000
+#define COLOR_TYPE  0xFFFFFF00
+#define END_PRINT   0x88000000
+*/
+#define INT32_TYPE  0x80000000
+#define INT16_TYPE  0x81000000
+#define INT8_TYPE   0x82000000
+#define UINT32_TYPE 0x83000000
+#define UINT16_TYPE 0x84000000
+#define UINT8_TYPE  0x85000000
+#define BOOL_TYPE   0x86000000
+#define FLOAT_TYPE  0x87000000
+#define COLOR_TYPE  0xE0000000
+#define END_PRINT   0xF0000000
+
 #endif
 
 ENTITY(peripherals,
@@ -27,32 +40,55 @@ DECL_PORTS(
 		PORT(clk_peri, CLK_TYPE, IN),
 		PORT(reset_n, RST_TYPE, IN),
 		PORT(core2mem_i, blk2mem_t, IN),
+		PORT(timer_IT_o, BIT_TYPE, OUT),
 		PORT(dbg_o, UINT(8), OUT),
 		PORT(gpios_o, UINT(32), OUT)
 		)
 );
 
 SIG(cnt, UINT(32));
-SIG(gate_cell, BIT_TYPE);
+SIG(cnt_cmp, UINT(32));
+SIG(cnt_started, BIT_TYPE);
+//SIG(gate_cell, BIT_TYPE);
 // does nothing in C++, mandatory for VHDL generation
-DECL_GATED_CLK(clk_g);
+//DECL_GATED_CLK(clk_g);
 
 BEGIN
 
 // Is a declaration in C++, instantiation in VHDL(after begin)
-GATED_CLK(clk_g ,clk_peri, gate_cell);
+//GATED_CLK(clk_g ,clk_peri, gate_cell);
 
 
 PROCESS(0, clk_peri, reset_n)
 VAR(DBG, UINT(8));
 BEGIN
 	IF ( reset_n == BIT(0) ) THEN
-	gpios_o <= TO_UINT(0, 32);
-	gate_cell <= BIT(1);
+		gpios_o <= TO_UINT(0, 32);
+		RESET(cnt);
+		RESET(cnt_cmp);
+		timer_IT_o <= BIT(0);
+		cnt_started <= BIT(0);
+	//gate_cell <= BIT(1);
 	ELSEIF ( EVENT(clk_peri) and (clk_peri == BIT(1)) ) THEN
+		IF ( not ( cnt == TO_UINT(0,32) ) ) THEN //timer increment
+			cnt <= cnt - TO_UINT(1, 32);
+			cnt_started <= BIT(1); // trig timer IT for timeout values != 0
+		ELSEIF (cnt_started == BIT(1)) THEN // timer was intitialized and actually reached timeout
+			timer_IT_o <= BIT(1);
+		ENDIF
 		IF ( ( PORT_BASE(core2mem_i).cs_n == BIT(0) ) and ( PORT_BASE(core2mem_i).wr_n == BIT(0) ) ) THEN
+			// Timer ----------------
+			// The mtime / mtimecmp on risc-V spec does not make sense to me
+			//
+			IF (PORT_BASE(core2mem_i).addr == BIN(1011111111100)) THEN // timer write timeout
+				//gate_cell <= B(PORT_BASE(core2mem_i).data, 0);
+				cnt <= PORT_BASE(core2mem_i).data;
+				cnt_started <= BIT(0);
+				timer_IT_o <= BIT(0); // reset interrupt line
+			ENDIF
+			// --------------
 			IF (PORT_BASE(core2mem_i).addr == BIN(1011111111111)) THEN
-				gate_cell <= B(PORT_BASE(core2mem_i).data, 0);
+				//gate_cell <= B(PORT_BASE(core2mem_i).data, 0);
 				gpios_o <= PORT_BASE(core2mem_i).data;
 #ifndef VHDL
 				gprintf("#Ugpios %Y", PORT_BASE(core2mem_i).data);
@@ -61,10 +97,12 @@ BEGIN
 			IF (PORT_BASE(core2mem_i).addr == BIN(1011111111110)) THEN
 				DBG = RANGE(PORT_BASE(core2mem_i).data, 7, 0);
 				dbg_o <= DBG;//RANGE(PORT_BASE(core2mem_i).data, 7, 0);
+
+				// This is for gprintf(...)
 #ifndef VHDL
 				char c = char(TO_INTEGER(DBG));
 				uint32_t val = TO_INTEGER(PORT_BASE(core2mem_i).data);
-				uint32_t code = ( (codep>>24) != 0x80 ) ? val & 0xffffff00 : 0; // Don't update code if already in coded value: the coded value might trig anything
+				uint32_t code = ( (codep>>28) != 0x8 ) ? val & 0xffffff00 : 0; // Don't update code if already in coded value: the coded value might trig anything
 				//if (code != 0) gprintf("#MCode % val %", to_hex(code), c);
 				gprintf("#BIn %R Write %R", to_hex(TO_INTEGER(PORT_BASE(core2mem_i).data)), c);
 				if (print_state == 0)
@@ -85,7 +123,7 @@ BEGIN
 				}
 				else if (print_state == 2)
 				{
-					if ( (c == 0) and not ( (codep>>24) == 0x80 ) )
+					if ( (c == 0) and not ( (codep>>28) == 0x8 ) )
 					{
 						if (code == END_PRINT)
 						{
@@ -93,10 +131,11 @@ BEGIN
 							{
 								dummy.set_color(dbg_file, color_code(0));
 								dbg_file << "\033[0m";
-								gprintf("#UResetting color scheme");
+								//gprintf("#UResetting color scheme");
 							}
 							base_color = 0;
 							print_state = 0;
+							dbg_file.flush();
 						}
 						else if ( (code == 0) and (base_color) ) // end of char*
 						{
@@ -105,12 +144,12 @@ BEGIN
 					}
 					else if (code == COLOR_TYPE)
 					{
-						gprintf("#gSetting color %", c);
+						//gprintf("#gSetting color %", c);
 						dummy.set_color(dbg_file, color_code(c));
 					}
-					else if ( (codep>>24) == 0x80 )
+					else if ( (codep>>28) == 0x8 )
 					{
-						gprintf("#BWriting coded value %", to_hex(val));
+						//gprintf("#BWriting coded value %", to_hex(val));
 						switch(codep)
 						{
 						case COLOR_TYPE : dummy.set_color(dbg_file, color_code(c)); break;
@@ -120,6 +159,7 @@ BEGIN
 						case UINT16_TYPE : dbg_file << uint16_t((val)); if(base_color) dummy.set_color(dbg_file, base_color);break;
 						case INT8_TYPE : dbg_file << int8_t((val)); if(base_color) dummy.set_color(dbg_file, base_color);break;
 						case UINT8_TYPE : dbg_file << uint8_t((val)); if(base_color) dummy.set_color(dbg_file, base_color);break;
+						case FLOAT_TYPE : dbg_file << *reinterpret_cast<float*>(&val); if(base_color) dummy.set_color(dbg_file, base_color);break;
 						case BOOL_TYPE : dbg_file << bool((val)); if(base_color) dummy.set_color(dbg_file, base_color);break;
 						default: dbg_file << char((val));
 						}
@@ -141,8 +181,8 @@ BEGIN
 	ENDIF
 END_PROCESS
 
-
-PROCESS(1, clk_g, reset_n)
+/*
+PROCESS(1, clk_peri, reset_n)
 BEGIN
 	IF ( reset_n == BIT(0) ) THEN
 		cnt <= TO_UINT(0, 32);
@@ -150,7 +190,7 @@ BEGIN
 		cnt <= cnt + 1;
 	ENDIF
 END_PROCESS
-
+*/
 //}
 
 BLK_END;
