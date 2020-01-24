@@ -11,7 +11,7 @@
 #define FLOAT_TYPE  0x87000000
 #define COLOR_TYPE  0xE0000000
 #define END_PRINT   0xF0000000
-#define TOGGLE_BLINK   0x03000000
+#define SET_CONSOLE_MODE   0x03000000
 #define PRINT_AT_XY   0x0F000000
 #define CLS   0x02000000
 #define FONT   0x01000000
@@ -55,7 +55,14 @@ void dbg_write(int32_t x)
     *dbg = INT32_TYPE;
     *dbg = x;
 }
-
+void dbg_write(uint16_t x)
+{
+	for (int k = 12; k >= 0;k-=4)
+	{
+		uint8_t c = (x >> k) & 15;
+		*dbg = (c < 10 ? 48 : 55) + c;
+	}
+}
 void dbg_write(color_type x)
 {
     *dbg = COLOR_TYPE | uint32_t(x.code);
@@ -105,6 +112,6 @@ void recurse_print(const char* toto, const T& first, const Args&... args)
 
 
 #define PRINT_AT(a, b, c) *dbg = (PRINT_AT_XY | (b << 8) | ((a) << 16) | (c));
-
-
+#define READ_BUF() static_cast<char>(*dbg)
+#define SET_CONSOLE(a) (*dbg = (SET_CONSOLE_MODE | a))
 #define gprintf(...) recurse_print(__VA_ARGS__)

@@ -2,7 +2,7 @@
 library ieee;use ieee.std_logic_1164.all;use IEEE.NUMERIC_STD.ALL;
 library work; use work.structures.all;
 entity top is port( clk_top : IN std_logic; reset_n : IN std_logic; bmkrD_io : INOUT unsigned ((15 -1) downto 0); bmkrA_io : INOUT unsigned ((7 -1) downto 0); pclk_o : OUT std_logic; red_o : OUT std_logic; green_o : OUT std_logic; blue_o : OUT std_logic; sdram_addr_o : OUT unsigned ((12 -1) downto 0); sdram_ba_o : OUT unsigned ((2 -1) downto 0); sdram_cke_o : OUT std_logic; sdram_cs_o : OUT std_logic; sdram_we_o : OUT std_logic; sdram_cas_o : OUT std_logic; sdram_ras_o : OUT std_logic; sdram_dQm_o : OUT unsigned ((2 -1) downto 0); sdram_dQ_io : INOUT unsigned ((16 -1) downto 0) ); end top; architecture rtl of top is component dummy_zkw_pouet is port(clk : in std_logic);end component;
-component hdmi is port( clk_hdmi : IN std_logic; clk_core : IN std_logic; clk_pix : IN std_logic; boot_mode_i : IN std_logic; trap_i : IN std_logic; dbg_i : IN unsigned ((33 -1) downto 0); reset_n : IN std_logic; core2mem_i : IN blk2mem_t; pclk_o : OUT std_logic; red_o : OUT std_logic; green_o : OUT std_logic; blue_o : OUT std_logic ); end component;
+component hdmi is port( clk_hdmi : IN std_logic; clk_core : IN std_logic; clk_pix : IN std_logic; boot_mode_i : IN std_logic; trap_i : IN std_logic; dbg_i : IN unsigned ((33 -1) downto 0); reset_n : IN std_logic; core2mem_i : IN blk2mem_t; mem2core_o : OUT mem2blk_t; pclk_o : OUT std_logic; red_o : OUT std_logic; green_o : OUT std_logic; blue_o : OUT std_logic ); end component;
 component dma is port( clk_dma : IN std_logic; reset_n : IN std_logic; boot_mode_i : IN std_logic; core2mem_i : IN blk2mem_t; mem2core_o : OUT mem2blk_t; mem2dma_i : IN mem2blk_t; uart_dma_i : IN p2d_8_t; uart_dma_o : OUT d2p_8_t; core_grant_i : IN std_logic; core_request_o : OUT blk2mem_t ); end component;
 component sUART is port( clk_peri : IN std_logic; reset_n : IN std_logic; boot_mode_i : IN std_logic; core2mem_i : IN blk2mem_t; mem2core_o : OUT mem2blk_t; uart_dma_i : IN d2p_8_t; uart_dma_o : OUT p2d_8_t; uart_tx_o : OUT std_logic; uart_rx_i : IN std_logic ); end component;
 component risc_V_core is port( clk_core : IN std_logic; reset_n : IN std_logic; boot_mode_i : IN std_logic; trap_o : OUT std_logic; dbg_o : OUT unsigned ((33 -1) downto 0); load_port_i : IN blk2mem_t; core2instmem_o : OUT blk2mem_t; instmem2core_i : IN mem2blk_t; core2datamem_o : OUT blk2mem_t; dma_request_i : IN blk2mem_t; dma_grant_o : OUT std_logic; datamem2core_i : IN mem2blk_t ); end component;
@@ -19,6 +19,7 @@ signal datamem2core : mem2blk_t;
 signal all2core : mem2blk_t;
 signal uart2core : mem2blk_t;
 signal dma2core : mem2blk_t;
+signal hdmi2core : mem2blk_t;
 signal dbg : unsigned ((8 -1) downto 0);
 signal gpios : unsigned ((32 -1) downto 0);
 signal gate_cell : std_logic;
@@ -44,7 +45,7 @@ signal sdram2hdmi_data : unsigned ((16 -1) downto 0);
 signal dbg33 : unsigned ((33 -1) downto 0);
 begin
 u0_clk_gen : clk_gen port map( areset => reset_n, inclk0 => clk_top, c0 => clk_mcu, c1 => clk_24, c2 => clk_120);
-u0_hdmi : hdmi port map( clk_hdmi => clk_120, clk_core => clk_mcu, clk_pix => clk_24, reset_n => reset_n, boot_mode_i => boot_mode, trap_i => trap, dbg_i => dbg33, core2mem_i => core2datamem, blue_o => blue_o, green_o => green_o, red_o => red_o, pclk_o => pclk_o);
+u0_hdmi : hdmi port map( clk_hdmi => clk_120, clk_core => clk_mcu, clk_pix => clk_24, reset_n => reset_n, boot_mode_i => boot_mode, trap_i => trap, dbg_i => dbg33, core2mem_i => core2datamem, mem2core_o => hdmi2core, blue_o => blue_o, green_o => green_o, red_o => red_o, pclk_o => pclk_o);
 u0_dma : dma port map( clk_dma => clk_mcu, reset_n => reset_n, boot_mode_i => boot_mode, core2mem_i => core2datamem, mem2core_o => dma2core, mem2dma_i => datamem2core, uart_dma_i => uart2dma, uart_dma_o => dma2uart, core_grant_i => dma_grant, core_request_o => dma_request);
 u0_sUART : sUART port map( clk_peri => clk_mcu, reset_n => reset_n, boot_mode_i => boot_mode, core2mem_i => core2datamem, mem2core_o => uart2core, uart_dma_o => uart2dma, uart_dma_i => dma2uart, uart_tx_o => uart_tx, uart_rx_i => uart_rx);
 u0_risc_V_core : risc_V_core port map( clk_core => clk_mcu, reset_n => reset_n, boot_mode_i => boot_mode, trap_o => trap, dbg_o => dbg33, load_port_i => load_port, core2instmem_o => core2instmem, instmem2core_i => instmem2core, core2datamem_o => core2datamem, dma_request_i => dma_request, dma_grant_o => dma_grant, datamem2core_i => all2core);
@@ -55,8 +56,8 @@ u0_sdram_ctrl : sdram_ctrl port map( clk_sdram => clk_120, reset_n => reset_n, r
 
  tb2core.data <= TO_UNSIGNED(0,32);
  tb2core.data_en <= '0';
- all2core.data <= ( datamem2core.data or uart2core.data or dma2core.data or tb2core.data);
- all2core.data_en <= ( datamem2core.data_en or uart2core.data_en or dma2core.data_en or tb2core.data_en);
+ all2core.data <= ( datamem2core.data or uart2core.data or dma2core.data or tb2core.data or hdmi2core.data);
+ all2core.data_en <= ( datamem2core.data_en or uart2core.data_en or dma2core.data_en or tb2core.data_en or hdmi2core.data_en);
  boot_mode <= bmkrD_io(8);
  uart_rx <= bmkrD_io(14);
  bmkrD_io(13) <= uart_tx;

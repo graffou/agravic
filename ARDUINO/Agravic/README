@@ -1,0 +1,5 @@
+go run make_composite_binary.go  -i ../../RTL/Source/top.ttf:1:512 -o app.h -t 1 > signature.h
+reset du merdier
+ouvrir putty config nucleo puis
+sudo dd if=../../FIRMWARE/led.bin of=/dev/ttyACM1
+sudo dd if=../../FIRMWARE/led.bin of=/dev/ttyACM0

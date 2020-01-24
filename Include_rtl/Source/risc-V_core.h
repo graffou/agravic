@@ -292,14 +292,10 @@ BEGIN
 		RESET(rrrd);
 		RESET(rrrdp);
 		RESET(cpu_stuck_cnt);
-
-
-// ok*/
 		RESET(rwb);
 		RESET(funct3wb);
 		RESET(rshiftwb);
 		mask_data_en <= BIT(0);
-// ok*/
 		rtrap <= BIT(0);
 		priv <= BIN(11); // Machine mode is default
 		load_mem <= BIT(0);
@@ -316,7 +312,6 @@ BEGIN
 		boot_mode <= BIT(0);
 		boot_modep <= BIT(0);
 		debug_write <= BIT(1);
-		//regs <= OTHERS(TO_UINT(0,32));
 		RESET(dbg_stop);
 
 		ELSEIF ( EVENT(clk_core) and (clk_core == BIT(1)) ) THEN
@@ -331,7 +326,6 @@ BEGIN
 			taken = BIN(0);
 			wbe = BIN(0000);
 			wrd = BIN(00000);
-			//rrd = BIN(00000);
 			opcode = TO_UINT(0, LEN(opcode));
 			rrd_wr_en <= BIT(0);
 			dma_grant_o <= BIT(0);
@@ -343,7 +337,6 @@ BEGIN
 			IF ( (B(pipe,0) == BIT(1)) and (cpu_wait == BIT(0)) and (flush == BIT(0)) ) THEN 			//IF ( (PORT_BASE(instmem2core_i).data_en == BIT(1)) and (cpu_wait == BIT(0)) ) THEN
 					rinstr <= instr;
 					opcode = RANGE(instr, 6, 0);
-					//gprintf("#MOPCODE %",opcode);
 					rd = RANGE(instr, 11, 7);
 					rs1 = RANGE(instr, 19, 15);
 					rs2 = RANGE(instr, 24, 20);
@@ -425,36 +418,8 @@ BEGIN
 					ENDIF
 			ENDIF
 
-			cpu_wait_early <= opcode_is_load;
-#if 0
-			// Basic code memory model: assume every read request is satisfied
-			IF ( ( ( (cpu_wait == BIT(0) ) ) and (not ( (ropcode == LOAD)
-#ifdef STORE_CPU_WAIT
-					or (ropcode == STORE)
-#endif
-					) ) and (halt == BIT(0)) ) // basic condition for PC progress
-					or ( (PORT_BASE(datamem2core_i).data_en == BIT(1)) and (load_mem == BIT(0)) and (mask_data_en == BIT(0))) // end of load from data mem
-					or ( (PORT_BASE(instmem2core_i).data_en == BIT(1)) and (load_mem == BIT(1)) and (mask_data_en == BIT(0))) //end of load from inst mem
-					or (cpu_wait_on_write == BIT(1)) ) THEN // End of extra cycle on write
-//					or (PORT_BASE(datamem2core_i).data_en == BIT(1)) or (cpu_wait_on_write == BIT(1)) ) THEN
-#else
-
 			// first condition is to stop as soon as possible. Then cpu_wait is raised: unlock when data is available
 			// this new conditions is beacuse of data_en from dma accesses
-
-			cond1 <= BOOL2BIT(( not ( ropcode == LOAD ) or (cpu_wait == BIT(1) ) ));
-			cond2 <= BOOL2BIT(( ( not ( cpu_wait == BIT(1) ) ) // Of course, PC is not updated during cpu_wait
-							or ( (PORT_BASE(datamem2core_i).data_en == BIT(1)) and (load_mem == BIT(0)) and (mask_data_en == BIT(0))) // end of load from data mem
-							or ( (PORT_BASE(instmem2core_i).data_en == BIT(1)) and (load_mem == BIT(1)) and (mask_data_en == BIT(0))) //end of load from inst mem
-							));
-			cond3 <= BOOL2BIT(( ( not ( ropcode == LOAD ) or (cpu_wait == BIT(1) ) )//cpu_wait_early == BIT(0) ) // stop PC when LOAD opcode hits decoding stage
-					and ( ( not ( cpu_wait == BIT(1) ) ) // Of course, PC is not updated during cpu_wait
-							or ( (PORT_BASE(datamem2core_i).data_en == BIT(1)) and (load_mem == BIT(0)) and (mask_data_en == BIT(0))) // end of load from data mem
-							or ( (PORT_BASE(instmem2core_i).data_en == BIT(1)) and (load_mem == BIT(1)) and (mask_data_en == BIT(0))) //end of load from inst mem
-							)
-							));
-			cond4 <= BOOL2BIT( not ( cpu_wait == BIT(1) ) );
-			cond5 <= BOOL2BIT(( (PORT_BASE(datamem2core_i).data_en == BIT(1)) and (load_mem == BIT(0)) and (mask_data_en == BIT(0))));
 
 			load_data_ok = ( ( (PORT_BASE(datamem2core_i).data_en == BIT(1)) and (load_mem == BIT(0)) and (mask_data_en == BIT(0))) // end of load from data mem
 									or ( (PORT_BASE(instmem2core_i).data_en == BIT(1)) and (load_mem == BIT(1))) );
@@ -463,104 +428,27 @@ BEGIN
 					   ( (cpu_wait == BIT(1)) and not load_data_ok )  or
 						(halt == BIT(1)) );//
 
-/*
-			IF ( ( not ( ropcode == LOAD ) or (cpu_wait == BIT(1) ) )//cpu_wait_early == BIT(0) ) // stop PC when LOAD opcode hits decoding stage
-					and ( ( not ( cpu_wait == BIT(1) ) ) // Of course, PC is not updated during cpu_wait
-							or ( (PORT_BASE(datamem2core_i).data_en == BIT(1)) and (load_mem == BIT(0)) and (mask_data_en == BIT(0))) // end of load from data mem
-							or ( (PORT_BASE(instmem2core_i).data_en == BIT(1)) and (load_mem == BIT(1)) and (mask_data_en == BIT(0))) //end of load from inst mem
-							)
-							) THEN
-							*/
-/*
-			IF ( ( not ( ropcode == LOAD) ) or
-					( (cpu_wait == BIT(1)) and
-							( ( (PORT_BASE(datamem2core_i).data_en == BIT(1)) and (load_mem == BIT(0)) and (mask_data_en == BIT(0))) // end of load from data mem
-														or ( (PORT_BASE(instmem2core_i).data_en == BIT(1)) and (load_mem == BIT(1)) and (mask_data_en == BIT(0))) ) ) ) THEN
-*/
+
 			IF (not stop_PC) THEN
-#endif
 				rdbg <= BIT(1);
 				pipe <= ( RANGE(pipe, HI(pipe)-1, 0) & BIT(1) );
 				PCp <= PC;
 				next_PC = PC + TO_UINT(4, LEN(PC));
 				inst_cs_n <= BIT(0);
-				RESET(cpu_stuck_cnt);
 			ELSE
-				IF (cpu_stuck_cnt == BIN(11111)) THEN // HORRIBLE workaround trial for broken pipeline
-					//blk2mem_t0.cs_n <= BIT(0);
-				ELSE
-				cpu_stuck_cnt <= cpu_stuck_cnt + 1;
-
-				ENDIF
-				rdbg <= BIT(0);
+			rdbg <= BIT(0);
 				inst_cs_n <= BIT(0); // Set 1 here is wrong when reading from instruction memory!!!! -> no cs_n means no instruction read after read
-			ENDIF
-
-			IF (cpu_stuck_cnt < BIN(00011)) THEN
-			//dbg_pipe <= (RANGE(dbg_pipe, 27, 0) & (rdbg & cpu_wait & PORT_BASE(datamem2core_i).data_en & BOOL2BIN(ropcode == LOAD)));
-			dbg_pipe <= (RANGE(dbg_pipe, 27, 0) & (rdbg & cpu_wait & blk2mem_t0.cs_n & PORT_BASE(datamem2core_i).data_en) );
 			ENDIF
 
 			blk2mem_t0.wr_n <= BIT(1);
 
 
-#define MEM_REGFILEzz
 			// Execute instruction ----------------------------------------------------------------------
 			IF ( (B(pipe, 1) == BIT(1)) and (cpu_wait == BIT(0)) and (flush == BIT(0)) ) THEN
 
 				exec <= BIT(1);
 				rrinstr <= rinstr;
-#if 1
-				IF (csri == BIT(1)) THEN// CSR instruction with immediate arg.
-					op1 = RESIZE(rrs1, LEN(op1));
-					rop1_rf <= RESIZE(rrs1, LEN(op1));
-				ELSE
-#ifdef MEM_REGFILE
-				IF ( (rrrd == rrs1) and (rrd_wr_en == BIT(1)) ) THEN
-					op1 = rrd_wr;
-				ELSEIF ( (rrrdp == rrs1) and (rrd_wr_enp == BIT(1)) ) THEN
-					op1 = rrd_wrp;
-				ELSE
-					op1= rs1_rd;
-				ENDIF
-#else
-					op1 = regs(TO_INTEGER(rrs1));
-#endif
-					IF ( (rrrd == rrs1) and (rrd_wr_en == BIT(1)) ) THEN
-							rop1_rf <= rrd_wr;
-					ELSEIF ( (rrrdp == rrs1) and (rrd_wr_enp == BIT(1)) ) THEN
-							rop1_rf <= rrd_wrp;
-					ELSE
-						rop1_rf <= rs1_rd;
-					ENDIF
 
-				ENDIF
-
-				IF ( use_immediate == BIT(1) ) THEN
-					op2 = rimmediate;
-					rop2_rf <= rimmediate;
-				ELSE
-#ifdef MEM_REGFILE
-				IF ((rrrd == rrs2) and (rrd_wr_en == BIT(1))) THEN
-					op2 = rrd_wr;
-				ELSEIF ((rrrdp == rrs2) and (rrd_wr_enp == BIT(1)) ) THEN
-					op2 = rrd_wrp;
-				ELSE
-					op2 = rs2_rd;
-				ENDIF
-#else
-					op2 = regs(TO_INTEGER(rrs2));
-#endif
-					IF ((rrrd == rrs2) and (rrd_wr_en == BIT(1))) THEN
-						rop2_rf <= rrd_wr;
-					ELSEIF ((rrrdp == rrs2) and (rrd_wr_enp == BIT(1)) ) THEN
-						rop2_rf <= rrd_wrp;
-					ELSE
-						rop2_rf <= rs2_rd;
-					ENDIF
-				ENDIF
-
-#else
 				IF (csri == BIT(1)) THEN// CSR instruction with immediate arg.
 					op1 = RESIZE(rrs1, LEN(op1));
 				ELSE
@@ -571,11 +459,9 @@ BEGIN
 				ELSE
 					op2 = regs(TO_INTEGER(rrs2));
 				ENDIF
-#endif
+
 				rop1 <= op1;
 				rop2 <= op2;
-				//rop1_rf <= rs1_rd;
-				//rop2_rf <= rs2_rd;
 
 				// Arithmetic operations and results
 				add_res = EXT(op1, LEN(add_res)) + EXT(op2, LEN(add_res));
@@ -644,7 +530,7 @@ BEGIN
 							//ELSE
 							//	trap = BIT(1); cause = ILLINSTR;
 							//ENDIF
-								#ifdef NONREG
+#ifdef NONREG
 								IF ( B(regs(3), 0) == BIN(1)) THEN  // program end
 										halt <= BIT(1);
 								ENDIF
@@ -720,10 +606,7 @@ BEGIN
 						blk2mem_t0.wr_n <= BIT(0);
 						blk2mem_t0.be <= wbe;
 						blk2mem_t0.data <= SHIFT_LEFT(regs(TO_INTEGER(rrs2)), TO_INTEGER(nshift & BIN(000)));
-#ifdef STORE_CPU_WAIT
-						cpu_wait <= BIT(1);//opcode_is_load; //optimize this later on
-						cpu_wait_on_write <= BIT(1);//opcode_is_load;
-#endif
+
 					CASE(CASE_LUI) rd_val = rimmediate;
 					CASE(CASE_AUIPC) rd_val = rimmediate; // Pc added at decoding stage
 					CASE(CASE_JAL) next_PC = rimmediate; rd_val = PCp; flush <= BIT(1); pipe <= TO_UINT(0, LEN(pipe));ropcode <= TO_UINT(0, LEN(ropcode));
@@ -748,8 +631,9 @@ BEGIN
 					blk2mem_t0 <= dma_request_i; // mem bus is free: transmit dma requests
 					dma_grant_o <= not PORT_BASE(dma_request_i).cs_n; // And signal access is granted
 					rcan_grant <= BIT(1);
+				ELSE
+					rcan_grant <= BIT(0);
 				ENDIF
-				rcan_grant <= BIT(1);
 
 				wrd = rrd;
 			ELSE // exec inst
@@ -757,6 +641,9 @@ BEGIN
 				blk2mem_t0.cs_n <= BIT(1);
 				exec <= BIT(0);
 				rd_val = BIN(10101010010101011010101001010101);
+				blk2mem_t0 <= dma_request_i; // mem bus is free: transmit dma requests
+				dma_grant_o <= not PORT_BASE(dma_request_i).cs_n; // And signal access is granted
+				rcan_grant <= BIT(1);
 			ENDIF
 
 			load_mem <= load_mem0;// Delay so that load_mem is not 1 just after load execution (this would trigger pipeline resume when accessing instruction memory)
@@ -859,13 +746,10 @@ BEGIN
 						RESET(rfunct3);
 						RESET(rrd);
 						// \this fixed the reboot-on-load
-
-				// ok*/
 						RESET(rwb);
 						RESET(funct3wb);
 						RESET(rshiftwb);
 						mask_data_en <= BIT(0);
-				// ok*/
 						rtrap <= BIT(0);
 						priv <= BIN(11); // Machine mode is default
 						load_mem <= BIT(0);

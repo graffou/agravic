@@ -2,7 +2,7 @@
 
 HW development platform in C++, NOT HLS but hardware-level C++ (VHDL generation via C preprocessor, HW simulation in C++).
 Arduino Vidor target (with HDMI console output).
-Risc-V small SoC.
+Risc-V small SoC (simple UART + DMA + HDMI console peripherals).
 Video demo of the SoC running on the Arduino Vidor: https://youtu.be/4wAXtRFF0tc
 (blurry video and awful speech inside ;)
 
@@ -11,10 +11,9 @@ The Risc-V tiny SoC HW can now be downloaded to the Arduino Vidor FPGA developme
 HDMI console mode (with programmable fonts) available via the micro-HDMI connector
 The test firmware runs on the risc-V core on the cyclone-10 FPGA.
 The HW HDMI console offers some means of SW and HW debug. 
-Basic version of the "agravic invaders" FW, with pacific invaders who don't even drop a bomb. Anyway, you can't send them any missile either ;)
-You just can move your ship  right to left using 's' and 'd' keys (with a Putty terminal open for serial ccommunication w/ the Vidor board).
+"agravic invaders" is a space invaders basic clone FW, fully written in bare-metal C++, and is now playable.
 
-###To build the HW
+### To build the HW
 * A linux system is preferred
 * You need a native g++ compiler, verions 7.4 to 8
 * You need to have quartus installed
@@ -30,11 +29,10 @@ You just can move your ship  right to left using 's' and 'd' keys (with a Putty 
     go run make_composite_binary.go  -i ../../RTL/Source/top.ttf:1:512 -o app.h -t 1 > signature.h   
 * In the same directory, open Agravic.ino in Arduino IDE
 * Make sure you have the Arduino libraries for the Arduino mkr4000 Vidor board. If not, run the Arduino IDE board manager and download them. 
-* The HW 
-* When done, select the Arduino mkr4000 vidor board, /dev/ttyACM0 port (or whatever), and programme USBAsp. Then, download the code.
+* When done, select the Arduino mkr4000 vidor board, /dev/ttyACM0 port (or whatever), and programmer as USBAsp. Then, upload the code.
 * You should see the GIORNO CORE prompt out of the Vidor HDMI interface (requires a micro HDMI -> HDMI cable)
 
-###To build and load the risc-V firmware
+### To build and load the risc-V firmware
 * Go to the FIRMWARE folder
 * Edit the Makefile to set the actual path of your risc-V toolchain
 * Type make
@@ -42,15 +40,15 @@ You just can move your ship  right to left using 's' and 'd' keys (with a Putty 
 * Alternatively, build the invader example. Type:
 * make -f Makefile_invaders
 * Install putty (sudo apt-get install putty on ubuntu platforms)
-* Open putty. Configure putty for a Serial, 115200 bauds session using /dev/ttyACM0 device (the Vidor board might show up as the /dev/ttyACM1 or /dev/ttyUSB* device). Opening putty seems to be required for proper serial configuration.
+* Open putty. Configure putty for a Serial, 115200 bauds session using /dev/ttyACM0 device (the Vidor board might show up as the /dev/ttyACM1 or /dev/ttyUSB* device). Opening putty is sometimes required for proper serial configuration.
 * The FW is loaded via the USB serial port of the Arduino Vidor (the arduino FW mirrors it to the HW UART of the Risc-V SoC)
 * from the FIRMWARE directory:
-* sudo dd if=led.bin of=/dev/ttyACM0
-* or sudo dd if=invaders.bin of=/dev/ttyACM0 for the agravic invaders
-* The HDMI console screen should turn blue during code download
-* The code is loaded: it displays a few stange messages then waits for serial transactions. Type characters in the putty console, they should show up in the HDMI console. If loading did not went well, the console might turn blue for a while, and you will see some hex data (this is the risc-V trace in case of trap).
-* Alternatively, you should see the agravic invaders
+* use the load script to download the binary file: 
+  load invaders.bin
+* The HDMI console screen should (shortly) turn blue during FW upload
+* If the firmware does not load properly, the risc-V core might go into trap. The HDMI console then shows the execution trace, and might even turn red. Reset the board, then check that putty is open and set properly.
 * Code can be reloaded without resetting the Vidor board. However, I am aware that there might be some glitches (the HW is not properly resetted after code loading)
+* To play agravic invaders, bring the putty window to the front. Use the 's' and 'd' keys to move your ship, space bar to fire.
 
 ## What is Agravic ?
 Agravic is a framework that enables writing VHDL-like code inside a C++ program.
@@ -60,7 +58,7 @@ The syntax has been chosen to enable VHDL and C++ code generation using the C pr
 
 **So, agravic enables rtl code writing without the expense of EDA tools.**
 Furthermore, C++ simulation of agravic designs should be faster than classical rtl simulation. 
-But the platform is not optimized yet, and it is is sure that designs with low flip-flop activity are slower than necessary.
+But the platform is not optimized yet, and it is sure that designs with low flip-flop activity are slower than necessary.
 This is why memory models are not the same for simulation as for VHDL generation (altera memory inferring requires describing memories as wide arrays of flip-flops, with inherently low toggling rate). 
 
 ### Limitations

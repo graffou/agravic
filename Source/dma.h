@@ -285,14 +285,16 @@ ELSEIF ( EVENT(clk_dma) and (clk_dma == BIT(1)) ) THEN
 				ENDIF
 				PORT_BASE(uart_dma_o).data_en <= BIT(0);
 
-			ELSEIF ( (dma_channels(idx).state == dma_wait_for_rd_grant) ) THEN
+			ELSEIF ( (dma_channels(idx).state == dma_wait_for_rd_grant) ) THEN // state to suppress when bus is e.g AHB
 				IF (core_grant_i == BIT(1)) THEN
 					dma_channels(idx).state <= dma_wait_for_rd1;
 					PORT_BASE(core_request_o).cs_n <= '1';
 				ENDIF
-			ELSEIF ( (dma_channels(idx).state == dma_wait_for_rd1) ) THEN
-				dma_channels(idx).tmp_data <= PORT_BASE(mem2dma_i).data;
-				dma_channels(idx).state <= dma_wait_for_periph_rdy;
+			ELSEIF ( (dma_channels(idx).state == dma_wait_for_rd1) ) THEN // Wait for mem data being available
+				IF (PORT_BASE(mem2dma_i).data_en == BIT(1)) THEN
+					dma_channels(idx).tmp_data <= PORT_BASE(mem2dma_i).data;
+					dma_channels(idx).state <= dma_wait_for_periph_rdy;
+				ENDIF
 			ELSEIF ( (dma_channels(idx).state == dma_wait_for_periph_rdy) ) THEN
 				IF ( B(periph_data_rdys, TO_INTEGER(dma_channels(idx).sink)) == BIT(1) ) THEN	// peripheral ready to receive
 					dma_channels(idx).tsfr_sz <= dma_channels(idx).tsfr_sz - 1;
@@ -324,11 +326,12 @@ ELSEIF ( EVENT(clk_dma) and (clk_dma == BIT(1)) ) THEN
 			ELSEIF ( (dma_channels(idx).state == dma_wait_for_ready) ) THEN	// let extra cycle to the peripheral to set its ready
 				dma_channels(idx).state <= dma_wait_for_periph_rdy; // wait for next periph data
 				PORT_BASE(uart_dma_o).data_en <= BIT(0);
-			ELSE // idle !!!!! NOOOOO !!!! not coming here if idle
+			ELSE // THIS IS PRE_IDLE STATE idle !!!!! NOOOOO !!!! not coming here if idle
 				IF (dma_channels(idx).source == BIN(000)) THEN
-					periph_data := EXT(PORT_BASE(uart_dma_i).data, 32);
+					//periph_data := EXT(PORT_BASE(uart_dma_i).data, 32);
 					PORT_BASE(uart_dma_o).data_en <= BIT(0);
 				ENDIF
+				dma_channels(idx).state <= dma_idle;
 
 			ENDIF
 		ELSE // idle

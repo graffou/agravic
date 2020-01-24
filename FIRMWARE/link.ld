@@ -84,12 +84,19 @@ SECTIONS
     PROVIDE_HIDDEN (__fini_array_end = .);
   } >rom
 
-  _sidata = LOADADDR(.data);
+  _sidata = LOADADDR(.sdata);
+
+   .sdata : {
+        . = ALIGN(4);
+         sdata  =  .;
+        _sdata  =  .;
+       *(.sdata);
+        *(.sdata.*)
+    } >ram AT> rom
 
     .data : {
         . = ALIGN(4);
-        sdata  =  .;
-        _sdata  =  .;
+
         *(.data);
         *(.data.*)
         edata  =  .;

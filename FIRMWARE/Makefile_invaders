@@ -8,7 +8,7 @@
 # -munaligned-access -mno-unaligned-access
 
 PROGRAM ?= invaders
-PROGRAM_CFLAGS = -Wall -g -Os -Warray-bounds
+PROGRAM_CFLAGS = -Wall -g -Os -Warray-bounds 
 ARCH = rv32i
 # ARCH = rv32im # to disable compressed instructions
 SRCS = $(PROGRAM).cpp

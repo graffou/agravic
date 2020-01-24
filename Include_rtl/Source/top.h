@@ -45,6 +45,7 @@ DECL_PORTS(
 		PORT(dbg_i, UINT(33), IN), // for code loading
 		PORT(reset_n, RST_TYPE, IN),
 		PORT(core2mem_i, blk2mem_t, IN), // reg access
+		PORT(mem2core_o, mem2blk_t, OUT), // reg access
 		PORT(pclk_o, BIT_TYPE, OUT),
 		PORT(red_o, BIT_TYPE, OUT),
 		PORT(green_o, BIT_TYPE, OUT),
@@ -171,6 +172,7 @@ SIG(datamem2core, mem2blk_t);
 SIG(all2core, mem2blk_t);
 SIG(uart2core, mem2blk_t);
 SIG(dma2core, mem2blk_t);
+SIG(hdmi2core, mem2blk_t);
 SIG(dbg, UINT(8));
 SIG(gpios, UINT(32));
 SIG(gate_cell, BIT_TYPE);
@@ -227,6 +229,7 @@ MAPPING(
 		PM(trap_i, trap),
 		PM(dbg_i, dbg33),
 		PM(core2mem_i, core2datamem),
+		PM(mem2core_o, hdmi2core),
 		//PM(debug, debug_o)
 		PM(blue_o, blue_o),
 		PM(green_o, green_o),
@@ -345,8 +348,8 @@ COMB_PROCESS(1, clk_mcu)
 	tb2core.data_en <= BIT(0);
 #endif
 
-	all2core.data <= ( datamem2core.data or uart2core.data or dma2core.data or tb2core.data);
-	all2core.data_en <= ( datamem2core.data_en or uart2core.data_en or dma2core.data_en or tb2core.data_en);
+	all2core.data <= ( datamem2core.data or uart2core.data or dma2core.data or tb2core.data or hdmi2core.data);
+	all2core.data_en <= ( datamem2core.data_en or uart2core.data_en or dma2core.data_en or tb2core.data_en or hdmi2core.data_en);
 
 
 	// A bit tricky for inouts

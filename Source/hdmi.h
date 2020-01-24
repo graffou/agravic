@@ -17,6 +17,7 @@ DECL_PORTS(
 		PORT(trap_i, BIT_TYPE, IN), //
 		PORT(dbg_i, UINT(33), IN), //
 		PORT(core2mem_i, blk2mem_t, IN), // reg access
+		PORT(mem2core_o, mem2blk_t, OUT), // reg access
 		PORT(pclk_o, BIT_TYPE, OUT),
 		PORT(red_o, BIT_TYPE, OUT),
 		PORT(green_o, BIT_TYPE, OUT),
@@ -129,28 +130,23 @@ SIG(buf_start_line, UINT(8));
 SIG(buf_end_line, UINT(8));
 SIG(buf_addr, UINT(13));
 SIG(buf_wen, BIT_TYPE);
+SIG(buf_rd, BIT_TYPE); // for buf read
+SIG(buf_rdp, BIT_TYPE);
+SIG(buf_rdpp, BIT_TYPE);
 SIG(test, BIT_TYPE);
 SIG(line_div12, UINT(4));
 
-SIG(font_addr, UINT(12));
-SIG(font_wen, BIT_TYPE);
-SIG(font_data, UINT(8));
-SIG(font_wdata, UINT(8));
-SIG(font_waddr, UINT(12));
-SIG(font_we, BIT_TYPE);
-SIG(font_we_release, BIT_TYPE);
+
 
 SIG(buf_line, UINT(8));
 SIG(buf_char, UINT(8));
 SIG(buf_cur_line, UINT(8));
 SIG(buf_cur_col, UINT(8));
 SIG(rbuf_char, UINT(8));
+SIG(rbuf_char_rd, UINT(8)); // for core read op.
 SIG(wbuf_char2, UINT(8));
 SIG(wbuf_char, UINT(8));
-SIG(wbuf_pos, UINT(16));
-SIG(wbuf_pos_en, BIT_TYPE);
-SIG(wbuf_char_clk_core, UINT(8));
-SIG(wbuf_char_clk_core_keep, UINT(1));
+
 SIG(char_line, UINT(8));
 SIG(buf_col, UINT(8));
 SIG(char_idx, UINT(8));
@@ -172,11 +168,26 @@ SIG(PC, UINT(32));
 SIG(PCp, UINT(32));
 SIG(PC_write, UINT(5));
 SIG(stop, UINT(13));
-SIG(blinking_cursor, BIT_TYPE);
+SIG(console_mode, UINT(1));
 SIG(cls, BIT_TYPE);
 SIG(cls_ack, BIT_TYPE);
 SIG(clsp, BIT_TYPE);
 
+// clk domain clk_core
+SIG(wbuf_pos, UINT(16));
+SIG(wbuf_pos_en, BIT_TYPE);
+SIG(wbuf_char_clk_core, UINT(8));
+SIG(wbuf_char_clk_core_keep, UINT(1));
+SIG(font_addr, UINT(12));
+SIG(font_wen, BIT_TYPE);
+SIG(font_data, UINT(8));
+SIG(font_wdata, UINT(8));
+SIG(font_waddr, UINT(12));
+SIG(font_we, BIT_TYPE);
+SIG(font_we_release, BIT_TYPE);
+SIG(rbuf_ok, BIT_TYPE);
+SIG(rbuf_wait, BIT_TYPE);
+SIG(reset_mem2core, BIT_TYPE);
 
 CONST(buf_idle, UINT(4)) := TO_UINT(0, 4);
 // init message: "GIORNO CORE\n"
@@ -300,6 +311,9 @@ BEGIN
 		font_we_release <= BIT(0);
 		clsp <= BIT(0);
 		cls_ack <= BIT(0);
+		buf_rd <= BIT(0);
+		buf_rdp <= BIT(0);
+		buf_rdpp <= BIT(0);
 
 	ELSEIF ( EVENT(clk_pix) and (clk_pix == BIT(1)) ) THEN
 
@@ -333,51 +347,45 @@ BEGIN
 		rvsyncp <= rvsync;
 		rin_frame <= BOOL2BIN( ( (vcnt < vres) ) );
 		IF (rde == BIN(1)) THEN
-			red := RANGE(hcnt, 7, 0) + RANGE(rcnt, 15, 8);
-			green := RANGE(hcnt, 7, 0) + RANGE(gcnt, 15, 8);
-			blue := RANGE(vcnt, 7, 0) + RANGE(bcnt, 15, 8);
 
-
-			//rgb_data <= (red & green & blue);
+			// Retrieve rgb data from char 8-bit line
 			IF ( (B(char_line, 7) xor blink)  == BIT(1)) THEN
 				rgb_data <= fg_color;//BIN(010000000100000001000000);//fg_color;
 			ELSE
 				rgb_data <= bg_color;//BIN(000001000100000001000000);//fg_color;
-				//rgb_data <= bg_color;
 			ENDIF
-			//IF (vcnt > TO_UINT(256, LEN(vcnt))) THEN
-			//	rgb_data <= ( RANGE(hcnt, 7, 0) & RANGE(hcnt, 7, 0) & RANGE(vcnt, 7, 0) );
-			//ENDIF
-			//rgb_data <= ( RANGE(gcnt, 15, 8) & RANGE(bcnt, 13, 6) & RANGE(rcnt, 9, 2) );
+			// shift char line data
 			char_line <= SHIFT_LEFT(char_line, 1);
-		ELSE
+		ELSE // Not pixel data, send control bits instead (hsync, vsync...)
 			ctrl_word3:= ( (not rhsync) & rhsync & (not rvsync) );
 			ctrl_word := SXT( (ctrl_word3), 8);
 			rgb_data <= (ctrl_word & ctrl_word & ctrl_word);//( CTRL00 & CTRL00 & ctrl_word);
 		ENDIF
 
-
-		ctrl_data <= (not rde);
-
+		ctrl_data <= (not rde); // used to modifiy TMDS encoding for ctrl data (violates XOR/XNOR rule)
 
 
-		buf_wen <= BIT(1);
-		buf_cur_line_p1 := buf_cur_line + 1;
+		buf_wen <= BIT(1); // default, no write
+		buf_rd <= BIT(0);
+		buf_rdp <= buf_rd;
+		buf_rdpp <= buf_rdp;
+		buf_cur_line_p1 := buf_cur_line + 1; // counters combinational ops.
 		buf_cur_col_p1 := buf_cur_col + 1;
 		IF (buf_cur_line == TO_UINT(39, LEN(buf_line))) THEN // wrap buffer
 			buf_cur_line_p1	:= TO_UINT(0, LEN(buf_line));
 		ENDIF
 
-		IF (RANGE(hcnt, 2, 0) == BIN(100)) THEN
+		IF (RANGE(hcnt, 2, 0) == BIN(100)) THEN // init buffer read pipe (syncs read pipe and pixel clock)
 			buf_read_pipe <= BIN(0001);
 			buf_addr <= (EXT( (buf_line * TO_UINT(80, 7)), LEN(buf_addr)) + EXT(buf_col, LEN(buf_addr)) );
-		ELSEIF ( not (wbuf_char == BIN(00000000) ) ) THEN // something to write to buffer
-			//bg_cnt <= bg_cnt + TO_UINT(4, 8);
-			//bg_color <= (bg_cnt & bg_cnt & bg_cnt);
+		ELSEIF ( not (wbuf_char == BIN(00000000) ) ) THEN // something to write to buffer: can do it now
 			wbuf_char <= BIN(00000000);
-			wbuf_char2 <= wbuf_char;
-			//gprintf("#MXXX wen");
-			buf_wen <= BIT(0);
+			wbuf_char2 <= wbuf_char; // memory input
+			IF ( not (RANGE(wbuf_char, 7, 1) == BIN(0000000) ) ) THEN // wbuf_char = 00000001 is for buffer read !!!!!!!!!
+				buf_wen <= BIT(0);
+			ENDIF
+			buf_rd <= BIT(1); // Buffer read pipe, also when writing (reads old data)
+
 			test <= BIT(0);
 			buf_addr <= (EXT( (buf_cur_line * TO_UINT(80, 7)), LEN(buf_addr)) + EXT(buf_cur_col, LEN(buf_addr)) );
 			// end line
@@ -392,6 +400,11 @@ BEGIN
 				buf_cur_col <= buf_cur_col_p1;
 			ENDIF
 
+		ENDIF
+
+		// For buffer read by core
+		IF (buf_rdp == BIT(1)) THEN
+			rbuf_char_rd <= buf_char;
 		ENDIF
 
 
@@ -409,6 +422,7 @@ BEGIN
 			buf_cur_line <= RANGE(wbuf_pos, 15, 8);
 		ENDIF
 		IF ( not (init_cnt == TO_UINT(0, LEN(init_cnt))) ) THEN
+			// Write init msg 'giorno core'
 			IF (B(init_cnt, 0) == BIT(1)) THEN
 				wbuf_char <= init_msg( TO_INTEGER( BIN(1101) - RANGE(init_cnt, 4, 1)) );
 				dbg_init_cnt <= EXT( (BIN(1101) - RANGE(init_cnt, 4, 1)), 5);
@@ -416,6 +430,7 @@ BEGIN
 			ENDIF
 			init_cnt <= init_cnt - 1;
 		ELSEIF ( (PC_write == TO_UINT(0, 5)) ) THEN
+			// Start write trace info
 			//PC <= PC_i;
 
 			IF ( B(PORT_BASE(dbg_i), 32) == BIT(1)) THEN //and not (RANGE(PORT_BASE(PC_i), 15, 0) == RANGE(PCp, 15, 0))) THEN //and (B(PORT_BASE(PC_i), 29)) == BIT(0) ) and (RANGE(PORT_BASE(PC_i), 28, 16) < stop)) THEN // stall display after trap
@@ -425,7 +440,7 @@ BEGIN
 			ENDIF
 			//trap <= (trap or B(PORT_BASE(PC_i), 31));//trap_i; //!:!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-		ELSE
+		ELSE // Write trace info
 			IF (B(PC_write,0) == BIT(1)) THEN
 				IF (PC_write == BIN(00001)) THEN
 					wbuf_char <= BIN(00001010);
@@ -479,21 +494,19 @@ BEGIN
 		font_we_release <= BIT(0);
 		IF (B(buf_read_pipe, 1) == BIT(1)) THEN // gain access for buffer read
 			rbuf_char <= buf_char;
-			IF (buf_char < BIN(00100000)) THEN
+			IF (buf_char < BIN(00100000)) THEN // font chars not defined
 				tmp := 	TO_UINT(10, 8);
 			ELSE
-				tmp := (buf_char - BIN(00100000));
+				tmp := (buf_char - BIN(00100000)); // defined font chars start at 32 - apply offset
 			ENDIF
-			//IF (tmp > TO_UINT(94, 8)) THEN
-			//	tmp := 	TO_UINT(10, 8);
-			//ENDIF
-			IF (buf_char == TO_UINT(10, 8)) THEN
-				line_blank <= BIN(1);
+
+			IF (buf_char == TO_UINT(10, 8)) THEN // should use tmp ?
+				line_blank <= console_mode;
 			ENDIF
 			//gprintf("#M tmp % addr %", tmp, tmp * TO_UINT(12,4));
 			font_addr <= EXT( (tmp * TO_UINT(12,4)), LEN(font_addr)) + EXT(line_div12, LEN(font_addr));
 
-			ELSE // enable font write
+		ELSE // enable font write
 			IF (font_we == BIT(1)) THEN
 				font_addr <= font_waddr;
 				font_wen <= BIT(0);
@@ -501,15 +514,17 @@ BEGIN
 			ENDIF
 
 		ENDIF
+		// Detect end of line and toggle blinking cursor
 		IF (B(buf_read_pipe, 2) == BIT(1)) THEN
 			IF	( (buf_line == buf_cur_line) and (buf_col == buf_cur_col) ) THEN
-				blink <= (B(blink_cnt, 5) and blinking_cursor);
-				line_blank <= BIN(1);
+				blink <= (B(blink_cnt, 5) and B(console_mode, 0));
+				line_blank <= console_mode;
 			ELSE
 				blink <= BIT(0);
 			ENDIF
 		ENDIF
 
+		// Last pipeline stage: get 8-bit font data
 		IF (B(buf_read_pipe, 3) == BIT(1)) THEN
 			IF ( (line_blank == BIN(1)) or (buf_blank == BIN(1)) ) THEN
 				RESET(char_line);
@@ -533,7 +548,7 @@ BEGIN
 				ENDIF
 
 				IF (buf_line == buf_end_line) THEN
-					buf_blank <= BIN(1);
+					buf_blank <= console_mode;
 				ENDIF
 			ELSEIF (rin_frame == BIN(1)) THEN
 				line_div12 <= line_div12 + 1;
@@ -585,11 +600,16 @@ IF (reset_n == BIT(0)) THEN
 	wbuf_char_clk_core <= BIN(00000000);
 	wbuf_char_clk_core_keep <= BIN(0);
 	font_we <= BIT(0);
-	blinking_cursor <= BIT(1);
+	console_mode <= BIN(1);
 	cls <= BIT(0);
 	RESET(wbuf_pos);
 	wbuf_pos_en <= BIT(0);
-
+	rbuf_ok <= BIT(0);
+	rbuf_wait <= BIT(0);
+	PORT_BASE(mem2core_o).data <= TO_UINT(0, 32);
+	PORT_BASE(mem2core_o).data_en <= BIT(0);
+	reset_mem2core <= BIT(0);
+	rbuf_wait <= BIT(0);
 ELSEIF ( EVENT(clk_core) and (clk_core == BIT(1)) ) THEN
 	wbuf_char_clk_core_keep <= BIN(0);
 
@@ -597,9 +617,12 @@ ELSEIF ( EVENT(clk_core) and (clk_core == BIT(1)) ) THEN
 	IF (font_we_release == BIT(1)) THEN
 		font_we <= BIT(0);
 	ENDIF
+	rbuf_ok <= (rbuf_ok or buf_rdpp); //
+	PORT_BASE(mem2core_o).data <= TO_UINT(0, 32);
+	PORT_BASE(mem2core_o).data_en <= BIT(0);
 
-	IF ( ( PORT_BASE(core2mem_i).cs_n == BIT(0) ) and ( PORT_BASE(core2mem_i).wr_n == BIT(0) ) ) THEN
-		IF ( (PORT_BASE(core2mem_i).addr == BIN(1011111111110)) ) THEN
+	IF ( ( PORT_BASE(core2mem_i).cs_n == BIT(0) ) and (PORT_BASE(core2mem_i).addr == BIN(1111111111110)) ) THEN//( PORT_BASE(core2mem_i).wr_n == BIT(0) ) ) THEN
+		IF ( ( PORT_BASE(core2mem_i).wr_n == BIT(0) ) ) THEN //(PORT_BASE(core2mem_i).addr == BIN(1011111111110)) ) THEN
 			byte := RANGE(PORT_BASE(core2mem_i).data, 7, 0);
 			cmd := RANGE(PORT_BASE(core2mem_i).data, 31, 24);
 			wbuf_pos_en <= BIT(0);
@@ -609,8 +632,8 @@ ELSEIF ( EVENT(clk_core) and (clk_core == BIT(1)) ) THEN
 				wbuf_char_clk_core <= byte;//RANGE(PORT_BASE(core2mem_i).data, 7, 0);
 				//gprintf("#MReceived %", to_hex(TO_INTEGER(PORT_BASE(core2mem_i).data)));
 			ELSEIF (B(cmd, 7) == BIT(1)) THEN // printf commands
-			ELSEIF (RANGE(cmd, 3, 0) == BIN(0011)) THEN // toggle blinking cursor
-				blinking_cursor <= (not blinking_cursor);
+			ELSEIF (RANGE(cmd, 3, 0) == BIN(0011)) THEN // set console mode
+				console_mode <= RANGE(byte, 0, 0);
 			ELSEIF (RANGE(cmd, 3, 0) == BIN(0010)) THEN // erase char buffer !! NOT IMPLEMENTED
 				cls <= BIT(1);
 			ELSEIF (RANGE(cmd, 3, 0) == BIN(0001)) THEN // write font data
@@ -621,14 +644,33 @@ ELSEIF ( EVENT(clk_core) and (clk_core == BIT(1)) ) THEN
 				wbuf_pos <= RANGE(PORT_BASE(core2mem_i).data, 23, 8);
 				wbuf_char_clk_core <= byte;//RANGE(PORT_BASE(core2mem_i).data, 7, 0);
 				wbuf_pos_en <= BIT(1);
+				IF ( not (byte == BIN(00000000)) ) THEN // no write nor read command, just place cursor
+					rbuf_ok <= BIT(0);
+				ENDIF
 			ENDIF
-
+		ELSE // READ: wait for data
+			rbuf_wait <= BIT(1);
 		ENDIF
 	ELSEIF (wbuf_char_clk_core_keep == BIN(0)) THEN
 		wbuf_char_clk_core <= BIN(00000000);
 		wbuf_pos_en <= BIT(0);
 		cls <= BIT(0);
 	ENDIF
+
+	IF ( ( rbuf_wait == BIT(1)) and (rbuf_ok == BIT(1) ) ) THEN // data available
+		PORT_BASE(mem2core_o).data <= EXT(rbuf_char_rd, 32);
+		PORT_BASE(mem2core_o).data_en <= BIT(1);
+		reset_mem2core <= BIT(1);
+		rbuf_wait <= BIT(0);
+		// don't reset rbuf_ok, this would lock the core in case of consecutive reads
+	ENDIF
+
+	IF (reset_mem2core == BIT(1)) THEN // better than 'default value' for vcd / sim time
+		PORT_BASE(mem2core_o).data <= TO_UINT(0, 32);
+		PORT_BASE(mem2core_o).data_en <= BIT(0);
+		reset_mem2core <= BIT(0);
+	ENDIF
+
 ENDIF
 END_PROCESS
 

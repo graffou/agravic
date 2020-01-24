@@ -80,21 +80,21 @@ BEGIN
 			// Timer ----------------
 			// The mtime / mtimecmp on risc-V spec does not make sense to me
 			//
-			IF (PORT_BASE(core2mem_i).addr == BIN(1011111111100)) THEN // timer write timeout
+			IF (PORT_BASE(core2mem_i).addr == BIN(1111111111100)) THEN // timer write timeout
 				//gate_cell <= B(PORT_BASE(core2mem_i).data, 0);
 				cnt <= PORT_BASE(core2mem_i).data;
 				cnt_started <= BIT(0);
 				timer_IT_o <= BIT(0); // reset interrupt line
 			ENDIF
 			// --------------
-			IF (PORT_BASE(core2mem_i).addr == BIN(1011111111111)) THEN
+			IF (PORT_BASE(core2mem_i).addr == BIN(1111111111111)) THEN
 				//gate_cell <= B(PORT_BASE(core2mem_i).data, 0);
 				gpios_o <= PORT_BASE(core2mem_i).data;
 #ifndef VHDL
 				gprintf("#Ugpios %Y", PORT_BASE(core2mem_i).data);
 #endif
 			ENDIF
-			IF (PORT_BASE(core2mem_i).addr == BIN(1011111111110)) THEN
+			IF (PORT_BASE(core2mem_i).addr == BIN(1111111111110)) THEN
 				DBG := RANGE(PORT_BASE(core2mem_i).data, 7, 0);
 				dbg_o <= DBG;//RANGE(PORT_BASE(core2mem_i).data, 7, 0);
 
@@ -104,7 +104,7 @@ BEGIN
 				uint32_t val = TO_INTEGER(PORT_BASE(core2mem_i).data);
 				uint32_t code = ( (codep>>28) != 0x8 ) ? val & 0xffffff00 : 0; // Don't update code if already in coded value: the coded value might trig anything
 				//if (code != 0) gprintf("#MCode % val %", to_hex(code), c);
-				gprintf("#BIn %R Write %R", to_hex(TO_INTEGER(PORT_BASE(core2mem_i).data)), c);
+				gprintf("#BIn %R Write %R state %R", to_hex(TO_INTEGER(PORT_BASE(core2mem_i).data)), c, print_state);
 				if (print_state == 0)
 				{
 					if ( (c == '#') or (c == '@') )

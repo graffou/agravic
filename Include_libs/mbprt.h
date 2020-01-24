@@ -771,6 +771,37 @@ void shell(const T* s)//stringstream& s)
     system(ss.c_str());
     //s.str("");//Clear shell cmd
 }
+template <class T>
+gstring to_bin(T val, int nbins = 0)
+{
+
+gstring x;
+unsigned int z = val;
+
+if (nbins == 0)
+  {
+    while (z)
+{
+  z >>= 1;
+  nbins++;
+}
+  }
+
+z = val;
+
+int nn = 1;
+while ( (nn <= nbins) || (nn == 1) )
+  {
+    int u = (z >> (nbins-1)) & 1;
+    //gprintf("%R % - ", u);
+    x.append_char(char(u + 48));
+    z = z << 1;
+    nn++;
+  }
+//gprintf("dec2hex % nbins % : % \n", val, nbins, x);
+return x;
+}
+
 
 template <class T>
 gstring to_hex(T val, int nbins = 0)

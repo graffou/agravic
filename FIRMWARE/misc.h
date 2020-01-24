@@ -1,6 +1,6 @@
 #define BIT_REVERSE(a) ( ((a&0x80)>>7) | ((a&0x40)>>5) | ((a&0x20)>>3) | ((a&0x10)>>1) | ((a&8)<<1) | ((a&4)<<3) | ((a&2)<<5) | ((a&1)<<7) )
 #define regs (*( struct reg_test_t *)0x40005f00) 
-volatile uint32_t *dbg = (volatile uint32_t *) 0x40005ff8; 
+volatile uint32_t *dbg = (volatile uint32_t *) 0x40007ff8; // 1ffe
 
 volatile uint32_t *var = (volatile uint32_t *) 0x40005ffc;
 volatile uint32_t *timer = (volatile uint32_t *) 0x40005ff0;
@@ -18,6 +18,7 @@ volatile uint32_t *dma = (volatile uint32_t *) 0x40007f80;
 
 
 #define CLK_FIXED_FREQ_HZ (50ULL * 1000 * 1000)
+#define CYCLES_PER_MS (000ULL)
 
 
 /**
@@ -45,4 +46,12 @@ static int usleep_ibex(unsigned long usec) {
 }
 static int usleep(unsigned long usec) {
   return usleep_ibex(usec);
+}
+// quick approximation w/o multiplier
+static int msleep(unsigned long n) {
+	  unsigned long cycles;
+	  cycles = n << 3 ;
+
+	  delay_loop_ibex(cycles);
+	  return 0;
 }

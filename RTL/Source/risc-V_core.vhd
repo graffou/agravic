@@ -293,20 +293,6 @@ begin
       csri <= '0';
      end if;
    end if;
-   cpu_wait_early <= opcode_is_load;
-   cond1 <= BOOL2BIT(( not ( ropcode = LOAD ) or (cpu_wait = '1' ) ));
-   cond2 <= BOOL2BIT(( ( not ( cpu_wait = '1' ) )
-       or ( (datamem2core_i.data_en = '1' ) and (load_mem = '0') and (mask_data_en = '0'))
-       or ( (instmem2core_i.data_en = '1' ) and (load_mem = '1' ) and (mask_data_en = '0'))
-       ));
-   cond3 <= BOOL2BIT(( ( not ( ropcode = LOAD ) or (cpu_wait = '1' ) )
-     and ( ( not ( cpu_wait = '1' ) )
-       or ( (datamem2core_i.data_en = '1' ) and (load_mem = '0') and (mask_data_en = '0'))
-       or ( (instmem2core_i.data_en = '1' ) and (load_mem = '1' ) and (mask_data_en = '0'))
-       )
-       ));
-   cond4 <= BOOL2BIT( not ( cpu_wait = '1' ) );
-   cond5 <= BOOL2BIT(( (datamem2core_i.data_en = '1' ) and (load_mem = '0') and (mask_data_en = '0')));
    load_data_ok := ( ( (datamem2core_i.data_en = '1' ) and (load_mem = '0') and (mask_data_en = '0'))
          or ( (instmem2core_i.data_en = '1' ) and (load_mem = '1' )) );
    stop_PC := ( ( (ropcode = LOAD) and cpu_wait = '0' ) or
@@ -318,17 +304,9 @@ begin
     PCp <= PC;
     next_PC := PC + TO_UNSIGNED(4,PC'length);
     inst_cs_n <= '0';
-    cpu_stuck_cnt <= TO_UNSIGNED(0,cpu_stuck_cnt'length);
    else
-    IF (cpu_stuck_cnt = "11111") then
-    else
-    cpu_stuck_cnt <= cpu_stuck_cnt + 1;
-    end if;
-    rdbg <= '0';
+   rdbg <= '0';
     inst_cs_n <= '0';
-   end if;
-   IF (cpu_stuck_cnt < "00011") then
-   dbg_pipe <= ((dbg_pipe(27 downto 0)) & (rdbg & cpu_wait & blk2mem_t0.cs_n & datamem2core_i.data_en) );
    end if;
    blk2mem_t0.wr_n <= '1' ;
    IF ( (pipe(1) = '1' ) and (cpu_wait = '0') and (flush = '0') ) then
@@ -336,29 +314,13 @@ begin
     rrinstr <= rinstr;
     IF (csri = '1' ) then
      op1 := RESIZE(rrs1, op1'length);
-     rop1_rf <= RESIZE(rrs1, op1'length);
     else
      op1 := regs(TO_INTEGER(rrs1));
-     IF ( (rrrd = rrs1) and (rrd_wr_en = '1' ) ) then
-       rop1_rf <= rrd_wr;
-     elsif ( (rrrdp = rrs1) and (rrd_wr_enp = '1' ) ) then
-       rop1_rf <= rrd_wrp;
-     else
-      rop1_rf <= rs1_rd;
-     end if;
     end if;
     IF ( use_immediate = '1' ) then
      op2 := rimmediate;
-     rop2_rf <= rimmediate;
     else
      op2 := regs(TO_INTEGER(rrs2));
-     IF ((rrrd = rrs2) and (rrd_wr_en = '1' )) then
-      rop2_rf <= rrd_wr;
-     elsif ((rrrdp = rrs2) and (rrd_wr_enp = '1' ) ) then
-      rop2_rf <= rrd_wrp;
-     else
-      rop2_rf <= rs2_rd;
-     end if;
     end if;
     rop1 <= op1;
     rop2 <= op2;
@@ -494,13 +456,17 @@ begin
      blk2mem_t0 <= dma_request_i;
      dma_grant_o <= not dma_request_i.cs_n;
      rcan_grant <= '1' ;
+    else
+     rcan_grant <= '0';
     end if;
-    rcan_grant <= '1' ;
     wrd := rrd;
    else
     blk2mem_t0.cs_n <= '1' ;
     exec <= '0';
     rd_val := "10101010010101011010101001010101";
+    blk2mem_t0 <= dma_request_i;
+    dma_grant_o <= not dma_request_i.cs_n;
+    rcan_grant <= '1' ;
    end if;
    load_mem <= load_mem0;
    IF (cpu_wait_on_write = '1' ) then

@@ -5,9 +5,9 @@ USE_PACKAGE(structures)
 TESTBENCH(tb_t);
 // For now, just implement vhdl and C++ codes separately
 // for clock generation
-
+#ifndef NONREG
 #define UART_LOADING 1
-
+#endif
 #ifdef VHDL
 constant c_clock_period : time = 5 ns;
 constant c_reset_length : time = 20 ns;
@@ -183,6 +183,10 @@ constexpr void run()
 	clk <= BIN(1);
 	reset_n <= BIN(1);
 	SIG_SET_BIT(bmkrD,14, BIT(1));
+
+	uint32_t addr = 0;
+	uint32_t end_addr = 0;
+
 for (int k = 0; k < 1; k++)
 {
 	for (int i = 0; i < 300; i++) {WAIT_5_CLK} // wait for giorno core hdmi msg
@@ -215,8 +219,7 @@ for (int k = 0; k < 1; k++)
 
 	for (int i = 0; i < 32; i++) {WAIT_5_CLK}
 
-	uint32_t addr = 0;
-	uint32_t end_addr = 0;
+
 	while (not code_file.eof() and not(LOAD_PORT.addr == BIN(1011111111111) ))
 	{
 		gprintf("% % \n", LOAD_PORT.addr, BIN(101111111111100));

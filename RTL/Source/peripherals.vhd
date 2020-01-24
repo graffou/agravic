@@ -24,15 +24,15 @@ begin
    timer_IT_o <= '1' ;
   end if;
   IF ( ( core2mem_i.cs_n = '0' ) and ( core2mem_i.wr_n = '0' ) ) then
-   IF (core2mem_i.addr = "1011111111100") then
+   IF (core2mem_i.addr = "1111111111100") then
     cnt <= core2mem_i.data;
     cnt_started <= '0';
     timer_IT_o <= '0';
    end if;
-   IF (core2mem_i.addr = "1011111111111") then
+   IF (core2mem_i.addr = "1111111111111") then
     gpios_o <= core2mem_i.data;
    end if;
-   IF (core2mem_i.addr = "1011111111110") then
+   IF (core2mem_i.addr = "1111111111110") then
     DBG := (core2mem_i.data(7 downto 0));
     dbg_o <= DBG;
    end if;
