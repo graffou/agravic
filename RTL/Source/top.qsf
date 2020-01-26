@@ -197,7 +197,6 @@ set_global_assignment -name VHDL_FILE ddio.vhd
 set_global_assignment -name VHDL_FILE slv_utils.vhd
 set_global_assignment -name VHDL_FILE hdmi.vhd
 set_global_assignment -name VHDL_FILE register_file.vhd
-set_global_assignment -name VHDL_FILE ../clk_gating_cell/synthesis/clk_gating_cell.vhd -library clk_gating_cell
 set_global_assignment -name QIP_FILE ../clk_gating_cell/synthesis/clk_gating_cell.qip
 set_global_assignment -name VHDL_FILE sUART.vhd
 set_global_assignment -name VHDL_FILE altera.vhd

@@ -44,6 +44,7 @@ struct base_slv
 	const static int length = N;
 	const static int high = N-1;
 	static const int size = 1;
+	constexpr static int _length() {return N;}
 
 };
 
@@ -363,10 +364,12 @@ _Pragma ("GCC diagnostic pop")
 	// called after clocked process execution
 	void clock()
 	{
+#ifndef NO_VCD
 		if ( (pvcd_entry->ID[0] != '#') and (_d != n) )
 		{
 			vcd_file.vcd_dump_ull((_d), &pvcd_entry->ID[0], pvcd_entry->nbits);
 		}		//gprintf("#R% in % out %", pvcd_entry->name, _d, n);
+#endif
 		n = _d;
 	}
 
@@ -404,7 +407,6 @@ struct const_slv
 	const static int length = N;
 	const static int high = N-1;
 	static const int size = 1;
-
 };
 // finally unused ?
 /*
@@ -1326,7 +1328,7 @@ struct array< T1<T,N> > : T1<T,N>, vcd_entry
 #define UINT(n) slv<n>
 #define TRISTATE(n) tristate<n>
 
-#define RESIZE(a,n) a.resize<n>()
+#define RESIZE(a,n)  a.template resize<n>()
 
 #define TO_UNSIGNED(a,n) slv<n>(a)
 #define TO_SIGNED(a,n) Signed<n>(a)
@@ -1354,8 +1356,8 @@ struct array< T1<T,N> > : T1<T,N>, vcd_entry
 #define B(a,b) (a).get_bit(b)
 #define VAR_SET_BIT(a, b, c) a.set_bit(b, c) //ONLY VARIABLES !!!!!!!!!!!!!!!!!!!!
 #define SIG_SET_BIT(a, b, c) a.set_bit(b, c) //ONLY COMB !!!!!!!!!!!!!!!!!!!!
-#define HI(a) a.high
-#define LEN(a) a.length
+#define HI(a) decltype(a)::high
+#define LEN(a) decltype(a)::length
 #define IF if
 #define THEN {
 #define ENDIF }
@@ -1378,14 +1380,15 @@ struct array< T1<T,N> > : T1<T,N>, vcd_entry
 #define GATED_CLK(name, clk_i, gate)  clk_t name = gen_gated_clk_desc(#name, this, clk_i, gate)
 #define GATE_CLK(clk_i, gated_clk, gating_signal) gated_clk.gate_clk(clk_i, gating_signal)
 //#define VAR(a, t)  t a //= gen_sig_desc(#a, this)
-#define VAR(a, t) t a // More like VHDL behavior, however static vars might generate latches
+#define VAR(a, t) static t a // More like VHDL behavior, however static vars might generate latches
 #define CONST(a, t)   const t a
 #define CASE_CONST(a, t)   const int a
 #define MEMBER(a, t) t a
 #define REC(a) struct a {
 #define ENDREC };
 #define LIST(...) { __VA_ARGS__ }
-#define EVENT(a) static_cast<tree>(a.get()).event()//CAT_(a,.event())
+//#define EVENT(a) static_cast<tree>(a.get()).event()//CAT_(a,.event())
+#define EVENT(a) (a.get()).event()//CAT_(a,.event())
 #define CONSTANT const
 #define OTHERS(a) __others(a)
 #define RESET(a) a <= TO_UINT(0, LEN(a))
@@ -1592,9 +1595,11 @@ struct array< T1<T,N> > : T1<T,N>, vcd_entry
 
 // process_void for trial purposes, when no clk nor reset
 #define PROCESS_VOID(number) constexpr control_signals process##number(){  __control_signals__.clk = -1; __control_signals__.reset_n = -1;
-#define COMB_PROCESS(number, signal1) constexpr control_signals process##number(){ __control_signals__.clk = signal1.get().n; __control_signals__.reset_n = -1; //gprintf("#### % % % ####", name, signal1.get().n, signal2.get().n);
+//#define COMB_PROCESS(number, signal1) constexpr control_signals process##number(){ __control_signals__.clk = signal1.get().n; __control_signals__.reset_n = -1; //gprintf("#### % % % ####", name, signal1.get().n, signal2.get().n);
+#define COMB_PROCESS(number, signal1) control_signals process##number(){ __control_signals__.clk = signal1.get().n; __control_signals__.reset_n = -1; //gprintf("#### % % % ####", name, signal1.get().n, signal2.get().n);
 
-#define PROCESS(number, signal1, signal2) constexpr control_signals process##number(){ __control_signals__.clk = signal1.get().n; __control_signals__.reset_n = signal2.get().n; //gprintf("#### % % % ####", name, signal1.get().n, signal2.get().n);
+//#define PROCESS(number, signal1, signal2) constexpr control_signals process##number(){ __control_signals__.clk = signal1.get().n; __control_signals__.reset_n = signal2.get().n; //gprintf("#### % % % ####", name, signal1.get().n, signal2.get().n);
+#define PROCESS(number, signal1, signal2)  control_signals process##number(){ __control_signals__.clk = signal1.get().n; __control_signals__.reset_n = signal2.get().n; //gprintf("#### % % % ####", name, signal1.get().n, signal2.get().n);
 
 #define END_PROCESS return(__control_signals__); }
 #define END_COMB_PROCESS return(__control_signals__); }

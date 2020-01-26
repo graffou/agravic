@@ -6,7 +6,16 @@ entity peripherals is port( clk_peri : IN std_logic; reset_n : IN std_logic; cor
 signal cnt : unsigned ((32 -1) downto 0);
 signal cnt_cmp : unsigned ((32 -1) downto 0);
 signal cnt_started : std_logic;
+
+
+
+
 begin
+
+
+
+
+
 process0 : process(clk_peri,reset_n)
 variable DBG : unsigned ((8 -1) downto 0);
 begin
@@ -16,6 +25,7 @@ begin
   cnt_cmp <= TO_UNSIGNED(0,cnt_cmp'length);
   timer_IT_o <= '0';
   cnt_started <= '0';
+
  elsif ( clk_peri'event and (clk_peri = '1' ) ) then
   IF ( not ( cnt = TO_UNSIGNED(0,32) ) ) then
    cnt <= cnt - TO_UNSIGNED(1,32);
@@ -24,13 +34,22 @@ begin
    timer_IT_o <= '1' ;
   end if;
   IF ( ( core2mem_i.cs_n = '0' ) and ( core2mem_i.wr_n = '0' ) ) then
+
+
+
    IF (core2mem_i.addr = "1111111111100") then
+
     cnt <= core2mem_i.data;
     cnt_started <= '0';
     timer_IT_o <= '0';
    end if;
+
    IF (core2mem_i.addr = "1111111111111") then
+
     gpios_o <= core2mem_i.data;
+
+
+
    end if;
    IF (core2mem_i.addr = "1111111111110") then
     DBG := (core2mem_i.data(7 downto 0));

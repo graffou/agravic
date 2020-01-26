@@ -2,6 +2,9 @@
 library ieee;use ieee.std_logic_1164.all;use IEEE.NUMERIC_STD.ALL;
 library work; use work.structures.all;
 library work; use work.slv_utils.all;
+
+
+
 entity mem is port( clk_mem : IN std_logic; reset_n : IN std_logic; core2mem_i : IN blk2mem_t; mem2core_o : OUT mem2blk_t ); end mem; architecture rtl of mem is component dummy_zkw_pouet is port(clk : in std_logic);end component;
 component spram6144x8 is port( clk : IN std_logic; reset_n : IN std_logic; addr_i : IN unsigned ((13 -1) downto 0); data_i : IN unsigned ((8 -1) downto 0); data_o : OUT unsigned ((8 -1) downto 0); wen_i : IN std_logic ); end component;
   signal addr : unsigned ((13 -1) downto 0);
@@ -22,17 +25,22 @@ component spram6144x8 is port( clk : IN std_logic; reset_n : IN std_logic; addr_
   signal rdata_en : unsigned ((1 -1) downto 0);
   signal data_en : std_logic;
   signal addr_ok : std_logic;
+
   signal mask : unsigned ((32 -1) downto 0);
+
  begin
+
   ram0 : spram6144x8 port map( clk => clk_mem, reset_n => reset_n, addr_i => addr, data_i => data_wr0, data_o => data_rd0, wen_i => wen0);
  ram1 : spram6144x8 port map( clk => clk_mem, reset_n => reset_n, addr_i => addr, data_i => data_wr1, data_o => data_rd1, wen_i => wen1);
  ram2 : spram6144x8 port map( clk => clk_mem, reset_n => reset_n, addr_i => addr, data_i => data_wr2, data_o => data_rd2, wen_i => wen2);
  ram3 : spram6144x8 port map( clk => clk_mem, reset_n => reset_n, addr_i => addr, data_i => data_wr3, data_o => data_rd3, wen_i => wen3);
  process0 : process(clk_mem,reset_n)
+
  begin
   IF ( reset_n = '0' ) then
    rdata_en <= "0";
   elsif ( clk_mem'event and (clk_mem = '1' ) ) then
+
    IF ( (core2mem_i.cs_n = '0') and
      (core2mem_i.wr_n = '1' ) and
      not ((core2mem_i.addr(12 downto 11)) = "11") ) then
@@ -40,8 +48,10 @@ component spram6144x8 is port( clk : IN std_logic; reset_n : IN std_logic; addr_
    else
     rdata_en <= "0";
    end if;
+
   end if;
  end process;
+
 
   addr <= ( core2mem_i.addr and unsigned(RESIZE(signed(BOOL2BIN(not ((core2mem_i.addr(12 downto 11)) = "11"))), 13)) );
   data_wr0 <= (core2mem_i.data(7 downto 0));
@@ -55,5 +65,10 @@ component spram6144x8 is port( clk : IN std_logic; reset_n : IN std_logic; addr_
   wen3 <= ( core2mem_i.be(3) and wen );
   mem2core_o.data <= ( (data_rd3 & data_rd2 & data_rd1 & data_rd0) and unsigned(RESIZE(signed((rdata_en & rdata_en)), 32)) );
   mem2core_o.data_en <= rdata_en(0);
+
+
+
+
+
 
 end rtl;

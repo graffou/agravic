@@ -2,6 +2,12 @@
 library ieee;use ieee.std_logic_1164.all;use IEEE.NUMERIC_STD.ALL;
 library work; use work.structures.all;
 entity tb_t is begin end tb_t; architecture rtl of tb_t is component dummy_zkw_pouet is port(clk : in std_logic);end component;
+
+
+
+
+
+
 constant c_clock_period : time := 5 ns;
 constant c_reset_length : time := 20 ns;
 component sUART is port( clk_peri : IN std_logic; reset_n : IN std_logic; core2mem_i : IN blk2mem_t; mem2core_o : OUT mem2blk_t; uart_tx_o : OUT std_logic; uart_rx_i : IN std_logic ); end component;
@@ -10,14 +16,17 @@ signal clk : std_logic;
 signal reset_n : std_logic;
 signal cmd : blk2mem_t;
 signal gpios : unsigned ((32 -1) downto 0);
+
 signal blue : std_logic;
 signal red : std_logic;
 signal green : std_logic;
 signal pclk : std_logic;
 signal bmkrD : unsigned ((15 -1) downto 0);
 signal bmkrA : unsigned ((7 -1) downto 0);
+
 signal core2datamem : blk2mem_t;
 signal uart2core : mem2blk_t;
+
 signal sdram_addr : unsigned ((12 -1) downto 0);
 signal sdram_ba : unsigned ((2 -1) downto 0);
 signal sdram_cke : std_logic;
@@ -27,9 +36,15 @@ signal sdram_ras : std_logic;
 signal sdram_cas : std_logic;
 signal sdram_dQm : unsigned ((2 -1) downto 0);
 signal sdram_dQ : unsigned ((16 -1) downto 0);
+
+
 signal uart_rx : std_logic;
 signal uart_tx : std_logic;
 begin
+
+
+
+
 dut : top port map( clk_top => clk, reset_n => reset_n, bmkrD_io => bmkrD, bmkrA_io => bmkrA, blue_o => blue, red_o => red, green_o => green, pclk_o => pclk, sdram_addr_o => sdram_addr, sdram_ba_o => sdram_ba, sdram_cke_o => sdram_cke, sdram_cs_o => sdram_cs, sdram_we_o => sdram_we, sdram_ras_o => sdram_ras, sdram_cas_o => sdram_cas, sdram_dQm_o => sdram_dQm, sdram_dQ_io => sdram_dQ);
 u0_sUART : sUART port map( clk_peri => dut.clk_mcu, reset_n => reset_n, core2mem_i => core2datamem, mem2core_o => uart2core, uart_tx_o => uart_tx, uart_rx_i => uart_rx);
 gen_clk: process
@@ -37,6 +52,7 @@ begin
    wait for (c_clock_period / 2);
    clk <= not clk;
 end process gen_clk;
+
 gen_reset_n: process
 begin
    wait for c_reset_length;

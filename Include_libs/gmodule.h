@@ -55,7 +55,7 @@ struct gated_clk_desc: public sig_desc
 		pmodule = pmodule_i;
 		parent_clk = &(clk_i.get());
 		gating_signal = &(gating_signal_i.get());
-		gprintf("#VCreating gated clk %Y from %Y", name_i, parent_clk->pvcd_entry->name);
+		//gprintf("#VCreating gated clk %Y from %Y", name_i, parent_clk->pvcd_entry->name);
 	}
 
 };

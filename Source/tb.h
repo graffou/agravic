@@ -175,7 +175,7 @@ void init_file( T& name_i)
 
 #define WAIT_5_CLK clk <= not clk;	clk <= not clk;clk <= not clk;	clk <= not clk;clk <= not clk;	clk <= not clk;clk <= not clk;	clk <= not clk;clk <= not clk;	clk <= not clk;
 
-constexpr void run()
+ void run()
 {
 	reset_n <= BIN(0);
 	clk <= BIN(1);
@@ -222,7 +222,7 @@ for (int k = 0; k < 1; k++)
 
 	while (not code_file.eof() and not(LOAD_PORT.addr == BIN(1011111111111) ))
 	{
-		gprintf("% % \n", LOAD_PORT.addr, BIN(101111111111100));
+		//gprintf("% % \n", LOAD_PORT.addr, BIN(101111111111100));
 		__control_signals__.clk = -1;
 		__control_signals__.reset_n = -1;
 
@@ -232,7 +232,7 @@ for (int k = 0; k < 1; k++)
 		LOAD_PORT.data <= slv<32>(data); // don't care for uart loading, cs_n is 1
 		//printf("%x\n", data)
 		if (LOAD_PORT.addr < BIN(0000000011100) ) {
-			gprintf("#Maddr : %R write %R %Y", to_hex(TO_INTEGER(LOAD_PORT.addr)), to_hex(TO_INTEGER(LOAD_PORT.data)), code_file.tellg());
+			//gprintf("#Maddr : %R write %R %Y", to_hex(TO_INTEGER(LOAD_PORT.addr)), to_hex(TO_INTEGER(LOAD_PORT.data)), code_file.tellg());
 		}
 #ifdef NONREG // for risc-v compliance test, copy init data to data memory ALWAYS USE LOAD PORT
 		if (addr >= 8192)
@@ -271,10 +271,10 @@ for (int k = 0; k < 1; k++)
 			}
 		}
 
-		gprintf("#Cmem content % %", to_hex(addr/4), to_hex(dut.u1_mem.get(addr/4)));
+		//gprintf("#Cmem content % %", to_hex(addr/4), to_hex(dut.u1_mem.get(addr/4)));
 
 #endif
-		std::cerr << '>';
+		//std::cerr << '>';
 		// Take care of top clk being not the one that drives the risc-V core
 		while (not (dut.clk_mcu.event()))
 		{
@@ -286,7 +286,7 @@ for (int k = 0; k < 1; k++)
 		clk <= not clk;
 		clk <= not clk;
 
-		std::cerr << '/';
+		//std::cerr << '/';
 	}
 
 	for (int i = 0; i < 32; i++) {WAIT_5_CLK}
