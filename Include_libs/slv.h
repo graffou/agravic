@@ -1,10 +1,10 @@
 #pragma once
-
-#include <iostream>
-#include "mbprt.h"
 #include "macros.h"
+#include <iostream>
+//#include "mbprt.h"
+//#include "macros.h"
 #include <vector>
-#include "vcd.h"
+//#include "vcd.h"
 #include <typeinfo>
 template<int N>
 struct slv;
@@ -12,15 +12,24 @@ struct slv;
 template<int N>
 struct Signed;
 
+struct clk_t;
+
+std::ofstream advisor;
+bool sim_abort = 0;
+
 struct flop
 {
 	uint64_t _d;
-	virtual void clock(){gprintf("#RVirtual clock");};
+	virtual void clock(){giprintf("#RVirtual clock");};
+    uint64_t nclk; // idx of clock driving signal
 };
 
 // Must use this function and forward declare it to call it in slv class, but first argument is of clock type which derives from slv
 template<class T1, class T2>
 void register_flop(T1 x, T2 y);
+template<class T2>
+void register_changed_flop(T2 y);
+
 
 template<int N>
 struct base_slv
@@ -68,9 +77,26 @@ struct range_t
 
 };
 
+
+template <int N>
+inline uint64_t adjust(uint64_t n)
+{
+	_Pragma ("GCC diagnostic push")
+	_Pragma ("GCC diagnostic ignored \"-Wshift-count-overflow\"") // avoids warning when N = 64; situation is normal
+	const uint64_t mask = (1ull << N) - 1; // Mask to keep N bits
+	_Pragma ("GCC diagnostic pop")
+	uint64_t nn = n & mask;
+	//gprintf("adj %", nn);
+	return nn;
+}
+
+
 // Forward declarations
 template <class T> int conv_integer(const T& x_i);
 template<int N > int conv_integer(const slv<N>& x_i);
+
+int tree_val(int n);
+
 // SLV unsigned -------------------------------------------------------------------------------------------------------------
 // was originally intended to mimic std_logic_vector, but finally is equivalent to signed(N-1 downto 0) of numeric_std package
 template<int N>
@@ -78,18 +104,18 @@ struct slv : public base_slv<N>, flop// inherits of flop / useless for combinati
 {
 
     using base_slv<N>::n;	//uint64_t n; // Stored value
-	uint8_t init = 0; // Is set at first <= assignment. 1 -> flip-flop, 2-> combinational
+    uint8_t init = 0; // Is set at first <= assignment. 1 -> flip-flop, 2-> combinational
 
 _Pragma ("GCC diagnostic push")
 _Pragma ("GCC diagnostic ignored \"-Wshift-count-overflow\"") // avoids warning when N = 64; situation is normal
-	const uint64_t mask = (1ull << N) - 1; // Mask to keep N bits
+	static const uint64_t mask = (N == 64) ? -1 : (1ull << N) - 1; // Mask to keep N bits
 _Pragma ("GCC diagnostic pop")
 
-	vcd_entry* pvcd_entry;
+	vcd_entry* pvcd_entry = &dummy_vcd_entry;
 
 	slv(){
 		pvcd_entry = &dummy_vcd_entry;// is a global variable which has 'non probing' attribute
-		//gprintf("#BBare slv of size %R ptr %R", N, this);
+		//giprintf("#BBare slv of size %R ptr %R", N, this);
 	}
 
 	slv(base_slv<N> x_i)
@@ -101,12 +127,30 @@ _Pragma ("GCC diagnostic pop")
 	slv(sig_desc x_i)
 	{
 		pvcd_entry = create_vcd_entry(x_i.name, x_i.pmodule, N);
-		gprintf("#BNew slv name % slv ptr % vcd ptr % module ptr %R",pvcd_entry->name, this, pvcd_entry, pvcd_entry->pmodule);
+		giprintf("#BNew slv name % slv ptr % vcd ptr % module ptr %R",pvcd_entry->name, this, pvcd_entry, pvcd_entry->pmodule);
 	}
 
 	// Construct with int. Should not be used directly (set private ?)
 	slv(uint64_t x_i)
 	{
+		//std::cerr << "??" << x_i << " " << n << "!!\n";
+/*
+		if ((N!=64) and (x_i & (~mask)))
+		{
+
+			if (pvcd_entry && (pvcd_entry != &dummy_vcd_entry))
+			{
+				//gprintf("#R% pvcd % of size % being assigned %", "xx", pvcd_entry, N, x_i);
+
+				gzprintf("#R% of size % being assigned %", pvcd_entry->name, N, x_i);
+			}
+			else
+				gzprintf("#R% pvcd % of size % being assigned % (%s)", "unknown", pvcd_entry, N, x_i, pvcd_entry);
+
+			bit_adjust();
+			sim_abort = 1;//exit(0);
+		}
+*/
 		n = x_i;
 		bit_adjust();
 		//std::cerr << "!!" << n << "!!\n";
@@ -115,7 +159,7 @@ _Pragma ("GCC diagnostic pop")
 	void conf_vcd_entry(sig_desc x_i)
 	{
 		pvcd_entry = create_vcd_entry(x_i.name, x_i.pmodule, N);
-		gprintf("#BNew slv name % slv ptr % vcd ptr % module ptr %R",pvcd_entry->name, this, pvcd_entry, pvcd_entry->pmodule);
+		giprintf("#BNew slv name % slv ptr % vcd ptr % module ptr %R",pvcd_entry->name, this, pvcd_entry, pvcd_entry->pmodule);
 	}
 
 	uint64_t conv_int() const
@@ -144,12 +188,16 @@ _Pragma ("GCC diagnostic pop")
 	// types allowed are more restrictive than in VHDL to avoid errors
 	slv<N> operator+(const slv<N>& x_i)
 	{
-		return slv<N>(n + x_i.n);
+		//gprintf("% + % = % ", n, x_i.n, (n + x_i.n) & mask);
+		//slv<N> toto((n + x_i.n) & mask) ;
+		//gprintf("Yo N = % ", N);
+		//return toto;
+		return slv<N>( (n + x_i.n) & mask );
 	}
 
 	slv<N> operator-(const slv<N>& x_i)
 	{
-		return slv<N>(n - x_i.n);
+		return slv<N>( (n - x_i.n) & mask );
 	}
 
 	bool operator==(const slv<N>& x_i) const
@@ -175,7 +223,7 @@ _Pragma ("GCC diagnostic pop")
 	template<int P>
 	slv<N+P> operator*(const Signed<P>& x_i)
 	{
-		return slv<N+P>( n * x_i.conv_int() );
+		return slv<N+P>( adjust<N+P>( n * x_i.conv_int() ) );
 	}
 
 	template<int P>
@@ -189,21 +237,24 @@ _Pragma ("GCC diagnostic pop")
 	// TODO Should replicate that in Signed class and call vcd_dump_ull here
 	inline void operator<=(const slv<N>& x_i)
 	{
-		//gprintf("#CU<= %R %R %M ptr %M", pvcd_entry->pmodule->name, pvcd_entry->name, int(init), this);
+		//giprintf("#CU<= %R %R %M ptr %M", pvcd_entry->pmodule->name, pvcd_entry->name, int(init), this);
+		//gzprintf("#GAssign slv %", pvcd_entry->name);
+		if (sim_abort) exit(0);
 
 		if (init == 1) // flip flop
 		{
-			//gprintf("#gFF % out % in", pvcd_entry->name, n, x_i);
+			//giprintf("#gFF % out % in", pvcd_entry->name, n, x_i);
 			_d = x_i.n; // assign flip-flop input
+			register_changed_flop(this);
 			// vcd dump occurs when calling clk()
 		}
 		else if (init == 2) // combinational
 		{
-			//gprintf("#R%", "start");
-			//gprintf("#R%", n);
-			//gprintf("#R%", x_i.n);
-			//gprintf("#R%", pvcd_entry->ID[0]);
-			//gprintf("#comb vcd n % in % name % ID", n, x_i.n, pvcd_entry->name, pvcd_entry->ID);
+			//giprintf("#R%", "start");
+			//giprintf("#R%", n);
+			//giprintf("#R%", x_i.n);
+			//giprintf("#R%", pvcd_entry->ID[0]);
+			//giprintf("#comb vcd n % in % name % ID", n, x_i.n, pvcd_entry->name, pvcd_entry->ID);
 			if ( (pvcd_entry->ID[0] != '#') and (x_i.n != n) )
 			{
 				n = x_i.n; // assign signal
@@ -217,35 +268,42 @@ _Pragma ("GCC diagnostic pop")
 		else // do not know yet
 		{
 			// In platform GS, combinational processes have a clock (pre or post clock, only post for the moment), but only synchronous ones have a reset!
-			gprintf("#RRegistering, reset id = % clk ID = %", __control_signals__.reset_n, __control_signals__.clk);
-			gprintf("#bflop % in %", pvcd_entry->name, pvcd_entry->pmodule->name);
+			giprintf("#RRegistering, reset id = % clk ID = %", __control_signals__.reset_n, __control_signals__.clk);
+			giprintf("#bflop % in %", pvcd_entry->name, pvcd_entry->pmodule->name);
 			if (__control_signals__.reset_n != -1) // not combinational
 			{
+#ifndef NO_ADVISOR
+				if (tree_val(__control_signals__.reset_n)) // reset is 1 at first access -> flop is not resetted
+				{
+					gprintf(advisor, "NOT reset signal % in module % \n", slv<N>::pvcd_entry->name, slv<N>::pvcd_entry->pmodule->name);
+				}
+#endif
+
 				init = 1;
-				gprintf("#rTo clk");
+				giprintf("#rTo clk");
 				_d = x_i.n; // reset value
 				n = x_i.n; // reset value
 				if (pvcd_entry->ID[0] != '#')
 				{
-					gprintf("#Rwriting vcd value %", _d);
+					giprintf("#Rwriting vcd value %", _d);
 					vcd_file.vcd_dump_ull((_d), &pvcd_entry->ID[0], pvcd_entry->nbits);
 				}
 				else
 				{
-					gprintf("#Rnot probed yet");
+					giprintf("#Rnot probed yet");
 				}
 				register_flop(__control_signals__.clk, static_cast<flop*>(this));
 			}
 			else
 			{
-				gprintf("#rTo clk comb");
+				giprintf("#rTo clk comb");
 				init = 2;
 				n = x_i.n;
 				if (pvcd_entry->ID[0] != '#')
 					vcd_file.vcd_dump_ull((n), &pvcd_entry->ID[0], pvcd_entry->nbits);
 			}
 		}
-		//gprintf("#GU<= %R %R %M", pvcd_entry->pmodule->name, pvcd_entry->name, int(init));
+		//giprintf("#GU<= %R %R %M", pvcd_entry->pmodule->name, pvcd_entry->name, int(init));
 
 	}
 
@@ -267,16 +325,17 @@ _Pragma ("GCC diagnostic pop")
 	// extract bit range toto.range<8,6>() <=> toto(8 downto 6)
 #if 1
 	template <int P, int Q>
-	slv<P-Q+1> range()
+	slv<P-Q+1> range() const
 	{
-		return slv<P-Q+1>(n>>Q);
+		//gprintf("#bP % Q % P-Q+1 %", P, Q, P-Q+1);
+		return slv<P-Q+1>(adjust<P-Q+1>(n>>Q));
 	}
 
 	// Version which returns constant size vector from variable position (to use in loops e.g.)
 	template <int P>
 	slv<P> range(int Q)
 	{
-		return slv<P>(n>>Q);
+		return slv<P>( adjust<P>(n>>Q) );
 	}
 #else
 	template <int P, int Q>
@@ -291,7 +350,7 @@ _Pragma ("GCC diagnostic pop")
 	// extract bit from bit vector
 	slv<1> get_bit(int i)
 	{
-		return slv<1>(n >> i);
+		return slv<1>( (n >> i) & 1);
 	}
 
 	// !!!!!!!!!!!!!!!!!!!!!!!! USE THIS ON VARIABLES or COMB LOGIC ONLY !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -299,8 +358,8 @@ _Pragma ("GCC diagnostic pop")
 	inline void set_bit(unsigned int pos, slv<1> val) //const T& val)
 	{
 		uint64_t bitmask = (1 << (pos));
-		// if (bitmask == 0) {gprintf("#RERROR, setting bit % of slv<%d> named %", pos, N, pvcd_entry->name);exit(0);} //  check index
-		//gprintf("#B setting bit % with % bitmask %R n = %M adj mask %R", pos, conv_integer(val), bitmask, n, (bitmask and mask));
+		// if (bitmask == 0) {giprintf("#RERROR, setting bit % of slv<%d> named %", pos, N, pvcd_entry->name);exit(0);} //  check index
+		//giprintf("#B setting bit % with % bitmask %R n = %M adj mask %R", pos, conv_integer(val), bitmask, n, (bitmask and mask));
 		if (conv_integer(val) == 1) // set to 1
 		{
 			n |= (bitmask & mask); // Avoid setting bit which does not belong to bitvector
@@ -309,7 +368,7 @@ _Pragma ("GCC diagnostic pop")
 		{
 			n &= (~bitmask);
 		}
-		//gprintf("#G setting bit % with % bitmask %R n = %M", pos, conv_integer(val), bitmask, n);
+		//giprintf("#G setting bit % with % bitmask %R n = %M", pos, conv_integer(val), bitmask, n);
 
 	}
 
@@ -325,25 +384,26 @@ _Pragma ("GCC diagnostic pop")
 
 	slv<N> sll(int x_i)
 		{
-			return slv<N>(n << x_i);
+			return slv<N>( (n << x_i) & mask);
 		}
 	slv<N> sla(int x_i)
 		{
-			return slv<N>( (n << x_i) | (n >> (32 - x_i)) );
+			return slv<N>( ( (n << x_i) | (n >> (32 - x_i)) ) & mask );
 		}
 	slv<N> srl(int x_i)
 		{
-			return slv<N>(n >> x_i);
+			//gprintf("srl %", x_i);
+			return slv<N>( (n >> x_i) & mask );
 		}
 	slv<N> sra(int x_i)
 		{
-			return slv<N>( (n >> x_i) | (n << (32 - x_i)) );
+			return slv<N>( ( (n >> x_i) | (n << (32 - x_i)) ) & mask );
 		}
 	//bitwise not
 	slv<N> operator!()
 	{
-		slv<N> res(~n);
-		return slv<N>(~n);
+		//slv<N> res(~n);
+		return slv<N>( (~n) & mask );
 	}
 	//bitwise and
 	slv<N> operator&&(const slv<N>& x_i)
@@ -368,7 +428,7 @@ _Pragma ("GCC diagnostic pop")
 		if ( (pvcd_entry->ID[0] != '#') and (_d != n) )
 		{
 			vcd_file.vcd_dump_ull((_d), &pvcd_entry->ID[0], pvcd_entry->nbits);
-		}		//gprintf("#R% in % out %", pvcd_entry->name, _d, n);
+		}		//giprintf("#R% in % out %", pvcd_entry->name, _d, n);
 #endif
 		n = _d;
 	}
@@ -377,7 +437,7 @@ _Pragma ("GCC diagnostic pop")
 	template <int m>
 	slv<m> resize()
 	{
-		return slv<m>(n);
+		return slv<m>(adjust<m>(n));
 	}
 
 	slv<N>& get()
@@ -432,7 +492,7 @@ struct Signed:slv<N>
 
 	Signed(int64_t x_i) : slv<N>(x_i)
 		{
-
+		//gprintf("#VSdone");
 		}
 	// forbidden in vhdl!
 	/*
@@ -443,6 +503,7 @@ struct Signed:slv<N>
 */
 	Signed(const Signed<N>& x_i)
 	{
+		//gprintf("Signed(%s)", x_i.n);
 		slv<N>::n = x_i.n;
 	}
 
@@ -475,9 +536,9 @@ struct Signed:slv<N>
 		return Signed<m>(conv_int());
 	}
 
-	slv<N> srl(int x_i)
+	Signed<N> srl(int x_i)
 		{
-			return slv<N>(conv_int() >> x_i);
+			return Signed<N>(adjust<N>(conv_int() >> x_i));
 		}
 	//This method is a copy of the one in slv
 	//This is utterly ugly, but I can't see any efficient way of sharing the code, except letting it in slv and use a function pointer for vcd_dump_ll / vcd_dump_ull
@@ -486,15 +547,18 @@ struct Signed:slv<N>
 
 	inline void operator<=(const Signed<N>& x_i)
 	{
-		//gprintf("#C<=");
+		//gzprintf("#GAssign slv %", slv<N>::pvcd_entry->name);
+		if (sim_abort) exit(0);
+		//giprintf("#C<=");
 		if (slv<N>::init == 1) // flip flop
 		{
 			slv<N>::_d = x_i.n; // assign flip-flop input
+			register_changed_flop(this);
 			// vcd dump occurs when calling clk()
 		}
 		else if (slv<N>::init == 2) // combinational
 		{
-			//gprintf("#comb vcd n % in % name % ID", n, x_i.n, pvcd_entry->name, pvcd_entry->ID);
+			//giprintf("#comb vcd n % in % name % ID", n, x_i.n, pvcd_entry->name, pvcd_entry->ID);
 			if ( (slv<N>::pvcd_entry->ID[0] != '#') and (x_i.n != slv<N>::n) )
 			{
 				slv<N>::n = x_i.n; // assign signal
@@ -507,12 +571,19 @@ struct Signed:slv<N>
 		else // do not know yet
 		{
 			// In platform GS, combinational processes have a clock (pre or post clock, only post for the moment), but only synchronous ones have a reset!
-			gprintf("#RRegistering, reset id = % clk ID = %", __control_signals__.reset_n, __control_signals__.clk);
-			gprintf("#bflop % in %", slv<N>::pvcd_entry->name, slv<N>::pvcd_entry->pmodule->name);
+			giprintf("#RRegistering, reset id = % clk ID = %", __control_signals__.reset_n, __control_signals__.clk);
+			giprintf("#bflop % in %", slv<N>::pvcd_entry->name, slv<N>::pvcd_entry->pmodule->name);
 			if (__control_signals__.reset_n != -1) // not combinational
 			{
+#ifndef NO_ADVISOR
+				if (tree_val(__control_signals__.reset_n)) // reset is 1 at first access -> flop is not resetted
+				{
+					gprintf(advisor, "NOT reset signal % in module % \n", slv<N>::pvcd_entry->name, slv<N>::pvcd_entry->pmodule->name);
+				}
+#endif
+
 				slv<N>::init = 1;
-				gprintf("#rTo clk");
+				giprintf("#rTo clk");
 				slv<N>::_d = x_i.n; // reset value
 				slv<N>::n = x_i.n; // reset value
 
@@ -522,7 +593,7 @@ struct Signed:slv<N>
 			}
 			else
 			{
-				gprintf("#rTo clk comb");
+				giprintf("#rTo clk comb");
 				slv<N>::init = 2;
 				slv<N>::n = x_i.n;
 				if (slv<N>::pvcd_entry->ID[0] != '#')
@@ -565,13 +636,13 @@ struct tristate:slv<N>
 	{
 		if ( (slv<N>::pvcd_entry->ID[0] != '#') and ( (slv<N>::_d != slv<N>::n) or (z_flags_d != z_flags) ) )
 		{
-			//gprintf("#VDUMP ZZZ % % % % %", slv<N>::pvcd_entry->name, slv<N>::_d, slv<N>::n, z_flags_d, z_flags);
+			//giprintf("#VDUMP ZZZ % % % % %", slv<N>::pvcd_entry->name, slv<N>::_d, slv<N>::n, z_flags_d, z_flags);
 			vcd_file.vcd_dump_tristate(slv<N>::_d, z_flags_d, &slv<N>::pvcd_entry->ID[0], slv<N>::pvcd_entry->nbits);
 			slv<N>::n = slv<N>::_d;
 			z_flags = z_flags_d;
 		}
 		//else
-			//gprintf("#VNODUMP ZZZ %y % % % %", slv<N>::pvcd_entry->name, slv<N>::_d, slv<N>::n, z_flags_d, z_flags);
+			//giprintf("#VNODUMP ZZZ %y % % % %", slv<N>::pvcd_entry->name, slv<N>::_d, slv<N>::n, z_flags_d, z_flags);
 
 	}
 
@@ -580,8 +651,8 @@ struct tristate:slv<N>
 	inline void set_bit(unsigned int pos, char val) //const T& val)
 	{
 		uint64_t bitmask = (1 << (pos));
-		// if (bitmask == 0) {gprintf("#RERROR, setting bit % of slv<%d> named %", pos, N, pvcd_entry->name);exit(0);} //  check index
-		//gprintf("#B setting bit % with % bitmask %R n = %M adj mask %R", pos, conv_integer(val), bitmask, n, (bitmask and mask));
+		// if (bitmask == 0) {giprintf("#RERROR, setting bit % of slv<%d> named %", pos, N, pvcd_entry->name);exit(0);} //  check index
+		//giprintf("#B setting bit % with % bitmask %R n = %M adj mask %R", pos, conv_integer(val), bitmask, n, (bitmask and mask));
 		if (val == 'Z')
 			z_flags |= (bitmask & slv<N>::mask); // Avoid setting bit which does not belong to bitvector
 		else if ((val) == '1') // set to 1
@@ -594,7 +665,7 @@ struct tristate:slv<N>
 			slv<N>::n &= (~bitmask);
 			z_flags &= (~bitmask);
 		}
-		//gprintf("#G setting bit % with % bitmask %R n = %M", pos, conv_integer(val), bitmask, n);
+		//giprintf("#G setting bit % with % bitmask %R n = %M", pos, conv_integer(val), bitmask, n);
 
 	}
 
@@ -602,8 +673,8 @@ struct tristate:slv<N>
 	inline void set_bit_d(unsigned int pos, char val) //const T& val)
 	{
 		uint64_t bitmask = (1 << (pos));
-		// if (bitmask == 0) {gprintf("#RERROR, setting bit % of slv<%d> named %", pos, N, pvcd_entry->name);exit(0);} //  check index
-		//gprintf("#B setting bit % with % bitmask %R n = %M adj mask %R", pos, conv_integer(val), bitmask, n, (bitmask and mask));
+		// if (bitmask == 0) {giprintf("#RERROR, setting bit % of slv<%d> named %", pos, N, pvcd_entry->name);exit(0);} //  check index
+		//giprintf("#B setting bit % with % bitmask %R n = %M adj mask %R", pos, conv_integer(val), bitmask, n, (bitmask and mask));
 		if (val == 'Z')
 		{
 			z_flags_d |= (bitmask & slv<N>::mask); // Avoid setting bit which does not belong to bitvector
@@ -618,18 +689,18 @@ struct tristate:slv<N>
 			slv<N>::_d &= (~bitmask);
 			z_flags_d &= (~bitmask);
 		}
-		//gprintf("#G setting bit % with % bitmask %R n = %M", pos, conv_integer(val), bitmask, n);
+		//giprintf("#G setting bit % with % bitmask %R n = %M", pos, conv_integer(val), bitmask, n);
 
 	}
 
 	bool bit_d_eq(unsigned int i, char val)
 	{
-		return ( (val == 'Z') ? ( (z_flags_d >> i) & 1 == 1) : ( (slv<N>::_d >> i & 1) == (val - 48) ) );
+		return ( (val == 'Z') ? ( (z_flags_d >> i) & 1) : ( (slv<N>::_d >> i & 1) == (val - 48) ) );
 	}
 
 	bool bit_eq(unsigned int i, char val)
 	{
-		return ( (val == 'Z') ? ( (z_flags >> i) & 1 == 1) : ( (slv<N>::n >> i & 1) == (val - 48) ) );
+		return ( (val == 'Z') ? ( (z_flags >> i) & 1) : ( (slv<N>::n >> i & 1) == (val - 48) ) );
 	}
 
 	bool eq(const char x_i[N])
@@ -648,7 +719,7 @@ struct tristate:slv<N>
 	{
 		for (int i = 0; i < N; i++)
 			set_bit_d(i, x_i[i]);
-		//gprintf("#RZZZ % %", slv<N>::n, z_flags_d);
+		//giprintf("#RZZZ % %", slv<N>::n, z_flags_d);
 	}
 
 	inline void set_q(const char x_i[N])
@@ -659,17 +730,20 @@ struct tristate:slv<N>
 
 	inline void operator<=(const slv<N>& x_i)
 	{
-		//gprintf("#C<=");
+		//gzprintf("#GAssign slv %", slv<N>::pvcd_entry->name);
+		if (sim_abort) exit(0);
+		//giprintf("#C<=");
 		if (slv<N>::init == 1) // flip flop
 		{
 			slv<N>::_d = x_i.n; // assign flip-flop input
+			register_changed_flop(this);
 			z_flags_d = 0;
-			//gprintf("#UAssigning % %", slv<N>::_d, z_flags_d);
+			//giprintf("#UAssigning % %", slv<N>::_d, z_flags_d);
 			// vcd dump occurs when calling clk()
 		}
 		else if (slv<N>::init == 2) // combinational
 		{
-			//gprintf("#comb vcd n % in % name % ID", n, x_i.n, pvcd_entry->name, pvcd_entry->ID);
+			//giprintf("#comb vcd n % in % name % ID", n, x_i.n, pvcd_entry->name, pvcd_entry->ID);
 			if ( (slv<N>::pvcd_entry->ID[0] != '#') and ( (x_i.n != slv<N>::n) or (z_flags != 0) ) )
 			{
 				slv<N>::n = x_i.n; // assign signal
@@ -682,12 +756,18 @@ struct tristate:slv<N>
 		else // do not know yet
 		{
 			// In platform GS, combinational processes have a clock (pre or post clock, only post for the moment), but only synchronous ones have a reset!
-			gprintf("#RRegistering, reset id = % clk ID = %", __control_signals__.reset_n, __control_signals__.clk);
-			gprintf("#bflop % in %", slv<N>::pvcd_entry->name, slv<N>::pvcd_entry->pmodule->name);
+			giprintf("#RRegistering, reset id = % clk ID = %", __control_signals__.reset_n, __control_signals__.clk);
+			giprintf("#bflop % in %", slv<N>::pvcd_entry->name, slv<N>::pvcd_entry->pmodule->name);
 			if (__control_signals__.reset_n != -1) // not combinational
 			{
+#ifndef NO_ADVISOR
+				if (tree_val(__control_signals__.reset_n)) // reset is 1 at first access -> flop is not resetted
+				{
+					gprintf(advisor, "NOT reset signal % in module % \n", slv<N>::pvcd_entry->name, slv<N>::pvcd_entry->pmodule->name);
+				}
+#endif
 				slv<N>::init = 1;
-				gprintf("#rTo clk");
+				giprintf("#rTo clk");
 				slv<N>::_d = x_i.n; // reset value
 				slv<N>::n = x_i.n; // reset value
 
@@ -697,7 +777,7 @@ struct tristate:slv<N>
 			}
 			else
 			{
-				gprintf("#rTo clk comb");
+				giprintf("#rTo clk comb");
 				slv<N>::init = 2;
 				slv<N>::n = x_i.n;
 				if (slv<N>::pvcd_entry->ID[0] != '#')
@@ -709,15 +789,16 @@ struct tristate:slv<N>
 	// for toto <= "11ZZ11";
 	inline void operator<=(const char x_i[N])
 	{
-		//gprintf("#C<=");
+		//giprintf("#C<=");
 		if (slv<N>::init == 1) // flip flop
 		{
 			set_d(x_i);
+			register_changed_flop(this);
 			// vcd dump occurs when calling clk()
 		}
 		else if (slv<N>::init == 2) // combinational
 		{
-			//gprintf("#comb vcd n % in % name % ID", n, x_i.n, pvcd_entry->name, pvcd_entry->ID);
+			//giprintf("#comb vcd n % in % name % ID", n, x_i.n, pvcd_entry->name, pvcd_entry->ID);
 			if ( (slv<N>::pvcd_entry->ID[0] != '#') and (not eq(x_i)) )
 			{
 				set_q(x_i); // assign signal
@@ -729,13 +810,20 @@ struct tristate:slv<N>
 		}
 		else // do not know yet
 		{
+
 			// In platform GS, combinational processes have a clock (pre or post clock, only post for the moment), but only synchronous ones have a reset!
-			gprintf("#RRegistering, reset id = % clk ID = %", __control_signals__.reset_n, __control_signals__.clk);
-			gprintf("#bflop % in %", slv<N>::pvcd_entry->name, slv<N>::pvcd_entry->pmodule->name);
+			giprintf("#RRegistering, reset id = % clk ID = %", __control_signals__.reset_n, __control_signals__.clk);
+			giprintf("#bflop % in %", slv<N>::pvcd_entry->name, slv<N>::pvcd_entry->pmodule->name);
 			if (__control_signals__.reset_n != -1) // not combinational
 			{
+#ifndef NO_ADVISOR
+				if (tree_val(__control_signals__.reset_n)) // reset is 1 at first access -> flop is not resetted
+				{
+					gprintf(advisor, "NOT reset signal % in module % \n", slv<N>::pvcd_entry->name, slv<N>::pvcd_entry->pmodule->name);
+				}
+#endif
 				slv<N>::init = 1;
-				gprintf("#rTo clk");
+				giprintf("#rTo clk");
 				set_q(x_i);
 				set_d(x_i);
 
@@ -745,7 +833,7 @@ struct tristate:slv<N>
 			}
 			else
 			{
-				gprintf("#rTo clk comb");
+				giprintf("#rTo clk comb");
 				slv<N>::init = 2;
 				set_q(x_i);
 				if (slv<N>::pvcd_entry->ID[0] != '#')
@@ -777,15 +865,16 @@ struct tree : slv<1>
 	// To retrieve tree signal from ID (reset process registers flip flops)
 	static std::vector<tree*> trees;
 
-	virtual void is_clk()
+	virtual bool is_clk()
 	{
-		gprintf("NOT CLOCK\n");
+		giprintf("NOT CLOCK\n");
+		return 0;
 	}
 
 	tree()
 	{
 		n = trees.size();
-		gprintf("#K tree % ",n);
+		giprintf("#K tree % ",n);
 		trees.push_back(this);
 		//n_trees++;
 	}
@@ -794,7 +883,7 @@ struct tree : slv<1>
 	{
 		slv<1>::init = 2; // Make sure is combinational
 		n = trees.size();
-		gprintf("#K tree % name %",n, x_i.name);
+		giprintf("#K tree % name %",n, x_i.name);
 		trees.push_back(this);
 		//n_trees++;
 	}
@@ -813,7 +902,7 @@ struct tree : slv<1>
 
 	void operator=(const slv<1>& x_i)
 	{
-		//gprintf("@B % val %R en % in % ", pvcd_entry->name, static_cast<slv<1>>(*this), *p_en, x_i);
+		//giprintf("@B % val %R en % in % ", pvcd_entry->name, static_cast<slv<1>>(*this), *p_en, x_i);
 		if (*p_en == slv<1>(1))
 		{
 			if ( not (x_i == static_cast<slv<1>>(*this)) )
@@ -831,7 +920,7 @@ struct tree : slv<1>
 
 	void operator<=(const slv<1>& x_i)
 	{
-		//gprintf("@G % val %R en % in % ", pvcd_entry->name, static_cast<slv<1>>(*this), *p_en, x_i);
+		//giprintf("@G % val %R en % in % ", pvcd_entry->name, static_cast<slv<1>>(*this), *p_en, x_i);
 		if (*p_en == slv<1>(1))
 		{
 			if ( not (x_i == static_cast<slv<1>>(*this)) )
@@ -845,22 +934,31 @@ struct tree : slv<1>
 			evt = 0;
 			slv<1>::operator<=(0);
 		}
-		//gprintf("#R ->evt % new val %", evt, static_cast<slv<1>>(*this));
+		//giprintf("#R ->evt % new val %", evt, static_cast<slv<1>>(*this));
 
 	}
 
 	// So that the get method can be called for a tree signal or a port<tree>
 	tree& get()
 	{
-		gprintf("#Vtree get %", pvcd_entry->name);
+		//giprintf("#Vtree get %", pvcd_entry->name);
 		return *this;
 	}
 
 	// so that tree list (trees) can call clk_t register_flop method
 	virtual void register_flop(flop* x_i)
 	{
-		gprintf("#RVirtual register flop");
+		giprintf("#RVirtual register flop");
 		//flop_list.push_back(x_i);
+	}
+	virtual void register_changed_flop(flop* x_i)
+	{
+		giprintf("#RVirtual register changed flop");
+		//flop_list.push_back(x_i);
+	}
+	void init_changed_flops_list()
+	{
+		giprintf("#RVirtual init changed flops");
 	}
 	// not good. Must be able to create a gated clock, not a gated tree
 	void create_gated(tree& tree_o, slv<1>& gate_i)
@@ -899,11 +997,11 @@ struct tree : slv<1>
 	}
 	virtual void copy_children( tree& x_i)
 	{
-		gprintf("#UIn %Y copying children, count %Y", pvcd_entry->name, children.size());
+		giprintf("#UIn %Y copying children, count %Y", pvcd_entry->name, children.size());
 		for (int i=0; i < children.size(); i++)
 		{
 			x_i.children.push_back(children[i]);
-			gprintf("#UIn %Y copying child %Y to driving signal %Y", pvcd_entry->name, children[i]->pvcd_entry->name, x_i.pvcd_entry->name);
+			giprintf("#UIn %Y copying child %Y to driving signal %Y", pvcd_entry->name, children[i]->pvcd_entry->name, x_i.pvcd_entry->name);
 		}
 	}
 	virtual void parse_modules(){}
@@ -913,20 +1011,28 @@ struct tree : slv<1>
 // To retrieve tree signal from ID (reset process registers flip flops)
 std::vector<tree*> tree::trees;
 
-
+//void create_event(const uint64_t& t, int forever_process_id);
+uint64_t cur_time = 0;
+template<class T>
+void create_event(const uint64_t& t, T evt_type);
 
 struct clk_t : public tree
 {
 	//static std::vector<clk_t> clocks; //
+	uint64_t nchanged_flops = 0;
 	std::vector<flop*> flop_list;
+	std::vector<flop*> changed_flop_list;
 	std::vector<std::function<control_signals()>> processes;
 	std::vector<std::function<control_signals()>> comb_processes; // post clock combinational logic, required by combinational assignments of output ports
 
 	uint64_t half_period = 1; // default is same as vcd clock
 
-	void is_clk()
+	uint8_t delta = 0;
+
+	bool is_clk()
 	{
-		gprintf("IS CLOCK\n");
+		giprintf("IS CLOCK\n");
+		return 1;
 	}
 
 	clk_t()
@@ -942,7 +1048,7 @@ struct clk_t : public tree
 	{
 		p_en = x_i.gating_signal;
 		x_i.parent_clk->children.push_back(this);
-		gprintf("#BAdding child %R to clk %R", this->pvcd_entry->name, (x_i.parent_clk)->pvcd_entry->name);
+		giprintf("#BAdding child %R to clk %R", this->pvcd_entry->name, (x_i.parent_clk)->pvcd_entry->name);
 	}
 
 	template<class T9>
@@ -954,7 +1060,7 @@ struct clk_t : public tree
 
 	clk_t& get()
 	{
-		//gprintf("#Vclk get %", pvcd_entry->name);
+		//giprintf("#Vclk get %", pvcd_entry->name);
 		return *this;
 	}
 	// set half period in numbers of vcd periods
@@ -967,9 +1073,32 @@ struct clk_t : public tree
 	// Register a flip-flop (called from reset statement of synchronous processes)
 	void register_flop(flop* x_i)
 	{
-		gprintf("#Centry %", flop_list.size());
+		giprintf("#Centry %", flop_list.size());
 		flop_list.push_back(x_i);
-		gprintf("#C<<<<<<");
+		changed_flop_list.push_back(x_i);
+		changed_flop_list.push_back(x_i); // final vector will 2* actual flop count (in case of duplicate <= inside a process)
+		giprintf("#C<<<<<<");
+	}
+
+	void init_changed_flops_list()
+	{
+		nchanged_flops = 0;
+		//giprintf("#Uinit changed flops list %", pvcd_entry->name);
+	}
+
+	void register_changed_flop(flop* x_i)
+	{
+		//giprintf("#Centry %", flop_list.size());
+		if (nchanged_flops >= changed_flop_list.size())
+		{
+			giprintf("#RChanged flop % of % in %", nchanged_flops, changed_flop_list.size(), pvcd_entry->name);
+			//exit(0);
+		}
+		else
+			changed_flop_list[nchanged_flops] = (x_i);
+		nchanged_flops++;
+		//changed_flop_list.push_back(x_i);
+		//giprintf("#C<<<<<<");
 	}
 	// Register a flip-flop (called from reset statement of synchronous processes)
 	void register_clk(clk_t* x_i)
@@ -983,41 +1112,168 @@ struct clk_t : public tree
 	// All relevant processes are registered and will be executed on clock events
 	void parse_modules( )
 	{
-		gprintf("#CParse modules");
+		giprintf("#CParse modules");
 		for (int i = 0; i < gmodule::module_list.size(); i++)
 		{
-			gprintf("#CParsing module %R", gmodule::module_list[i]->name);
+			giprintf("#CParsing module %R", gmodule::module_list[i]->name);
 
 			control_signals x;
 			// This is ugly but I don't see any better solution
 			// Parse all processes in modules
 			// If they have this clock in their sensitivity list, register them to this clk
 			// If they don't have reset, consider them as combinational
+			if (not (gmodule::module_list[i]->forever_process_flags & 1) ){
+			giprintf("#mexec");
 			x = gmodule::module_list[i]->process0();
-			if (x.clk == n) // process has this clk in sensitivity list
-				if (x.reset_n == -1) // comb
-					comb_processes.push_back((std::bind(&gmodule::process0, gmodule::module_list[i])));
-				else
-					processes.push_back((std::bind(&gmodule::process0, gmodule::module_list[i])));
+			if (x.clk >= 0) static_cast<clk_t*>(tree::trees[x.clk])->init_changed_flops_list();
 
+			giprintf("#mRead clk is %R and trial clk is %R", x.clk, n);
+			if (x.clk == n) // process has this clk in sensitivity list
+			{
+				if (x.reset_n == -1) // comb
+				{
+					comb_processes.push_back((std::bind(&gmodule::process0, gmodule::module_list[i])));
+				}
+				else
+				{
+					processes.push_back((std::bind(&gmodule::process0, gmodule::module_list[i])));
+				}
+
+			}
+			}
+
+			if (not (gmodule::module_list[i]->forever_process_flags & 2) ){
+			giprintf("#mexec");
 			x = gmodule::module_list[i]->process1();
+			if (x.clk >= 0) static_cast<clk_t*>(tree::trees[x.clk])->init_changed_flops_list();
+			giprintf("#mRead clk is %R and trial clk is %R", x.clk, n);
 			if (x.clk == n) // process has this clk in sensitivity list
+			{
 				if (x.reset_n == -1) // comb
+				{
 					comb_processes.push_back((std::bind(&gmodule::process1, gmodule::module_list[i])));
+				}
 				else
+				{
 					processes.push_back((std::bind(&gmodule::process1, gmodule::module_list[i])));
+				}
+
+			}
+			}
+
+			if (not (gmodule::module_list[i]->forever_process_flags & 4) ){
+			giprintf("#mexec");
 			x = gmodule::module_list[i]->process2();
+			if (x.clk >= 0) static_cast<clk_t*>(tree::trees[x.clk])->init_changed_flops_list();
+			giprintf("#mRead clk is %R and trial clk is %R", x.clk, n);
 			if (x.clk == n) // process has this clk in sensitivity list
+			{
 				if (x.reset_n == -1) // comb
+				{
 					comb_processes.push_back((std::bind(&gmodule::process2, gmodule::module_list[i])));
+				}
 				else
+				{
 					processes.push_back((std::bind(&gmodule::process2, gmodule::module_list[i])));
+				}
+
+			}
+			}
+
+			if (not (gmodule::module_list[i]->forever_process_flags & 8) ){
+			giprintf("#mexec");
 			x = gmodule::module_list[i]->process3();
+			if (x.clk >= 0) static_cast<clk_t*>(tree::trees[x.clk])->init_changed_flops_list();
+			giprintf("#mRead clk is %R and trial clk is %R", x.clk, n);
 			if (x.clk == n) // process has this clk in sensitivity list
+			{
 				if (x.reset_n == -1) // comb
+				{
 					comb_processes.push_back((std::bind(&gmodule::process3, gmodule::module_list[i])));
+				}
 				else
+				{
 					processes.push_back((std::bind(&gmodule::process3, gmodule::module_list[i])));
+				}
+			}
+			}
+
+
+			if (not (gmodule::module_list[i]->forever_process_flags & 16) ){
+			giprintf("#mexec");
+			x = gmodule::module_list[i]->process4();
+			if (x.clk >= 0) static_cast<clk_t*>(tree::trees[x.clk])->init_changed_flops_list();
+			giprintf("#mRead clk is %R and trial clk is %R", x.clk, n);
+			if (x.clk == n) // process has this clk in sensitivity list
+			{
+				if (x.reset_n == -1) // comb
+				{
+					comb_processes.push_back((std::bind(&gmodule::process4, gmodule::module_list[i])));
+				}
+				else
+				{
+					processes.push_back((std::bind(&gmodule::process4, gmodule::module_list[i])));
+				}
+			}
+			}
+
+			if (not (gmodule::module_list[i]->forever_process_flags & 32) ){
+			giprintf("#mexec");
+			x = gmodule::module_list[i]->process5();
+			if (x.clk >= 0) static_cast<clk_t*>(tree::trees[x.clk])->init_changed_flops_list();
+			giprintf("#mRead clk is %R and trial clk is %R", x.clk, n);
+			if (x.clk == n) // process has this clk in sensitivity list
+			{
+				if (x.reset_n == -1) // comb
+				{
+					comb_processes.push_back((std::bind(&gmodule::process5, gmodule::module_list[i])));
+				}
+				else
+				{
+					processes.push_back((std::bind(&gmodule::process5, gmodule::module_list[i])));
+				}
+			}
+			}
+
+			if (not (gmodule::module_list[i]->forever_process_flags & 64) ){
+			giprintf("#mexec");
+			x = gmodule::module_list[i]->process6();
+			if (x.clk >= 0) static_cast<clk_t*>(tree::trees[x.clk])->init_changed_flops_list();
+			giprintf("#mRead clk is %R and trial clk is %R", x.clk, n);
+			if (x.clk == n) // process has this clk in sensitivity list
+			{
+				if (x.reset_n == -1) // comb
+				{
+					comb_processes.push_back((std::bind(&gmodule::process6, gmodule::module_list[i])));
+				}
+				else
+				{
+					processes.push_back((std::bind(&gmodule::process6, gmodule::module_list[i])));
+				}
+			}
+			}
+
+			if (not (gmodule::module_list[i]->forever_process_flags & 128) ){
+			giprintf("#mexec");
+			x = gmodule::module_list[i]->process7();
+			if (x.clk >= 0) static_cast<clk_t*>(tree::trees[x.clk])->init_changed_flops_list();
+			giprintf("#mRead clk is %R and trial clk is %R", x.clk, n);
+			if (x.clk == n) // process has this clk in sensitivity list
+			{
+				if (x.reset_n == -1) // comb
+				{
+					comb_processes.push_back((std::bind(&gmodule::process7, gmodule::module_list[i])));
+				}
+				else
+				{
+					processes.push_back((std::bind(&gmodule::process7, gmodule::module_list[i])));
+				}
+			}
+			}
+
+
+			giprintf("#CEnd module");
+
 		}
 
 
@@ -1027,13 +1283,16 @@ struct clk_t : public tree
 			children[i]->parse_modules();
 
 		}
+		giprintf("#BEnd Parse modules");
+
 #endif
 	}
 
 
 	inline void exec_processes()
 	{
-		//gprintf("#UProcesses: %", processes.size());
+		//giprintf("#UProcesses: %", processes.size());
+		init_changed_flops_list();
 		for (int i = 0; i < processes.size(); i++)
 		{
 
@@ -1050,49 +1309,79 @@ struct clk_t : public tree
 	}
 	inline void exec_clock()
 	{
-		//gprintf("#VCLOCK flops: %Y", flop_list.size());
+		//if (nchanged_flops)
+		//giprintf("#VCLOCK flops: %Y changed %Y in %Y", flop_list.size(), nchanged_flops, pvcd_entry->name);
+#if 0
 		for (int i = 0; i < flop_list.size(); i++)
 		{
-			//gprintf("#cflop %", i);
+			//giprintf("#cflop %", i);
 			flop_list[i]->clock();
 		}
+#else
+		for (int i = 0; i < nchanged_flops; i++)
+		{
+			//giprintf("#cflop %", i);
+			changed_flop_list[i]->clock();
+		}
+#endif
 	}
 
+	// will execute stg depending on clk delta cycle value
+	bool exec_delta()
+	{
+		if (delta == 0)
+			exec_processes();
+		else if (delta == 1)
+			exec_clock();
+		else
+			exec_comb_processes();
+		delta++;	
+		return (delta == 3); // Flags the end of delta cycles
+	}
 
 	void operator<=(const slv<1>& x_i)
 	{
-		//gprintf("#m***********clock <= val %R", x_i);
-		tree::operator<=(x_i);
-		//gprintf("#mclock tree <= val %R", x_i);
+		//giprintf("#m***********clock <= val %R", x_i);
+		//giprintf("#mclock tree <= val %R", x_i);
+#if 0		
 		operator=(x_i);
-		//gprintf("#mEND clock <= val %R", x_i);
+#else
+		tree::operator<=(x_i);
+		delta = 0;
+		//giprintf("#Rclk event from <= % @ curtime % -> %", pvcd_entry->name, cur_time, cur_time+1);
+		//create_event(cur_time+1, this);
+		if (this->event()) create_event(cur_time+1, this);
+#endif		
+		//giprintf("#mEND clock <= val %R", x_i);
 	}
 
 	void operator=(const slv<1>& x_i)
 	{
-		//gprintf("#mclock = val %R", x_i);
+		//giprintf("#mclock = val %R", x_i);
 		//vcd_file.set_vcd_time(vcd_file.get_vcd_time() + half_period);
 		//tree::operator=(x_i);
+		tree::operator<=(x_i);
 
 #ifdef GATED_CLOCKS
 		for (int i = 0; i < children.size(); i++)
 		{
-			//gprintf("#b en %", *(children[i]->p_en) );
+			//giprintf("#b en %", *(children[i]->p_en) );
+			//static_cast<clk_t*>(children[i])->init_changed_flops_list();
 			children[i]->tree::operator<=(x_i);
 			//static_cast<slv<1>>(*children[i])<=(x_i);
-			//gprintf("#Mval %", (*children[i]));
+			//giprintf("#Mval %", (*children[i]));
 		}
 #endif
 		if (tree::event())
 		{
-			//gprintf("#ball processes");
+			//giprintf("#ball processes");
 #ifdef GATED_CLOCKS
-			//gprintf("#mchidren:%", children.size());
+			//giprintf("#mchidren:%", children.size());
 			for (int i = 0; i < children.size(); i++)
 			{
 				if (children[i]->event())
 					{
-					//gprintf("#BExec processes for clk %R", children[i]->pvcd_entry->name);
+					//giprintf("#BExec processes for clk %R", children[i]->pvcd_entry->name);
 						children[i]->exec_processes();
 					}
 
@@ -1126,7 +1415,7 @@ struct clk_t : public tree
 template<class T1, class T2> register_clk(T1 g_clk, T2)
 void register_clk(T1 x, T2 y)
 {
-	gprintf("#VFunction register clock");// to %",tree::trees[x]->is_clk());
+	giprintf("#VFunction register clock");// to %",tree::trees[x]->is_clk());
 	tree::trees[x]->is_clk();
 	tree::trees[x]->register_clk(y);
 }
@@ -1134,11 +1423,20 @@ void register_clk(T1 x, T2 y)
 template<class T1, class T2>
 void register_flop(T1 x, T2 y)
 {
-	//gprintf("#VFunction register flop");// to %",tree::trees[x]->is_clk());
+	//giprintf("#VFunction register flop");// to %",tree::trees[x]->is_clk());
 	//tree::trees[x]->is_clk();
 	tree::trees[x]->register_flop(y);
+	y->nclk = x;
+
 }
 
+template<class T2>
+void register_changed_flop(T2 y)
+{
+	//giprintf("#VFunction register flop");// to %",tree::trees[x]->is_clk());
+	//tree::trees[x]->is_clk();
+	tree::trees[y->nclk]->register_changed_flop(y);
+}
 struct reset_t : tree
 {
 	reset_t()
@@ -1158,20 +1456,25 @@ struct reset_t : tree
 clk_t no_clock;
 reset_t no_reset;
 
-
-
 template<int N>
 Signed<N> conv_signed(const slv<N>& x_i)
 //Signed<N> conv_signed( slv<N> x_i)
 {
-	return Signed<N>(x_i.n);
+	//gprintf("UNSss % %", N, x_i.n );
+	//Signed<N> res = adjust<N>(x_i.n);
+	//gprintf("CS done % ", res.n);
+	//return res;
+	return Signed<N>(adjust<N>(x_i.n));
 }
 
 
 template<int N>
 slv<N> conv_unsigned(const slv<N>& x_i)
 {
-	return slv<N>(x_i.n);
+	//gprintf("UNSzzz % %", x_i.n, N);
+	//gprintf("UNSzz % % %", x_i.n, N, adjust<N>(x_i.n));
+	//gprintf("Yo");
+	return slv<N>( adjust<N>(x_i.n) );
 }
 
 // Conv to int, general case  !!!!!!!!!! Called conv_integer for disambiguating when is called from within slv<> (set_bit method)
@@ -1187,6 +1490,7 @@ template<int N >
  int conv_integer(const slv<N>& x_i)
 {
 	uint64_t nn = x_i.conv_int();
+	//gprintf("#m N % x_i % nn %", N, x_i, nn);
 	//Signed<32> r = Signed<32>(x_i.n);
 	return int(nn);
 }
@@ -1200,422 +1504,19 @@ const constexpr inline int const_conv_int(const slv<N> x_i)
 	return int(x_i.n);
 }
 
-template <class T, int N>
-struct array_base
+// get value of a tree using its idx
+int tree_val(int n)
 {
-	T v[N];
-	T& operator()(int n)
-	{
-		if (n >= N) { gprintf("R#ERROR: accessing element % of array 0 to %", n, N-1); exit(0);}
-		return array_base<T,N>::v[n];
-	}
-	T& operator[](int n)
-	{
-		if (n >= N) { gprintf("R#ERROR: accessing element % of array 0 to %", n, N-1); exit(0);}
-		return array_base<T,N>::v[n];
-	}
-};
+	return conv_integer(static_cast<slv<1>>(*tree::trees[n]));
+}
 
+#include "array.h"
 
-
-
-template < class T1 >
-struct array {}; // does not exist
-
-// This to mimmic vhdl statement toto <= ( others => to_signed(0, 8) );
-// especially important for array use
-template <class T>
-struct others_type
-{
-	T x;
-	others_type(T x_i)
-	{
-		x = (x_i);
-	}
-};
-
-template <class T> others_type<T> __others(T x)
-		{
-			return others_type<T>(x);
-		}
-
-// To be called with array_base as T1
-template < template<class ,int> class T1, class T, int N>
-struct array< T1<T,N> > : T1<T,N>, vcd_entry
-{
-	//T v[N];
-	vcd_entry* pvcd_entry;
-
-	array( ) // for constants
-	{
-	}
-	array(const T1<T,N>& x_i ) : T1<T,N>(x_i) // for constants init
-	{
-		/*
-		for (int i = 0; i < N; i++)
-		{
-			array_base<T,N>::v[i] = x_i.v[i];
-		}*/
-		//array_base(x_i);
-	}
-
-	array(const sig_desc& x_i ) : vcd_entry(x_i)
-	{
-		//vcd_entry = create_vcd_entry(x_i.name, x_i.pmodule, -4);
-		vcd_entry::nbits = -65536; // marks an array of vcd entries
-		x_i.pmodule->vcd_list.push_back(static_cast<vcd_entry*>(this));
-
-		for (int i = 0; i < N; i++)
-		{
-#if 0
-			std::string name = x_i.name + '(' + std::to_string(i) + ')';
-			array_base<T,N>::v[i].pvcd_entry = create_vcd_entry(name, x_i.pmodule, (*this).length + array_base<T,N>::v[i].length);
-#else // trying to make arrays of records possible
-			std::string name = x_i.name + '(' + std::to_string(i) + ')';
-			int nbits = (*this).length + array_base<T,N>::v[i].length;
-			array_base<T,N>::v[i].conf_vcd_entry(gen_sig_desc(name, x_i.pmodule));//, (*this).length + array_base<T,N>::v[i].length);
-			array_base<T,N>::v[i].pvcd_entry->nbits = nbits; //gen_sig_desc(name, x_i.pmodule);//, (*this).length + array_base<T,N>::v[i].length);
-#endif
-
-		}
-	}
-
-	T1<T,N>* pbase()
-		{
-			return &static_cast<T1<T,N>>(*this);
-		}
-
-	template <class T2>
-	void operator<=(others_type<T2> x_i)
-	{
-		for (int i = 0; i < N; i++)
-		{
-			array_base<T,N>::v[i].operator<=(x_i.x);
-		}
-	}
-
-	void activate()
-	{
-		for (int i = 0; i < N; i++)
-		{
-			array_base<T,N>::v[i].pvcd_entry->activate();
-		}
-	}
-/*
-	T& operator()(int n)
-	{
-		return array_base<T,N>::v[n];
-	}
-*/
-	static const int length = -65536;
-};
-
-#define DIV(a, b) a\b
-
-#define VHDLz
+// Include all Agravic macros
 #ifndef VHDL
-#define SIGNED(a) conv_signed(a)
-#define UNSIGNED(a) conv_unsigned(a)
-#define SLV(a, n) slv<n>(a)
-#define BOOLEAN bool
-#define SLV_TYPE(n) slv<n>
-#define TO_SLV(a) a
-#define TO_LOGIC(a) slv<1>(a)
-#define PORT_BASE(a) a.base_type()  // Required to perform something that is not supported by the std:reference_wrapper used for port class ex: SIGNED(PORT_BASE(data_i))
-#define SIGNED_TYPE(n) Signed<n>
-#define UNSIGNED_TYPE(n) slv<n>
-#define INT(n) Signed<n>
-#define UINT(n) slv<n>
-#define TRISTATE(n) tristate<n>
-
-#define RESIZE(a,n)  a.template resize<n>()
-
-#define TO_UNSIGNED(a,n) slv<n>(a)
-#define TO_SIGNED(a,n) Signed<n>(a)
-#define TO_UINT(a,n) slv<n>(a)
-#define TO_INT(a,n) Signed<n>(a)
-#define TO_INTEGER(a) conv_integer(a)
-
-#define CLK_TYPE clk_t
-#define RST_TYPE reset_t
-#define BIT_TYPE slv<1>
-#define CAT(a,b) a.cat(b)
-#define STRING(a) #a
-#define BIN(a) slv<sizeof(STRING(a))-1>(0b##a)
-#define CASE_BIN(a) (0b##a)
-#define HEX(a) slv<(sizeof(STRING(a))-1)*4>(0x##a)
-#define BIT(a) slv<sizeof(STRING(a))-1>(0b##a)
-#define EQ(a,b) (a==b)
-#define EXT(a,b) slv<b>((a).n)
-#define SXT(a,b) slv<b>(conv_signed(a).conv_int())
-#define SIGNED(a) conv_signed(a)
-#define UNSIGNED(a) conv_unsigned(a)
-#define RANGE(a,b,c) (a.template range<b,c>())
-#define SUBVECTOR(a,b,c) (a.template range<b>(c)) // Version of RANGE which extracts a vector of len b from pos c
-#define SLV_RANGE(a,b,c) a.range<b,c>() // for further concatenation in vhdl
-#define B(a,b) (a).get_bit(b)
-#define VAR_SET_BIT(a, b, c) a.set_bit(b, c) //ONLY VARIABLES !!!!!!!!!!!!!!!!!!!!
-#define SIG_SET_BIT(a, b, c) a.set_bit(b, c) //ONLY COMB !!!!!!!!!!!!!!!!!!!!
-#define HI(a) decltype(a)::high
-#define LEN(a) decltype(a)::length
-#define IF if
-#define THEN {
-#define ENDIF }
-#define ELSE } else {
-#define ELSEIF } else if
-#define SWITCH(a) switch(TO_INTEGER(a)){
-#define CASE(b) break;case b: //.get_const()://const_conv_int(b) ://const_conv_int(b):
-#define DEFAULT break;default:
-#define ENDCASE }
-#define VA =
-#define ARRAY_TYPE(t, n) array<array_base<t,n>>
-#define BASE_ARRAY_TYPE(t, n) array_base<t,n>
-#define BASE_RECORD_TYPE(t) t##_base
-
-#define TYPE(a, t) typedef t a
-#define TOP_SIG(a, t)  t a = gen_sig_desc(#a, gmodule::out_of_hier)
-//#define CONST(a, t)  const t a
-#define SIG(a, t)  t a = gen_sig_desc(#a, this)
-#define DECL_GATED_CLK(name)
-#define GATED_CLK(name, clk_i, gate)  clk_t name = gen_gated_clk_desc(#name, this, clk_i, gate)
-#define GATE_CLK(clk_i, gated_clk, gating_signal) gated_clk.gate_clk(clk_i, gating_signal)
-//#define VAR(a, t)  t a //= gen_sig_desc(#a, this)
-#define VAR(a, t) static t a // More like VHDL behavior, however static vars might generate latches
-#define CONST(a, t)   const t a
-#define CASE_CONST(a, t)   const int a
-#define MEMBER(a, t) t a
-#define REC(a) struct a {
-#define ENDREC };
-#define LIST(...) { __VA_ARGS__ }
-//#define EVENT(a) static_cast<tree>(a.get()).event()//CAT_(a,.event())
-#define EVENT(a) (a.get()).event()//CAT_(a,.event())
-#define CONSTANT const
-#define OTHERS(a) __others(a)
-#define RESET(a) a <= TO_UINT(0, LEN(a))
-#define shift_left(a, b) a.sll(b)
-#define shift_right(a, b) a.srl(b)
-#define ROTATE_LEFT(a, b) a.sla(b)
-#define ROTATE_RIGHT(a, b) a.sra(b)
-#define SHIFT_LEFT(a, b) a.sll(b)
-#define SHIFT_RIGHT(a, b) a.srl(b)
-#define FOR(a,b,c) for (int a = b; a <= c; a++) {
-#define ENDLOOP }
+#include "C_macros.h"
 #else
 #include "VHDL_macros.h"
-
-
-#endif
-
-#ifndef VHDL
-
-#ifdef NOPRINT
-#define gprintf(...)
-#endif
-
-#define START_OF_FILE(a) // c++ file of block a generated by platform GS
-
-// template parameters for in and out ports
-#define IN 1
-#define OUT 0
-#define INOUT 0 // in or out ports should be able to accept assignments for either side.
-
-// port definition
-//#define PORT_DEF(name, type, in) port<type, in> name = gen_sig_desc(#name, this);
-#define STRINGIFY(x) #x// EVAL(x)
-
-//#define PORT_DEF(name, type, in) port<type, in> name = gen_sig_desc(STRINGIFY(<name), this);
-//#define PORT_DEF(name, type, in) port<type, in> name = gen_sig_desc(STRINGIFY(CAT_(PORT_CHAR(in), name)), this);
-#define PORT_DEF(name, type, in) port<type, in> name = \
-		IF_ELSE(in) (gen_sig_desc(STRINGIFY(<name), this)) (gen_sig_desc(STRINGIFY(>name), this));
-
-#define FIELD_DEF(name, type) type name;
-// get first and second args. of port mapping
-#define get1_PM(a,b) a
-#define get2_PM(a,b) b
-#define get_MAPPING(...) __VA_ARGS__
-#define get_GENERIC(...) __VA_ARGS__
-#define get1_PORT(a,b,c) a
-#define get2_PORT(a,b,c) b
-#define get3_PORT(a,b,c) c
-#define get_DECL_PORTS(...) __VA_ARGS__
-#define get_DECL_FIELDS(...) __VA_ARGS__
-#define get1_FIELD(a,b) a
-#define get2_FIELD(a,b) b
-
-
-// because we have to pass a member pointer (to a port) and a pointer to something to refer to
-// pointers required because port map list is a template recurse, and member pointer passing require that all parameters are passed by value
-// and port driver recursion on ports require that they are passed by reference
-#define PORT_PTR(type, name) &type::name //type::## name
-#define VAR_PTR(name) &name //type::## name
-
-#define PORT_MAP_COMMA(type,b) PORT_PTR(type, EVAL1(get1_##b)), VAR_PTR(EVAL1(get2_##b)),
-#define PORT_MAP(type,b) PORT_PTR(type, EVAL1(get1_##b)), VAR_PTR(EVAL1(get2_##b))
-
-
-
-//#define PORT_MAPS(type,  ...) EVAL1(MAP_PLUS1(type, PORT_MAP2, __VA_ARGS__))
-#define PORT_MAPS(type,  ...) EVAL(MAP_ALT_PLUS1(type, PORT_MAP_COMMA, PORT_MAP, __VA_ARGS__))
-#define GEN_BIND(name, ...) gen_bind(name, )
-
-#define BLK_CTOR(name) name(char* name_i, gmodule* parent) : gmodule::gmodule(name_i, parent)
-
-#define APPLY_PORT(decl) EVAL1(get_##decl)
-
-
-#define DECL_PORT(a) PORT_DEF(EVAL1(get1_##a),EVAL1(get2_##a),EVAL1(get3_##a))
-#define DECL_PORTS(...) EVAL(MAP(DECL_PORT, __VA_ARGS__))
-#define DECL_FIELD(a) FIELD_DEF(EVAL1(get1_##a),EVAL1(get2_##a))
-#define DECL_FIELDS(...) EVAL(MAP(DECL_FIELD, __VA_ARGS__))
-
-#define FIELD_ACT_VCD(name)  name.pvcd_entry->activate();
-#define FIELD_ASSIGN(name)  name <= x.name;
-#define FIELD_EQ(name)  name = x.name;
-
-#define RECORD_NAME1(a,b) a.b
-#define RECORD_NAME2(a,b) STRINGIFY(EVAL(RECORD_NAME1(a,b)))
-
-//#define FIELD_VCD1(name)   create_vcd_entry(STRINGIFY(name), x.pmodule, -16)
-#define FIELD_VCD2(name)   STRINGIFY(name)
-#define FIELD_VCD1(...)   __VA_ARGS__
-
-#define FIELD_VCD(name)  {std::string __zozo__ = rec_name + '.' + FIELD_VCD2(name); name.pvcd_entry = create_vcd_entry(__zozo__, x.pmodule, (*this).length + name.length);}
-
-#define FIELD_USING1(recname, name) FIELD_USING2(recname, name)
-#define FIELD_USING(recname, name) using FIELD_USING2(recname, name);
-#define FIELD_USING2(recname, name) recname##_base::name
-
-//#define FIELD_USING(recname, name)  using recname##_base::##name;
-
-#define USING_FIELDS(type, ...) EVAL(MAP_PLUS1(type, USING_FIELD, __VA_ARGS__))
-#define USING_FIELD(recname, a) FIELD_USING(recname,EVAL1(get1_##a))
-
-#define VCD_FIELDS( ...) EVAL(MAP(VCD_FIELD, __VA_ARGS__))
-#define VCD_FIELD(a) FIELD_VCD(EVAL1(get1_##a))
-
-#define VCD_ACT_FIELDS(...) EVAL(MAP(VCD_ACT_FIELD, __VA_ARGS__))
-#define VCD_ACT_FIELD(a) FIELD_ACT_VCD(EVAL1(get1_##a))
-#define ASSIGN_FIELDS(...) EVAL(MAP(ASSIGN_FIELD, __VA_ARGS__))
-#define ASSIGN_FIELD(a) FIELD_ASSIGN(EVAL1(get1_##a))
-#define EQ_FIELDS(...) EVAL(MAP(EQ_FIELD, __VA_ARGS__))
-#define EQ_FIELD(a) FIELD_EQ(EVAL1(get1_##a))
-
-#define BASE_TYPE(type) type##_base
-
-// Block and ports declaration
-//#define ENTITY(type, ports, ...) IF_ELSE(HAS_ARGS(__VA_ARGS__))(template<int dummy0, __VA_ARGS>)(template<int dummy0>) struct type : gmodule {/*
-#define ENTITY(type, ports, ...) IF_ELSE(HAS_ARGS(__VA_ARGS__))(template<int dummy##type, __VA_ARGS>)(template<int dummy##type>) struct type : gmodule {/*
-		*/ EVAL1(DECL_PORTS(get_##ports)) /*
-		*/ type(const char*x, gmodule* y):gmodule(x,y) {}//std::cerr << "CTOR " << name << "\n";}
-#define TESTBENCH(type, ...) template<int dummy0> struct type : gmodule {/*
-		*/ type(const char*x, gmodule* y):gmodule(x,y) {}//std::cerr << "CTOR " << name << "\n";}
-
-#define PACKAGE(a)
-#define END_PACKAGE(a)
-#define USE_PACKAGE(a)
-#define INTEGER int
-#if 0
-#define RECORD(type, ports)	struct type : vcd_entry{\
-		EVAL(DECL_FIELDS(get_##ports))\
-		type(const sig_desc& x) : vcd_entry(x){\
-		vcd_entry::nbits = -1024; /* marks record */\
-		x.pmodule->vcd_list.push_back(static_cast<vcd_entry*>(this)); \
-		std::string rec_name = x.name; \
-		EVAL(VCD_FIELDS(type,get_##ports)) }\
-		void activate() {\
-		EVAL(VCD_ACT_FIELDS(get_##ports)) }\
-		void operator <= (const type& x){\
-		EVAL(ASSIGN_FIELDS(get_##ports)) }\
-}
-#else
-#define RECORD(type, ports)	struct type##_base{\
-		EVAL(DECL_FIELDS(get_##ports))};\
-		struct type : type##_base, vcd_entry{/*\
-		~type() = default; \
-*/		vcd_entry* pvcd_entry = static_cast<vcd_entry*>(this);\
-		EVAL(USING_FIELDS(type,get_##ports)) \
-		type() {}\
-		~type(){gprintf("#RDestroying record %", pvcd_entry->name);}\
-		type(const sig_desc& x) : vcd_entry(x){\
-		gprintf("#VNew record : %", x.name);\
-		vcd_entry::nbits = -2048; /* marks record */\
-		x.pmodule->vcd_list.push_back(static_cast<vcd_entry*>(this)); \
-		std::string rec_name = x.name; \
-		EVAL(VCD_FIELDS(get_##ports)) }\
-		void conf_vcd_entry(const sig_desc& x){\
-		gprintf("#VNew record VCD configuration: %", x.name);\
-		pvcd_entry->name = x.name;\
-		pvcd_entry->pmodule = x.pmodule;\
-		pvcd_entry->driver = this;\
-		pvcd_entry->nbits = -2048;\
-		x.pmodule->vcd_list.push_back(static_cast<vcd_entry*>(this)); \
-		std::string rec_name = x.name; \
-		EVAL(VCD_FIELDS(get_##ports)) }\
-		void activate() {\
-		EVAL(VCD_ACT_FIELDS(get_##ports)) }\
-		void operator <= (const type& x){\
-		EVAL(ASSIGN_FIELDS(get_##ports)) }\
-		void operator = (const type& x){\
-		EVAL(EQ_FIELDS(get_##ports)) }\
-		void operator <= (const type##_base& x){\
-		EVAL(ASSIGN_FIELDS(get_##ports)) }\
-		void operator = (const type##_base& x){\
-		EVAL(EQ_FIELDS(get_##ports)) } \
-		static const int length = -2048;\
-		void copy_children(const type& x_i){}\
-		}
-#endif
-#define END_ENTITY //}
-#define COMPONENT(type, ports, ...)
-
-#define INTERNAL_BINDINGS
-#define END_INTERNAL_BINDINGS
-
-#define INTERNAL_SIGNALS
-#define END_INTERNAL_SIGNALS
-
-// end of block declaration
-#define BLK_END }
-
-#define APPLY_MAP(type, port_map) PORT_MAPS(type, EVAL1(get_##port_map))
-
-// Pass generic parameters - to be used later
-#define APPLY_GENERIC(a) EVAL1(get_##a)
-
-// instantiation of block inside hierarchy - all except testbench
-#define BLK_INST(name, type, port_map, ...) IF_ELSE(HAS_ARGS(__VA_ARGS__))\
-	(type<0,APPLY_GENERIC(__VA_ARGS__)>& name = *create_block(#name, this, APPLY_MAP(type<0,APPLY_GENERIC(__VA_ARGS__)>, port_map)))\
-	(type<0>& name = *create_block< type<0> >(#name, this, APPLY_MAP(type<0>, port_map)))
-
-// Instantiation of top rtl block - should be testbench
-/*#define BLK_INST_TOP(name, type, port_map, ...) IF_ELSE(HAS_ARGS(__VA_ARGS__))\
-	(type<0,APPLY_GENERIC(__VA_ARGS__)>& name = *create_block(#name, gmodule::out_of_hier, APPLY_MAP(type<0,APPLY_GENERIC(__VA_ARGS__)>, port_map)))\
-	(type<0>& name = *create_block<type<0>>(#name, gmodule::out_of_hier, APPLY_MAP(type<0>, port_map)))*/
-#define BLK_INST_TOP(name, type, ...) type<0>& name = *create_block<type<0>>(#name)
-
-// process_void for trial purposes, when no clk nor reset
-#define PROCESS_VOID(number) constexpr control_signals process##number(){  __control_signals__.clk = -1; __control_signals__.reset_n = -1;
-//#define COMB_PROCESS(number, signal1) constexpr control_signals process##number(){ __control_signals__.clk = signal1.get().n; __control_signals__.reset_n = -1; //gprintf("#### % % % ####", name, signal1.get().n, signal2.get().n);
-#define COMB_PROCESS(number, signal1) control_signals process##number(){ __control_signals__.clk = signal1.get().n; __control_signals__.reset_n = -1; //gprintf("#### % % % ####", name, signal1.get().n, signal2.get().n);
-
-//#define PROCESS(number, signal1, signal2) constexpr control_signals process##number(){ __control_signals__.clk = signal1.get().n; __control_signals__.reset_n = signal2.get().n; //gprintf("#### % % % ####", name, signal1.get().n, signal2.get().n);
-#define PROCESS(number, signal1, signal2)  control_signals process##number(){ __control_signals__.clk = signal1.get().n; __control_signals__.reset_n = signal2.get().n; //gprintf("#### % % % ####", name, signal1.get().n, signal2.get().n);
-
-#define END_PROCESS return(__control_signals__); }
-#define END_COMB_PROCESS return(__control_signals__); }
-
-
-#define MAP_LIST(blk_name, blk_type, ...) EVAL(MAP_PLUS2(blk_name, blk_type)
-
-#define BEGIN
-//#define INCLUDES #include "slv.h"
-#define INCLUDES
-
-
-
-
-#else
-
 #endif
 
 // Include here all constants (slv sizes)

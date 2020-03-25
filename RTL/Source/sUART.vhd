@@ -5,7 +5,7 @@ library work; use work.altera.all;
 
 
 
-entity sUART is port( clk_peri : IN std_logic; reset_n : IN std_logic; boot_mode_i : IN std_logic; core2mem_i : IN blk2mem_t; mem2core_o : OUT mem2blk_t; uart_dma_i : IN d2p_8_t; uart_dma_o : OUT p2d_8_t; uart_tx_o : OUT std_logic; uart_rx_i : IN std_logic ); end sUART; architecture rtl of sUART is component dummy_zkw_pouet is port(clk : in std_logic);end component;
+entity sUART is generic (generic_int: integer); port ( clk_peri : IN std_logic; reset_n : IN std_logic; boot_mode_i : IN std_logic; core2mem_i : IN blk2mem_t; mem2core_o : OUT mem2blk_t; irq_o : OUT std_logic; uart_dma_i : IN d2p_8_t; uart_dma_o : OUT p2d_8_t; uart_tx_o : OUT std_logic; uart_rx_i : IN std_logic ); end sUART; architecture rtl of sUART is component dummy_zkw_pouet is port(clk : in std_logic);end component;
 signal div : unsigned ((16 -1) downto 0);
 signal cnt : unsigned ((16 -1) downto 0);
 signal conf : unsigned ((32 -1) downto 0);
@@ -19,6 +19,13 @@ signal ready : std_logic;
 signal boot_mode : std_logic;
 signal state : unsigned ((5 -1) downto 0);
 
+constant reg_base_addr : unsigned ((core2mem_i.addr'length-1) downto 0) := TO_UNSIGNED(generic_int,core2mem_i.addr'length);
+signal base_addr_test : unsigned ((core2mem_i.addr'length-1) downto 0);
+constant reg_addr_lsbs : INTEGER := ( generic_int / 268435456);
+signal addr_lsbs_test : unsigned ((4 -1) downto 0);
+
+signal base_addr_ok : std_logic;
+signal addr_ok : std_logic;
 
 begin
 
@@ -54,6 +61,9 @@ begin
   rx_started <= '0';
   get_rx_byte <= '1' ;
   send_tx_byte <= '0';
+  base_addr_test <= reg_base_addr;
+  addr_lsbs_test <= TO_UNSIGNED(reg_addr_lsbs,4);
+  irq_o <= '0';
 
  elsif ( clk_peri'event and (clk_peri = '1' ) ) then
   cnt <= cnt - TO_UNSIGNED(1,cnt'length);
@@ -65,10 +75,14 @@ begin
 
   mem2core_o.data_en <= '0';
   mem2core_o.data <= TO_UNSIGNED(0,32);
-  IF ( ( core2mem_i.cs_n = '0' ) and ( (core2mem_i.addr(15 - 3 downto 4)) = "111111111" ) ) then
+
+  IF ( ( core2mem_i.cs_n = '0' ) and ( (core2mem_i.addr(core2mem_i.addr'high downto ( (generic_int / 268435456 + 16) rem 16 ))) = (reg_base_addr(reg_base_addr'high downto ( (generic_int / 268435456 + 16) rem 16 ))) ) ) then
+   base_addr_ok <= '1' ;
 
    IF (core2mem_i.wr_n = '0' ) then
-    IF (core2mem_i.addr = "1111111110000") then
+
+    IF ((core2mem_i.addr(( (generic_int / 268435456 + 16) rem 16 )-1 downto 0)) = TO_UNSIGNED(0,( (generic_int / 268435456 + 16) rem 16 ))) then
+     addr_ok <= '1' ;
      val := core2mem_i.data;
      div <= (val(31 downto 16));
      byte <= (val(7 downto 0));
@@ -82,7 +96,8 @@ begin
     end if;
    else
 
-    IF (core2mem_i.addr = "1111111110000") then
+
+    IF ((core2mem_i.addr(( (generic_int / 268435456 + 16) rem 16 )-1 downto 0)) = TO_UNSIGNED(0,( (generic_int / 268435456 + 16) rem 16 ))) then
      mem2core_o.data_en <= '1' ;
      mem2core_o.data <= ( div & TO_UNSIGNED(0,7) & ready & byte );
     end if;
@@ -97,13 +112,13 @@ begin
    uart_dma_o.rdy <= '0';
   end if;
 
-
+  irq_o <= '0';
 
   IF ( (send_tx_byte = '1' ) and (cnt = TO_UNSIGNED(0,cnt'length)) ) then
    case (state) is
     when "11000" => uart_tx_o <= '0'; cnt <= div; state <= "00000";
     when "01000" => uart_tx_o <= '1' ; cnt <= div; state <= "10000";
-    when "10000" => uart_tx_o <= '1' ; state <= "11000"; send_tx_byte <= '0'; get_rx_byte <= '1' ; ready <= '1' ;uart_dma_o.rdy <= '1' ;
+    when "10000" => uart_tx_o <= '1' ; state <= "11000"; send_tx_byte <= '0'; get_rx_byte <= '1' ; ready <= '1' ;uart_dma_o.rdy <= '1' ; irq_o <= '1' ;
     when others => cnt <= div; uart_tx_o <= byte(0); state <= state + TO_UNSIGNED(1,state'length); byte <= SHIFT_RIGHT(byte, 1);
    end case;
   end if;
@@ -125,7 +140,7 @@ begin
     case (state) is
      when "11000" => cnt <= div; state <= "00000";
      when "01000" => cnt <= TO_UNSIGNED(0,cnt'length); state <= "10000";
-     when "10000" => state <= "11000"; ready <= '1' ; uart_dma_o.data <= byte; uart_dma_o.data_en <= '1' ; rx_started <= '0';
+     when "10000" => state <= "11000"; ready <= '1' ; uart_dma_o.data <= byte; uart_dma_o.data_en <= '1' ; rx_started <= '0'; irq_o <= '1' ;
      when others => cnt <= div; byte <= (SHIFT_RIGHT(byte, 1) or (uart_rx & "0000000")); state <= state + TO_UNSIGNED(1,state'length);
     end case;
    end if;

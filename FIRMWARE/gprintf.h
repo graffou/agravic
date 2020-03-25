@@ -63,6 +63,13 @@ void dbg_write(uint16_t x)
 		*dbg = (c < 10 ? 48 : 55) + c;
 	}
 }
+void dbg_write(uint8_t x)
+{
+	uint8_t c = (x >> 4) & 15;
+	*dbg = (c < 10 ? 48 : 55) + c;
+	c = x & 15;
+	*dbg = (c < 10 ? 48 : 55) + c;
+}
 void dbg_write(color_type x)
 {
     *dbg = COLOR_TYPE | uint32_t(x.code);

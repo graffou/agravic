@@ -5,14 +5,11 @@ entity tb_t is begin end tb_t; architecture rtl of tb_t is component dummy_zkw_p
 
 
 
-
-
-
-constant c_clock_period : time := 5 ns;
-constant c_reset_length : time := 20 ns;
-component sUART is port( clk_peri : IN std_logic; reset_n : IN std_logic; core2mem_i : IN blk2mem_t; mem2core_o : OUT mem2blk_t; uart_tx_o : OUT std_logic; uart_rx_i : IN std_logic ); end component;
-component top is port( clk_top : IN std_logic; reset_n : IN std_logic; bmkrD_io : INOUT unsigned ((15 -1) downto 0); bmkrA_io : INOUT unsigned ((7 -1) downto 0); pclk_o : OUT std_logic; red_o : OUT std_logic; green_o : OUT std_logic; blue_o : OUT std_logic ); end component;
+component sUART is generic (generic_int: integer); port ( clk_peri : IN std_logic; reset_n : IN std_logic; core2mem_i : IN blk2mem_t; mem2core_o : OUT mem2blk_t; uart_tx_o : OUT std_logic; uart_rx_i : IN std_logic ); end component;
+component top is port ( clk_top : IN std_logic; reset_n : IN std_logic; bmkrD_io : INOUT unsigned ((15 -1) downto 0); bmkrA_io : INOUT unsigned ((7 -1) downto 0); pclk_o : OUT std_logic; red_o : OUT std_logic; green_o : OUT std_logic; blue_o : OUT std_logic ); end component;
+component SPI_wrapper is generic (generic_int: integer); port ( clk_mcu : IN std_logic; reset_n : IN std_logic; data_i : IN unsigned ((16 -1) downto 0); data_o : OUT unsigned ((16 -1) downto 0); data_en_i : IN std_logic; data_en_o : OUT std_logic; spi_csn_o : OUT std_logic; spi_clk_o : OUT std_logic; spi_tx_o : OUT std_logic; spi_rx_i : IN std_logic ); end component;
 signal clk : std_logic;
+signal clk_100 : std_logic;
 signal reset_n : std_logic;
 signal cmd : blk2mem_t;
 signal gpios : unsigned ((32 -1) downto 0);
@@ -24,8 +21,8 @@ signal pclk : std_logic;
 signal bmkrD : unsigned ((15 -1) downto 0);
 signal bmkrA : unsigned ((7 -1) downto 0);
 
-signal core2datamem : blk2mem_t;
 signal uart2core : mem2blk_t;
+signal core2datamem : blk2mem_t;
 
 signal sdram_addr : unsigned ((12 -1) downto 0);
 signal sdram_ba : unsigned ((2 -1) downto 0);
@@ -40,23 +37,100 @@ signal sdram_dQ : unsigned ((16 -1) downto 0);
 
 signal uart_rx : std_logic;
 signal uart_tx : std_logic;
+signal uart_dbg : std_logic;
+
+signal spi_tx : std_logic;
+signal spi_rx : std_logic;
+signal spi_csn : std_logic;
+signal spi_clk : std_logic;
+signal spi2pluto : unsigned ((16 -1) downto 0);
+signal spi2pluto_en : std_logic;
+signal pluto2spi : unsigned ((16 -1) downto 0);
+signal pluto2spi_en : std_logic;
+
+signal init_done : std_logic;
 begin
 
 
 
 
 dut : top port map( clk_top => clk, reset_n => reset_n, bmkrD_io => bmkrD, bmkrA_io => bmkrA, blue_o => blue, red_o => red, green_o => green, pclk_o => pclk, sdram_addr_o => sdram_addr, sdram_ba_o => sdram_ba, sdram_cke_o => sdram_cke, sdram_cs_o => sdram_cs, sdram_we_o => sdram_we, sdram_ras_o => sdram_ras, sdram_cas_o => sdram_cas, sdram_dQm_o => sdram_dQm, sdram_dQ_io => sdram_dQ);
-u0_sUART : sUART port map( clk_peri => dut.clk_mcu, reset_n => reset_n, core2mem_i => core2datamem, mem2core_o => uart2core, uart_tx_o => uart_tx, uart_rx_i => uart_rx);
-gen_clk: process
-begin
-   wait for (c_clock_period / 2);
-   clk <= not clk;
-end process gen_clk;
+signal halt_pipe : unsigned ((32 -1) downto 0);
 
-gen_reset_n: process
+
+u0_sUART : sUART generic map(generic_int => 16#UART_TB_REGS#) port map( clk_peri => dut.clk_mcu, reset_n => reset_n, core2mem_i => core2datamem, mem2core_o => uart2core, uart_tx_o => uart_tx, uart_rx_i => uart_rx) ;
+u0_SPI_wrapper : SPI_wrapper generic map(generic_int => 16#SPI_MST_REGS#) port map( clk_mcu => clk_100, reset_n => reset_n, spi_clk_o => spi_clk, spi_tx_o => spi_tx, spi_rx_i => spi_rx, spi_clk_o => spi_clk) ;
+FOREVER_PROCESS(0)
+
+FOREVER_BEGIN
+
+ clk <= "0";
+
+ FOREVER_WAIT(2083)
+
+ clk <= "1";
+
+
+ FOREVER_WAIT_AND_LOOP(2084)
+
+
+FOREVER_END
+
+
+FOREVER_PROCESS(2)
+
+FOREVER_BEGIN
+ clk_100 <= "0";
+ FOREVER_WAIT(5000)
+ clk_100 <= "1";
+ FOREVER_WAIT_AND_LOOP(5000)
+FOREVER_END
+
+
+FOREVER_PROCESS(1)
+
+FOREVER_BEGIN
+ reset_n <= "0";
+ FOREVER_WAIT(55000)
+ reset_n <= "1";
+ uint32_t addr = 0;
+ uint32_t data;
+ while (not code_file.eof())
+ {
+  code_file.read ((char*)&data, sizeof(data));
+  dut.u0_mem.set(addr, data);
+
+
+
+
+
+  giprintf("#MLoading data mem % %", to_hex(addr), to_hex(data));
+  addr++;
+ }
+ for (int i = 0; i < 6144; i++)
+  dut.u0_mem.get(i);
+ FOREVER_WAIT(55000)
+ bmkrD(7) <= '0';
+
+FOREVER_END
+
+
 begin
-   wait for c_reset_length;
-   reset_n <= '1';
-   wait;
-end process gen_reset_n;
+
+ bmkrD(14) <= uart_tx;
+ dut.tb2core = uart2core;
+ core2datamem.addr <= dut.core2datamem.addr;
+ core2datamem.data <= dut.core2datamem.data;
+ core2datamem.cs_n <= dut.core2datamem.cs_n;
+ core2datamem.wr_n <= dut.core2datamem.wr_n;
+
+
+ spi_rx <= bmkrD(10);
+begin
+
+ bmkrD(8) <= spi_tx;
+ bmkrD(9) <= spi_clk;
+
+
+
 end rtl;

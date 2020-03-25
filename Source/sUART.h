@@ -14,11 +14,13 @@ DECL_PORTS(
 		PORT(boot_mode_i, BIT_TYPE, IN), // have to reset the UART for DMA
 		PORT(core2mem_i, blk2mem_t, IN),
 		PORT(mem2core_o, mem2blk_t, OUT),
+		PORT(irq_o, BIT_TYPE, OUT),
 		PORT(uart_dma_i, d2p_8_t, IN),
 		PORT(uart_dma_o, p2d_8_t, OUT),
 		PORT(uart_tx_o, BIT_TYPE, OUT),
 		PORT(uart_rx_i, BIT_TYPE, IN)
 		)
+		, INTEGER generic_int
 );
 
 //SIG(cnt, UINT(32));
@@ -38,6 +40,13 @@ SIG(ready, BIT_TYPE);
 SIG(boot_mode, BIT_TYPE);
 SIG(state, UINT(5)); // 00xxx start bit, 01xxx send bit xxx 10xxx send stop bit
 //SIG(always_tx, UINT(1)); // 00xxx start bit, 01xxx send bit xxx 10xxx send stop bit
+CONST(reg_base_addr, UINT(LEN(PORT_BASE(core2mem_i).addr))) := TO_UINT(generic_int, LEN(PORT_BASE(core2mem_i).addr));
+SIG(base_addr_test, UINT(LEN(PORT_BASE(core2mem_i).addr)));
+CONST(reg_addr_lsbs, INTEGER) := ( generic_int / 268435456);
+SIG(addr_lsbs_test, UINT(4));
+
+SIG(base_addr_ok, BIT_TYPE);
+SIG(addr_ok, BIT_TYPE);
 
 BEGIN
 
@@ -73,6 +82,9 @@ BEGIN
 		rx_started <= BIT(0);
 		get_rx_byte  <= BIT(1);
 		send_tx_byte <= BIT(0);
+		base_addr_test <= reg_base_addr;
+		addr_lsbs_test <= TO_UINT(reg_addr_lsbs, 4);
+		irq_o <= BIT(0);
 		//always_tx <= BIN(1);
 	ELSEIF ( EVENT(clk_peri) and (clk_peri == BIT(1)) ) THEN
 		cnt <= cnt - TO_UINT(1, LEN(cnt));
@@ -84,10 +96,14 @@ BEGIN
 		// Registers R/W
 		PORT_BASE(mem2core_o).data_en <= BIT(0);
 		PORT_BASE(mem2core_o).data <= TO_UINT(0, 32);
-		IF ( ( PORT_BASE(core2mem_i).cs_n == BIT(0) ) and ( RANGE( PORT_BASE(core2mem_i).addr, data_addr_span - 3, 4) == BIN(111111111) ) ) THEN
+		//IF ( ( PORT_BASE(core2mem_i).cs_n == BIT(0) ) and ( RANGE( PORT_BASE(core2mem_i).addr, data_addr_span - 3, 4) == BIN(111111111) ) ) THEN
+		IF ( ( PORT_BASE(core2mem_i).cs_n == BIT(0) ) and ( RANGE( PORT_BASE(core2mem_i).addr, HI(PORT_BASE(core2mem_i).addr), REG_NBITS) == RANGE( reg_base_addr, HI(reg_base_addr), REG_NBITS) ) ) THEN
+			base_addr_ok <= BIT(1);
 			// Write registers
 			IF (PORT_BASE(core2mem_i).wr_n == BIT(0) ) THEN
-				IF (PORT_BASE(core2mem_i).addr == BIN(1111111110000)) THEN
+			//IF (PORT_BASE(core2mem_i).addr == BIN(1111111110000)) THEN
+				IF (RANGE(PORT_BASE(core2mem_i).addr, REG_NBITS-1, 0) == TO_UINT(0, REG_NBITS)) THEN
+					addr_ok <= BIT(1);
 					val := PORT_BASE(core2mem_i).data;
 					div <= RANGE(val, 31, 16);
 					byte <= RANGE(val, 7, 0);
@@ -101,7 +117,8 @@ BEGIN
 				ENDIF
 			ELSE
 				// Read registers
-				IF (PORT_BASE(core2mem_i).addr == BIN(1111111110000)) THEN
+				//IF (PORT_BASE(core2mem_i).addr == BIN(1111111110000)) THEN
+				IF (RANGE(PORT_BASE(core2mem_i).addr, REG_NBITS-1, 0) == TO_UINT(0, REG_NBITS)) THEN
 					PORT_BASE(mem2core_o).data_en <= BIT(1);
 					PORT_BASE(mem2core_o).data <= ( div & TO_UINT(0, 7) & ready & byte );
 				ENDIF
@@ -131,13 +148,13 @@ BEGIN
 			PORT_BASE(uart_dma_o).rdy <= BIT(0);
 		ENDIF
 
-
+		irq_o <= BIT(0);
 		// Uart Tx ---------------------------------------------------------------------
 		IF ( (send_tx_byte == BIT(1)) and (cnt == TO_UINT(0, LEN(cnt))) ) THEN
 			SWITCH((state))
 				CASE(CASE_BIN(11000)) uart_tx_o <= BIT(0); cnt <= div; state <= BIN(00000); // start bit
 				CASE(CASE_BIN(01000)) uart_tx_o <= BIT(1); cnt <= div; state <= BIN(10000); // stop bit
-				CASE(CASE_BIN(10000)) uart_tx_o <= BIT(1); state <= BIN(11000); send_tx_byte <= BIT(0); get_rx_byte <= BIT(1); ready <= BIT(1);PORT_BASE(uart_dma_o).rdy <= BIT(1);// tx end
+				CASE(CASE_BIN(10000)) uart_tx_o <= BIT(1); state <= BIN(11000); send_tx_byte <= BIT(0); get_rx_byte <= BIT(1); ready <= BIT(1);PORT_BASE(uart_dma_o).rdy <= BIT(1); irq_o <= BIT(1);// tx end
 				DEFAULT cnt <= div; uart_tx_o <= B(byte,0); state <= state + TO_UINT(1, LEN(state)); byte <= SHIFT_RIGHT(byte, 1);//data bit
 			ENDCASE
 		ENDIF
@@ -159,7 +176,7 @@ BEGIN
 				SWITCH((state))
 					CASE(CASE_BIN(11000)) cnt <= div; state <= BIN(00000); // start bit
 					CASE(CASE_BIN(01000)) RESET(cnt); state <= BIN(10000); // stop bit
-					CASE(CASE_BIN(10000)) state <= BIN(11000); ready <= BIT(1); PORT_BASE(uart_dma_o).data <= byte; PORT_BASE(uart_dma_o).data_en <= BIT(1); rx_started <= BIT(0);// rx end
+					CASE(CASE_BIN(10000)) state <= BIN(11000); ready <= BIT(1); PORT_BASE(uart_dma_o).data <= byte; PORT_BASE(uart_dma_o).data_en <= BIT(1); rx_started <= BIT(0); irq_o <= BIT(1);// rx end
 					DEFAULT cnt <= div; byte <= (SHIFT_RIGHT(byte, 1) or (uart_rx & BIN(0000000))); state <= state + TO_UINT(1, LEN(state));
 				ENDCASE
 			ENDIF

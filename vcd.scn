@@ -9,9 +9,9 @@ tb:dut:u0_dma: bin
 tb:dut:u0_sUART: bin
 tb:dut:u0_risc_V_core:u0_register_file: bin
 tb:dut:u0_risc_V_core:u0_dbg_mem: bin
+
+
 tb:dut:u0_mem: bin
-tb:dut:u0_mem:ram3:data_o bin
-tb:dut:u0_mem:addr bin
 tb:dut:u1_mem: bin
 
 tb:dut:u0_sdram_ctrl: bin
@@ -22,7 +22,11 @@ tb:dut:u0_hdmi:u0_font: bin
 tb:dut:u0_hdmi:u0_ddio: bin
 
 tb:dut:u0_risc_V_core: bin
-
+tb:dut:u0_csr_irq: bin
+/*
+tb: bin
+tb:u0_clk_gen: bin
+*/
 /*
 tb:dut:u0_risc_V_core:u0_register_file: bin
 tb:dut:u0_risc_V_core:core2datamem_o.addr bin

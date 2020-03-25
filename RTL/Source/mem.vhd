@@ -5,70 +5,45 @@ library work; use work.slv_utils.all;
 
 
 
-entity mem is port( clk_mem : IN std_logic; reset_n : IN std_logic; core2mem_i : IN blk2mem_t; mem2core_o : OUT mem2blk_t ); end mem; architecture rtl of mem is component dummy_zkw_pouet is port(clk : in std_logic);end component;
-component spram6144x8 is port( clk : IN std_logic; reset_n : IN std_logic; addr_i : IN unsigned ((13 -1) downto 0); data_i : IN unsigned ((8 -1) downto 0); data_o : OUT unsigned ((8 -1) downto 0); wen_i : IN std_logic ); end component;
-  signal addr : unsigned ((13 -1) downto 0);
-  signal addr_mask : unsigned ((13 -1) downto 0);
-  signal data_rd0 : unsigned ((8 -1) downto 0);
-  signal data_rd1 : unsigned ((8 -1) downto 0);
-  signal data_rd2 : unsigned ((8 -1) downto 0);
-  signal data_rd3 : unsigned ((8 -1) downto 0);
-  signal data_wr0 : unsigned ((8 -1) downto 0);
-  signal data_wr1 : unsigned ((8 -1) downto 0);
-  signal data_wr2 : unsigned ((8 -1) downto 0);
-  signal data_wr3 : unsigned ((8 -1) downto 0);
-  signal wen1 : std_logic;
-  signal wen2 : std_logic;
-  signal wen3 : std_logic;
-  signal wen0 : std_logic;
-  signal wen : std_logic;
-  signal rdata_en : unsigned ((1 -1) downto 0);
-  signal data_en : std_logic;
-  signal addr_ok : std_logic;
+entity mem is generic (generic_int: integer); port ( clk_mem : IN std_logic; reset_n : IN std_logic; core2mem_i : IN blk2mem_t; mem2core_o : OUT mem2blk_t ); end mem; architecture rtl of mem is component dummy_zkw_pouet is port(clk : in std_logic);end component;
+component spram is generic (generic_int: integer); port ( clk_mem : IN std_logic; reset_n : IN std_logic; addr_i : IN unsigned ((24 -2 -1) downto 0); data_i : IN unsigned ((32 -1) downto 0); be_i : IN unsigned ((4 -1) downto 0); wrn_i : IN std_logic; data_o : OUT unsigned ((32 -1) downto 0) ); end component;
+signal addr : unsigned ((core2mem_i.addr'length-1) downto 0);
+constant max_addr : unsigned ((core2mem_i.addr'length-1) downto 0) := TO_UNSIGNED(generic_int,addr'length);
+signal data_rd : unsigned ((32 -1) downto 0);
+signal data_wr : unsigned ((32 -1) downto 0);
+signal be : unsigned ((4 -1) downto 0);
+signal wen : std_logic;
+signal rd_en : unsigned ((1 -1) downto 0);
 
-  signal mask : unsigned ((32 -1) downto 0);
 
- begin
+begin
 
-  ram0 : spram6144x8 port map( clk => clk_mem, reset_n => reset_n, addr_i => addr, data_i => data_wr0, data_o => data_rd0, wen_i => wen0);
- ram1 : spram6144x8 port map( clk => clk_mem, reset_n => reset_n, addr_i => addr, data_i => data_wr1, data_o => data_rd1, wen_i => wen1);
- ram2 : spram6144x8 port map( clk => clk_mem, reset_n => reset_n, addr_i => addr, data_i => data_wr2, data_o => data_rd2, wen_i => wen2);
- ram3 : spram6144x8 port map( clk => clk_mem, reset_n => reset_n, addr_i => addr, data_i => data_wr3, data_o => data_rd3, wen_i => wen3);
+ ram0 : spram generic map(generic_int => generic_int) port map( clk_mem => clk_mem, reset_n => reset_n, addr_i => addr, data_i => data_wr, data_o => data_rd, be_i => be, wrn_i => wen) ;
  process0 : process(clk_mem,reset_n)
 
  begin
   IF ( reset_n = '0' ) then
-   rdata_en <= "0";
+   rd_en <= "0";
   elsif ( clk_mem'event and (clk_mem = '1' ) ) then
+   IF ( (core2mem_i.cs_n = '0') and ((core2mem_i.addr) < max_addr) ) then
+    IF ((core2mem_i.wr_n = '1' )) then
+     rd_en <= "1";
 
-   IF ( (core2mem_i.cs_n = '0') and
-     (core2mem_i.wr_n = '1' ) and
-     not ((core2mem_i.addr(12 downto 11)) = "11") ) then
-    rdata_en <= "1";
+    else
+     rd_en <= "0";
+    end if;
    else
-    rdata_en <= "0";
+    rd_en <= "0";
    end if;
 
   end if;
  end process;
 
 
-  addr <= ( core2mem_i.addr and unsigned(RESIZE(signed(BOOL2BIN(not ((core2mem_i.addr(12 downto 11)) = "11"))), 13)) );
-  data_wr0 <= (core2mem_i.data(7 downto 0));
-  data_wr1 <= (core2mem_i.data(15 downto 8));
-  data_wr2 <= (core2mem_i.data(23 downto 16));
-  data_wr3 <= (core2mem_i.data(31 downto 24));
-  wen <= ( not core2mem_i.cs_n and not core2mem_i.wr_n and not (core2mem_i.addr(12) and core2mem_i.addr(11)) );
-  wen0 <= ( core2mem_i.be(0) and wen );
-  wen1 <= ( core2mem_i.be(1) and wen );
-  wen2 <= ( core2mem_i.be(2) and wen );
-  wen3 <= ( core2mem_i.be(3) and wen );
-  mem2core_o.data <= ( (data_rd3 & data_rd2 & data_rd1 & data_rd0) and unsigned(RESIZE(signed((rdata_en & rdata_en)), 32)) );
-  mem2core_o.data_en <= rdata_en(0);
-
-
-
-
-
-
+  addr <= ( ( core2mem_i.addr ) and unsigned(RESIZE(signed(BOOL2BIN( core2mem_i.addr < max_addr )), addr'length)) );
+  data_wr <= core2mem_i.data;
+  wen <= ( not core2mem_i.cs_n and not core2mem_i.wr_n and BOOL2BIT(core2mem_i.addr < max_addr ) );
+  be <= core2mem_i.be;
+  mem2core_o.data <= ( data_rd and unsigned(RESIZE(signed(rd_en), 32)));
+  mem2core_o.data_en <= rd_en(0);
 end rtl;

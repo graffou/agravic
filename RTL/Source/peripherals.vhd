@@ -2,13 +2,19 @@
 library ieee;use ieee.std_logic_1164.all;use IEEE.NUMERIC_STD.ALL;
 library work; use work.structures.all;
 library work; use work.altera.all;
-entity peripherals is port( clk_peri : IN std_logic; reset_n : IN std_logic; core2mem_i : IN blk2mem_t; timer_IT_o : OUT std_logic; dbg_o : OUT unsigned ((8 -1) downto 0); gpios_o : OUT unsigned ((32 -1) downto 0) ); end peripherals; architecture rtl of peripherals is component dummy_zkw_pouet is port(clk : in std_logic);end component;
+entity peripherals is generic (generic_int: integer); port ( clk_peri : IN std_logic; reset_n : IN std_logic; core2mem_i : IN blk2mem_t; timer_IT_o : OUT std_logic; dbg_o : OUT unsigned ((8 -1) downto 0); gpios_o : OUT unsigned ((32 -1) downto 0) ); end peripherals; architecture rtl of peripherals is component dummy_zkw_pouet is port(clk : in std_logic);end component;
 signal cnt : unsigned ((32 -1) downto 0);
 signal cnt_cmp : unsigned ((32 -1) downto 0);
 signal cnt_started : std_logic;
 
 
 
+constant reg_base_addr : unsigned ((core2mem_i.addr'length-1) downto 0) := TO_UNSIGNED(generic_int,core2mem_i.addr'length);
+signal base_addr_test : unsigned ((core2mem_i.addr'length-1) downto 0);
+constant reg_addr_lsbs : INTEGER := ( generic_int / 268435456);
+signal addr_lsbs_test : unsigned ((4 -1) downto 0);
+signal base_addr_ok : std_logic;
+signal addr_ok : std_logic;
 
 begin
 
@@ -25,6 +31,8 @@ begin
   cnt_cmp <= TO_UNSIGNED(0,cnt_cmp'length);
   timer_IT_o <= '0';
   cnt_started <= '0';
+  base_addr_test <= reg_base_addr;
+  addr_lsbs_test <= TO_UNSIGNED(reg_addr_lsbs,4);
 
  elsif ( clk_peri'event and (clk_peri = '1' ) ) then
   IF ( not ( cnt = TO_UNSIGNED(0,32) ) ) then
@@ -33,25 +41,18 @@ begin
   elsif (cnt_started = '1' ) then
    timer_IT_o <= '1' ;
   end if;
-  IF ( ( core2mem_i.cs_n = '0' ) and ( core2mem_i.wr_n = '0' ) ) then
-
-
-
-   IF (core2mem_i.addr = "1111111111100") then
-
-    cnt <= core2mem_i.data;
-    cnt_started <= '0';
-    timer_IT_o <= '0';
-   end if;
-
-   IF (core2mem_i.addr = "1111111111111") then
+  IF ( ( core2mem_i.cs_n = '0' ) and ( core2mem_i.wr_n = '0' ) and ( (core2mem_i.addr(core2mem_i.addr'high downto ( (generic_int / 268435456 + 16) rem 16 ))) = (reg_base_addr(reg_base_addr'high downto ( (generic_int / 268435456 + 16) rem 16 ))) )) then
+   base_addr_ok <= '1' ;
+   IF ((core2mem_i.addr(( (generic_int / 268435456 + 16) rem 16 )-1 downto 0)) = TO_UNSIGNED(3,( (generic_int / 268435456 + 16) rem 16 ))) then
 
     gpios_o <= core2mem_i.data;
 
 
 
    end if;
-   IF (core2mem_i.addr = "1111111111110") then
+
+   IF ((core2mem_i.addr(( (generic_int / 268435456 + 16) rem 16 )-1 downto 0)) = TO_UNSIGNED(2,( (generic_int / 268435456 + 16) rem 16 ))) then
+    addr_ok <= '1' ;
     DBG := (core2mem_i.data(7 downto 0));
     dbg_o <= DBG;
    end if;

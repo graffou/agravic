@@ -3,19 +3,6 @@ START_OF_FILE(tb)
 INCLUDES
 USE_PACKAGE(structures)
 TESTBENCH(tb_t);
-// For now, just implement vhdl and C++ codes separately
-// for clock generation
-#ifndef NONREG
-#define UART_LOADING 1
-#endif
-#ifdef VHDL
-constant c_clock_period : time = 5 ns;
-constant c_reset_length : time = 20 ns;
-#else
-
-
-
-#endif
 
 
 
@@ -27,7 +14,8 @@ DECL_PORTS(
 		PORT(mem2core_o, mem2blk_t, OUT),
 		PORT(uart_tx_o, BIT_TYPE, OUT),
 		PORT(uart_rx_i, BIT_TYPE, IN)
-		)
+		),
+		INTEGER addr
 );
 
 COMPONENT(top,
@@ -51,7 +39,25 @@ DECL_PORTS(
 );
 
 
+COMPONENT(SPI_wrapper,
+DECL_PORTS(
+		PORT(clk_mcu, CLK_TYPE, IN),
+		PORT(reset_n, RST_TYPE, IN),
+		PORT(data_i, UINT(16), IN),
+		PORT(data_o, UINT(16), OUT),
+		PORT(data_en_i, BIT_TYPE, IN),
+		PORT(data_en_o, BIT_TYPE, OUT),
+		PORT(spi_csn_o, BIT_TYPE, OUT),
+		PORT(spi_clk_o, BIT_TYPE, OUT),
+		PORT(spi_tx_o, BIT_TYPE, OUT),
+		PORT(spi_rx_i, BIT_TYPE, IN)
+		)
+		, INTEGER generic_int
+
+);
+
 SIG(clk, CLK_TYPE);
+SIG(clk_100, CLK_TYPE);
 SIG(reset_n, RST_TYPE);// reset_n;
 SIG(cmd, blk2mem_t);
 SIG(gpios, UINT(32));
@@ -63,8 +69,8 @@ SIG(pclk, BIT_TYPE);
 SIG(bmkrD, UINT(15));
 SIG(bmkrA, UINT(7));
 
-SIG(core2datamem, blk2mem_t);
 SIG(uart2core, mem2blk_t);
+SIG(core2datamem, blk2mem_t);
 
 SIG(sdram_addr, UINT(12));
 SIG(sdram_ba, UINT(2));
@@ -79,6 +85,19 @@ SIG(sdram_dQ, TRISTATE(16));
 
 SIG(uart_rx, BIT_TYPE);
 SIG(uart_tx, BIT_TYPE);
+SIG(uart_dbg, BIT_TYPE);
+
+SIG(spi_tx, BIT_TYPE);
+SIG(spi_rx, BIT_TYPE);
+SIG(spi_csn, BIT_TYPE);
+SIG(spi_clk, BIT_TYPE);
+SIG(spi2pluto, UINT(16));
+SIG(spi2pluto_en,BIT_TYPE );
+SIG(pluto2spi, UINT(16));
+SIG(pluto2spi_en, BIT_TYPE);
+
+SIG(init_done, BIT_TYPE);
+
 
 #ifndef VHDL
 int ncycles = 10000;
@@ -86,9 +105,25 @@ bool success = 1;
 std::ifstream code_file;
 std::ifstream check_file;
 std::ifstream sig_start_file;
+#define LOAD_PORT dut.load_port //(&top)->load_port
 
+
+template<class T>
+void init_file( T& name_i)
+{
+	gstring name = name_i; // input is of input_parm<> type
+	code_file.open(name.c_str(), std::ifstream::binary);
+	gprintf("#VOpening code file %Y open %Y", name.c_str(), code_file.is_open());
+	name.replace(".bin", ".sig_start");
+	sig_start_file.open(name.c_str());
+	name.replace("elf.sig_start", "reference_output");
+	check_file.open(name.c_str());
+	gprintf("#VOpening check file %Y open %Y", name.c_str(), check_file.is_open());
+}
 
 #endif
+
+
 
 BEGIN
 
@@ -120,261 +155,128 @@ BLK_INST(dut, top,
 				PM(sdram_dQ_io,sdram_dQ)				//PM(gpios_o, gpios)
 				)
 			);
+SIG(halt_pipe, UINT(32));
 
 // Instantiate this block AFTER top, because dut.mcu must exist before we can map it to clk_peri !!!!!!!!!!!!!!!!!!!!!!!!!!!!
 BLK_INST(u0_sUART, sUART,
 MAPPING(
-		PM(clk_peri, dut.clk_mcu),
+		PM(clk_peri, dut.clk_mcu), // get clk from inside dut
 		PM(reset_n, reset_n),
 		PM(core2mem_i, core2datamem),
 		PM(mem2core_o, uart2core),
 		PM(uart_tx_o, uart_tx),
 		PM(uart_rx_i, uart_rx)
-		)
+		),
+		HEX_INT(UART_TB_REGS) //1073774528
+
 );
 
+BLK_INST(u0_SPI_wrapper, SPI_wrapper,
+MAPPING(
+		PM(clk_mcu, clk_100),
+		PM(reset_n, reset_n),
+		PM(spi_clk_o, spi_clk),
+		PM(spi_tx_o, spi_tx),
+		PM(spi_rx_i, spi_rx),
+		PM(spi_clk_o, spi_clk)
+		)
+		, HEX_INT(SPI_MST_REGS)
 
-#ifdef VHDL
-gen_clk: process
-begin
-   wait for (c_clock_period / 2);
-   clk <= not clk;
-end process gen_clk;
+);
 
-gen_reset_n: process
-begin
-   wait for c_reset_length;
-   reset_n <= '1';
-   wait;
-end process gen_reset_n;
-#else
-
-//#define LOAD_PORT cmd //(&top)->load_port
-#define LOAD_PORT dut.load_port //(&top)->load_port
-
-
-void init_clk_rst()
-{
-	bmkrD = 0xFFFF; // also init ports
-	clk <= BIT(0);
-	reset_n <= BIT(0);
-}
-
-template<class T>
-void init_file( T& name_i)
-{
-	gstring name = name_i; // input is of input_parm<> type
-	code_file.open(name.c_str(), std::ifstream::binary);
-	gprintf("#VOpening code file %Y open %Y", name.c_str(), code_file.is_open());
-	name.replace(".bin", ".sig_start");
-	sig_start_file.open(name.c_str());
-	name.replace("elf.sig_start", "reference_output");
-	check_file.open(name.c_str());
-	gprintf("#VOpening check file %Y open %Y", name.c_str(), check_file.is_open());
-}
-
-#define WAIT_5_CLK clk <= not clk;	clk <= not clk;clk <= not clk;	clk <= not clk;clk <= not clk;	clk <= not clk;clk <= not clk;	clk <= not clk;clk <= not clk;	clk <= not clk;
-
- void run()
-{
-	reset_n <= BIN(0);
-	clk <= BIN(1);
+// Clk 240MHz
+FOREVER_PROCESS(0)
+//gprintf("#M>01 % ", cnt);
+FOREVER_BEGIN
+//gprintf("#M>02");
 	clk <= BIN(0);
+	//gprintf("#M>03");
+	FOREVER_WAIT(2083)
+	//gprintf("#M>04");
 	clk <= BIN(1);
+	//gprintf("#M>05");
+
+	FOREVER_WAIT_AND_LOOP(2084)
+	//gprintf("#M>06");
+
+FOREVER_END
+
+// Clk 100MHz
+FOREVER_PROCESS(2)
+//gprintf("#M>2");
+FOREVER_BEGIN
+	clk_100 <= BIN(0);
+	FOREVER_WAIT(5000)
+	clk_100 <= BIN(1);
+	FOREVER_WAIT_AND_LOOP(5000)
+FOREVER_END
+
+// Reset
+FOREVER_PROCESS(1)
+	//gprintf("#M>1");
+FOREVER_BEGIN
+	reset_n <= BIN(0);
+#ifndef VHDL
+	// Directly upload code to program memory
+
+	SIG_SET_BIT(bmkrD,7, BIT(0));// set boot mode
+	LOAD_PORT.cs_n <= BIT(1);
+	LOAD_PORT.wr_n <= BIT(1);
+
+#endif
+	FOREVER_WAIT(55000)
 	reset_n <= BIN(1);
-	SIG_SET_BIT(bmkrD,14, BIT(1));
-
 	uint32_t addr = 0;
-	uint32_t end_addr = 0;
-
-for (int k = 0; k < 1; k++)
-{
-	for (int i = 0; i < 300; i++) {WAIT_5_CLK} // wait for giorno core hdmi msg
-	SIG_SET_BIT(bmkrD,8, BIT(0));// reset boot mode
-	//SIG_SET_BIT(bmkrD,14, BIT(1));
-
-#ifndef UART_LOADING
-	LOAD_PORT.cs_n <= BIT(0);
-	LOAD_PORT.wr_n <= BIT(0);
-	LOAD_PORT.addr <= TO_UINT(0, LEN(LOAD_PORT.addr));
-	LOAD_PORT.be <= BIN(1111);
-#else
-	for (int i = 0; i < 300; i++) {WAIT_5_CLK} // wait for giorno core hdmi msg
-	LOAD_PORT.cs_n <= BIT(1);
-	LOAD_PORT.wr_n <= BIT(1);
-	SIG_SET_BIT(bmkrD,8, BIT(0));// set boot mode
-	for (int i = 0; i < 32; i++)
-		clk <= not clk;
-	SIG_SET_BIT(bmkrD,8, BIT(1));// set boot mode
-	for (int i = 0; i < 32; i++)
-		clk <= not clk;
-	//SIG_SET_BIT(bmkrD,14, BIT(1));
-
-#endif
-	clk <= not clk;
-	clk <= not clk;	clk <= not clk; // add cycles so that the 48MHz clk can toggle (clk is 240MHz clk)
-	clk <= not clk;	clk <= not clk;
-	clk <= not clk;	clk <= not clk;
-	clk <= not clk;
-
-	for (int i = 0; i < 32; i++) {WAIT_5_CLK}
-
-
-	while (not code_file.eof() and not(LOAD_PORT.addr == BIN(1011111111111) ))
+	uint32_t data;
+	while (not code_file.eof())
 	{
-		//gprintf("% % \n", LOAD_PORT.addr, BIN(101111111111100));
-		__control_signals__.clk = -1;
-		__control_signals__.reset_n = -1;
-
-		uint32_t data;
 		code_file.read ((char*)&data, sizeof(data)); //>> data;
-
-		LOAD_PORT.data <= slv<32>(data); // don't care for uart loading, cs_n is 1
-		//printf("%x\n", data)
-		if (LOAD_PORT.addr < BIN(0000000011100) ) {
-			//gprintf("#Maddr : %R write %R %Y", to_hex(TO_INTEGER(LOAD_PORT.addr)), to_hex(TO_INTEGER(LOAD_PORT.data)), code_file.tellg());
-		}
-#ifdef NONREG // for risc-v compliance test, copy init data to data memory ALWAYS USE LOAD PORT
-		if (addr >= 8192)
-		{
-			dut.u1_mem.set(addr/4, data);
-			gprintf("#MLoading data mem % %", to_hex(addr/4), to_hex(data));
-			gprintf("#Cmem content % %", to_hex(addr/4), to_hex(dut.u1_mem.get(addr/4)));
-		}
-#else
-
-		for (int i = 0; i < 4; i++)
-		{
-			uint8_t byte = (data >> (i<<3)) & 0xFF;
-			while (not (dut.clk_mcu.event()))
-			{
-				clk <= not clk;
-				clk <= not clk;
-			}
-			core2datamem.addr <= 0x1ff0;
-			//core2datamem.data <= (0x01A10000 | byte);
-			core2datamem.data <= (0x00010000 | byte);
-			core2datamem.cs_n <= BIT(0);
-			core2datamem.wr_n <= BIT(0);
-
-			WAIT_5_CLK
-
-			core2datamem.cs_n <= BIT(1);
-
-			WAIT_5_CLK
-
-			while (not u0_sUART.ready == BIT(1))
-			{
-				clk <= not clk;
-				clk <= not clk;
-				SIG_SET_BIT(bmkrD,14, uart_tx);
-			}
-		}
-
-		//gprintf("#Cmem content % %", to_hex(addr/4), to_hex(dut.u1_mem.get(addr/4)));
-
-#endif
-		//std::cerr << '>';
-		// Take care of top clk being not the one that drives the risc-V core
-		while (not (dut.clk_mcu.event()))
-		{
-			LOAD_PORT.addr <= TO_UINT(addr/4, LEN(LOAD_PORT.addr));//LOAD_PORT.addr + TO_UINT(4, LEN(LOAD_PORT.addr));
-			clk <= not clk;
-			clk <= not clk;
-		}
-		addr = addr + 4;
-		clk <= not clk;
-		clk <= not clk;
-
-		//std::cerr << '/';
-	}
-
-	for (int i = 0; i < 32; i++) {WAIT_5_CLK}
-	SIG_SET_BIT(bmkrD,8, BIT(0));// reset boot mode
-	//code_file.close();
-	code_file.clear();
-	code_file.seekg( 0, std::ios::beg );
-	if (code_file.eof())
-	{
-		gprintf("#Rcode file not reopen");
-		exit(0);
-	};
-	addr = 0;
-	LOAD_PORT.addr = 0;
-}
-#ifndef UART_LOADING
-	gprintf("#VEnded code loading addr % eof % ", LOAD_PORT.addr, code_file.eof());
-	LOAD_PORT.cs_n <= BIT(1);
-	LOAD_PORT.wr_n <= BIT(1);
-#endif
-	clk <= not clk;
-	clk <= not clk;
-
-	gprintf("#VStarting simulation, % ", ncycles);
-	for (int i = 0; i < ncycles*2 ; i++)
-	{
-		//std::cerr << '.';
-		clk <= not clk;
-		//gpios <= BIN(10101010010101011111111100000000);
-
-
-		// Configure TB IPs from FW -------------------
-		// Address range 0x1e00-1eFF
-
-
-		if ( (dut.core2datamem.addr and 0x1f00) == 0x1e00 )
-		{
-			core2datamem <= dut.core2datamem;
-			core2datamem.addr <= core2datamem.addr + 0x100;
-			//gprintf("#RYoooooooooooooooooooooooooooo % ", to_hex(TO_INTEGER(dut.core2datamem.addr)), to_hex(TO_INTEGER(dut.core2datamem.data)));
-			//exit(0);
-
-		}
-		else
-			core2datamem.cs_n = 1;
-
-		uart_rx <= B(bmkrD, 13);
-		SIG_SET_BIT(bmkrD,14, uart_tx);
-		//bmkrD <= bmkrD;
-		dut.tb2core = uart2core;
-
-
-	}
+		dut.u0_mem.set(addr, data);
 #ifdef NONREG
-	for (int i= 2048; i < 2100;i++)
-		gprintf("#Cmem content % %", to_hex(i), to_hex(dut.u1_mem.get(i)));
-	for (int i= 0; i < 200;i++)
-		gprintf("#Mmem content % %", to_hex(i), to_hex(dut.u0_mem.get(i)));
-	sig_start_file >> std::hex >> addr;
-	std::string yo;
-	sig_start_file >> std::hex >> yo; // reads end of line:
-	sig_start_file >> std::hex >> end_addr;
-	gprintf("#VTesting signature from %Y to %Y", to_hex(addr), to_hex(end_addr));
-	addr = addr >> 2;
-	end_addr = end_addr >> 2;
-	gprintf("#VTesting signature from %Y to %Y", to_hex(addr), to_hex(end_addr));
-	while (not check_file.eof())
-	{
-		uint32_t check_val;
-		check_file >> std::hex >> check_val;
-		if (not check_file.eof() and (addr <= end_addr) )
-		{
-			if (check_val == dut.u1_mem.get(addr))
-				gprintf("#GChecking % % %", addr, to_hex(check_val), to_hex(dut.u1_mem.get(addr)));
-			else
-			{
-				success = 0;
-				gprintf("#RChecking % % %", addr, to_hex(check_val), to_hex(dut.u1_mem.get(addr)));
-			}
-		}
+		if (addr >= 2048)
+			dut.u1_mem.set(addr, data);
 
-		addr ++;
+#endif
+		giprintf("#MLoading data mem % %", to_hex(addr), to_hex(data));
+		addr++;
 	}
+	for (int i = 0; i < 6144; i++)
+		dut.u0_mem.get(i);
+	FOREVER_WAIT(55000)
+	SIG_SET_BIT(bmkrD,7, BIT(0));// reset boot mode
+
+FOREVER_END
+
+COMB_PROCESS(3, clk)
+BEGIN
+
+	SIG_SET_BIT(bmkrD,14, uart_tx);
+	dut.tb2core = uart2core;
+	core2datamem.addr <= dut.core2datamem.addr;//  + TO_UINT(256, LEN(dut.core2datamem.addr));
+	core2datamem.data <= dut.core2datamem.data;
+	core2datamem.cs_n <= dut.core2datamem.cs_n;
+	core2datamem.wr_n <= dut.core2datamem.wr_n;
+	//SIG_SET_BIT(bmkrD,8, spi_tx);
+	//SIG_SET_BIT(bmkrD,9, spi_clk);
+	spi_rx <= B(bmkrD, 10);
+#ifdef NONREG
+	if (B(halt_pipe, 31) == BIT(1)) // end of nonreg test
+	{
+		scheduler.end_sim = 1;
+	}
+
+	halt_pipe = (RANGE(halt_pipe,30,0) & dut.u0_risc_V_core.halt);
 #endif
 
-}
+END_COMB_PROCESS
 
-#endif // VHDL
 
+COMB_PROCESS(4, clk_100)
+BEGIN
+
+	SIG_SET_BIT(bmkrD,8, spi_tx);
+	SIG_SET_BIT(bmkrD,9, spi_clk);
+
+END_COMB_PROCESS
 
 BLK_END;

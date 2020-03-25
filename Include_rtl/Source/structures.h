@@ -16,6 +16,8 @@ RECORD(blk2mem_t,
 				)
 );
 
+//CONSTANT BASE_RECORD_TYPE(blk2mem_t) blk2mem_init = LIST(TO_UINT(0, data_addr_span - 2), TO_UINT(0, 32), TO_UINT(0, 4), BIT(1), BIT(1));
+
 RECORD(mem2blk_t,
 		DECL_FIELDS(
 				FIELD(data, UINT(32)),
@@ -123,4 +125,20 @@ RECORD(sdram_req_t,
 				FIELD(en, BIT_TYPE)
 				)
 );
+
+// CSR registers that must be always accessible (without CSRR request)
+// IRQs as well, since block is CSR + timer IRQ+ IRQ filtering
+RECORD(csr2core_t,
+		DECL_FIELDS(
+				FIELD(mepc, UINT(32)),
+				FIELD(mtvec, UINT(32)),
+				FIELD(irq, BIT_TYPE), // one single wire, source is given by cause
+				FIELD(trap, BIT_TYPE), // traps can occur from CSR read
+				FIELD(cause, UINT(6)),
+				FIELD(priv, UINT(2)) // is it right ? Future use anyway
+				)
+);
+
+TYPE(irq_t, ARRAY_TYPE(BIT_TYPE,16));
+
 END_PACKAGE(structures)

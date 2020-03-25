@@ -44,6 +44,8 @@ DECL_PORTS(
 		PORT(dbg_o, UINT(8), OUT),
 		PORT(gpios_o, UINT(32), OUT)
 		)
+		, INTEGER generic_int
+
 );
 
 SIG(cnt, UINT(32));
@@ -52,6 +54,12 @@ SIG(cnt_started, BIT_TYPE);
 //SIG(gate_cell, BIT_TYPE);
 // does nothing in C++, mandatory for VHDL generation
 //DECL_GATED_CLK(clk_g);
+CONST(reg_base_addr, UINT(LEN(PORT_BASE(core2mem_i).addr))) = TO_UINT(generic_int, LEN(PORT_BASE(core2mem_i).addr));
+SIG(base_addr_test, UINT(LEN(PORT_BASE(core2mem_i).addr)));
+CONST(reg_addr_lsbs, INTEGER) = ( generic_int / 268435456);
+SIG(addr_lsbs_test, UINT(4));
+SIG(base_addr_ok, BIT_TYPE);
+SIG(addr_ok, BIT_TYPE);
 
 BEGIN
 
@@ -68,7 +76,9 @@ BEGIN
 		RESET(cnt_cmp);
 		timer_IT_o <= BIT(0);
 		cnt_started <= BIT(0);
-	//gate_cell <= BIT(1);
+		base_addr_test <= reg_base_addr;
+		addr_lsbs_test <= TO_UINT(reg_addr_lsbs, 4);
+		//gate_cell <= BIT(1);
 	ELSEIF ( EVENT(clk_peri) and (clk_peri == BIT(1)) ) THEN
 		IF ( not ( cnt == TO_UINT(0,32) ) ) THEN //timer increment
 			cnt <= cnt - TO_UINT(1, 32);
@@ -76,25 +86,30 @@ BEGIN
 		ELSEIF (cnt_started == BIT(1)) THEN // timer was intitialized and actually reached timeout
 			timer_IT_o <= BIT(1);
 		ENDIF
-		IF ( ( PORT_BASE(core2mem_i).cs_n == BIT(0) ) and ( PORT_BASE(core2mem_i).wr_n == BIT(0) ) ) THEN
+		IF ( ( PORT_BASE(core2mem_i).cs_n == BIT(0) ) and ( PORT_BASE(core2mem_i).wr_n == BIT(0) ) and ( RANGE( PORT_BASE(core2mem_i).addr, HI(PORT_BASE(core2mem_i).addr), REG_NBITS) == RANGE( reg_base_addr, HI(reg_base_addr), REG_NBITS) )) THEN
 			// Timer ----------------
 			// The mtime / mtimecmp on risc-V spec does not make sense to me
 			//
-			IF (PORT_BASE(core2mem_i).addr == BIN(1111111111100)) THEN // timer write timeout
+/*			IF (PORT_BASE(core2mem_i).addr == BIN(1111111111100)) THEN // timer write timeout
 				//gate_cell <= B(PORT_BASE(core2mem_i).data, 0);
 				cnt <= PORT_BASE(core2mem_i).data;
 				cnt_started <= BIT(0);
 				timer_IT_o <= BIT(0); // reset interrupt line
 			ENDIF
+			*/
 			// --------------
-			IF (PORT_BASE(core2mem_i).addr == BIN(1111111111111)) THEN
+			//IF (PORT_BASE(core2mem_i).addr == BIN(1111111111111)) THEN
+			base_addr_ok <= BIT(1);
+			IF (RANGE(PORT_BASE(core2mem_i).addr, REG_NBITS-1, 0) == TO_UINT(3, REG_NBITS)) THEN
 				//gate_cell <= B(PORT_BASE(core2mem_i).data, 0);
 				gpios_o <= PORT_BASE(core2mem_i).data;
 #ifndef VHDL
 				gprintf("#Ugpios %Y", PORT_BASE(core2mem_i).data);
 #endif
 			ENDIF
-			IF (PORT_BASE(core2mem_i).addr == BIN(1111111111110)) THEN
+			//IF (PORT_BASE(core2mem_i).addr == BIN(1111111111110)) THEN
+			IF (RANGE(PORT_BASE(core2mem_i).addr, REG_NBITS-1, 0) == TO_UINT(2, REG_NBITS)) THEN
+				addr_ok <= BIT(1);
 				DBG = RANGE(PORT_BASE(core2mem_i).data, 7, 0);
 				dbg_o <= DBG;//RANGE(PORT_BASE(core2mem_i).data, 7, 0);
 
@@ -104,7 +119,7 @@ BEGIN
 				uint32_t val = TO_INTEGER(PORT_BASE(core2mem_i).data);
 				uint32_t code = ( (codep>>28) != 0x8 ) ? val & 0xffffff00 : 0; // Don't update code if already in coded value: the coded value might trig anything
 				//if (code != 0) gprintf("#MCode % val %", to_hex(code), c);
-				gprintf("#BIn %R Write %R state %R", to_hex(TO_INTEGER(PORT_BASE(core2mem_i).data)), c, print_state);
+				//gprintf("#BIn %R Write %R state %R", to_hex(TO_INTEGER(PORT_BASE(core2mem_i).data)), c, print_state);
 				if (print_state == 0)
 				{
 					if ( (c == '#') or (c == '@') )

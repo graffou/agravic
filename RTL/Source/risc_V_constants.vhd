@@ -167,6 +167,10 @@ constant MIE_HI : INTEGER := 3;
 constant SIE_HI : INTEGER :=1 ;
 constant UIE_HI : INTEGER := 0;
 
+constant MSI : INTEGER := 3;
+constant MTI : INTEGER := 7;
+constant MEI : INTEGER := 11;
+
 
 
 constant CASE_AMSTATUS : unsigned ((12 -1) downto 0) := "001100000000";
@@ -177,12 +181,30 @@ constant CASE_AMIE : unsigned ((12 -1) downto 0) := "001100000100";
 constant CASE_AMTVEC : unsigned ((12 -1) downto 0) := "001100000101";
 constant CASE_AMTCOUNTEREN : unsigned ((12 -1) downto 0) := "001100000110";
 
+constant CASE_ACYCLE : unsigned ((12 -1) downto 0) := "110000000000";
+constant CASE_ATIME : unsigned ((12 -1) downto 0) := "110000000001";
+constant CASE_ACYCLEH : unsigned ((12 -1) downto 0) := "110010000000";
+constant CASE_ATIMEH : unsigned ((12 -1) downto 0) := "110010000001";
+
+constant CASE_AMCYCLE : unsigned ((12 -1) downto 0) := "101100000000";
+constant CASE_AMTIME : unsigned ((12 -1) downto 0) := "101100000001";
+constant CASE_AMTIMECMP : unsigned ((12 -1) downto 0) := "101111110000";
+constant CASE_AMTIMECMPH : unsigned ((12 -1) downto 0) := "101111110001";
+constant CASE_AMCYCLEH : unsigned ((12 -1) downto 0) := "101110000000";
+constant CASE_AMTIMEH : unsigned ((12 -1) downto 0) := "101110000001";
+constant CASE_AMCOUNTEREN : unsigned ((12 -1) downto 0) := "001100000110";
+constant CASE_AMCOUNTINHIB : unsigned ((12 -1) downto 0) := "001100100000";
 
 constant CASE_AMSCRATCH : unsigned ((12 -1) downto 0) := "001101000000";
 constant CASE_AMEPC : unsigned ((12 -1) downto 0) := "001101000001";
+constant CASE_AMEPC_WFI : unsigned ((12 -1) downto 0) := "001101000101";
 constant CASE_AMCAUSE : unsigned ((12 -1) downto 0) := "001101000010";
 
 constant CASE_AMIP : unsigned ((12 -1) downto 0) := "001101000100";
+constant CASE_MVENDORID : unsigned ((12 -1) downto 0) := "111110101011";
+constant CASE_MARCHID : unsigned ((12 -1) downto 0) := "111110101100";
+constant CASE_MIMPID : unsigned ((12 -1) downto 0) := "111110101101";
+constant CASE_MHARTID : unsigned ((12 -1) downto 0) := "111110101110";
 
 
 

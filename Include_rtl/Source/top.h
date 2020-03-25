@@ -1,4 +1,5 @@
 #include "slv.h"
+#include "../FIRMWARE/Include/reg_def.h" // required by block register addresses
 //#include "slv.h"
 START_OF_FILE(risc-V_core)
 INCLUDES
@@ -51,6 +52,8 @@ DECL_PORTS(
 		PORT(green_o, BIT_TYPE, OUT),
 		PORT(blue_o, BIT_TYPE, OUT)
 		)
+		, INTEGER generic_int
+
 );
 
 COMPONENT(dma,
@@ -66,9 +69,14 @@ DECL_PORTS(
 		PORT(uart_dma_i, p2d_8_t, IN),
 		PORT(uart_dma_o, d2p_8_t, OUT),
 
+		// SPI
+		PORT(spi_dma_i, p2d_8_t, IN),
+		PORT(spi_dma_o, d2p_8_t, OUT),
+
 		PORT(core_grant_i, BIT_TYPE, IN),
 		PORT(core_request_o, blk2mem_t, OUT)
 		)
+		, INTEGER generic_int
 );
 
 COMPONENT(sUART,
@@ -82,7 +90,8 @@ DECL_PORTS(
 		PORT(uart_dma_o, p2d_8_t, OUT),
 		PORT(uart_tx_o, BIT_TYPE, OUT),
 		PORT(uart_rx_i, BIT_TYPE, IN)
-		)
+		),
+		INTEGER generic_int
 );
 
 COMPONENT(risc_V_core,
@@ -101,6 +110,7 @@ DECL_PORTS(
 		//PORT(dma2core_i, blk2mem_t, IN), // These are DMA write requests from peripherals / are transmitted when mem bus is not used by core
 		PORT(dma_request_i, blk2mem_t, IN),
 		PORT(dma_grant_o, BIT_TYPE, OUT),
+		PORT(csr2core_i, csr2core_t, IN),
 		PORT(datamem2core_i, mem2blk_t, IN)
 		// GPIOs
 		//PORT(gpios_o, UINT(32), OUT)
@@ -114,6 +124,8 @@ DECL_PORTS(
 		PORT(core2mem_i, blk2mem_t, IN),
 		PORT(mem2core_o, mem2blk_t, OUT)
 		)
+		, INTEGER generic_int
+
 );
 
 COMPONENT(peripherals,
@@ -124,6 +136,7 @@ DECL_PORTS(
 		PORT(dbg_o, UINT(8), OUT),
 		PORT(gpios_o, UINT(32), OUT)
 		)
+		, INTEGER generic_int
 );
 
 COMPONENT( clk_gen,
@@ -134,6 +147,7 @@ COMPONENT( clk_gen,
 		PORT(c0, CLK_TYPE, OUT),	//	: OUT STD_LOGIC ;
 		PORT(c1, CLK_TYPE, OUT),	//	: OUT STD_LOGIC ;
 		PORT(c2, CLK_TYPE, OUT),	//	: OUT STD_LOGIC ;
+		PORT(c3, CLK_TYPE, OUT),	//	: OUT STD_LOGIC ;
 		PORT(locked, BIT_TYPE, OUT)	//	: OUT STD_LOGIC
 	)
 );
@@ -161,7 +175,58 @@ DECL_PORTS(
 		PORT(dQ_io, TRISTATE(16), INOUT)
 
 		)
+		, INTEGER generic_int
 );
+
+COMPONENT(SPI_master,
+DECL_PORTS(
+		PORT(clk_120, CLK_TYPE, IN),
+		PORT(clk_mcu, CLK_TYPE, IN),
+		PORT(reset_n, RST_TYPE, IN),
+		PORT(core2mem_i, blk2mem_t, IN),
+		PORT(mem2core_o, mem2blk_t, OUT),
+		PORT(trig_i, BIT_TYPE, IN),    // signal that trigs transfers (should come from timer)
+		PORT(spi_dma_i, d2p_8_t, IN),
+		PORT(spi_dma_o, p2d_8_t, OUT),
+		PORT(spi_csn_o, BIT_TYPE, OUT),
+		PORT(spi_clk_o, BIT_TYPE, OUT),
+		PORT(spi_tx_o, BIT_TYPE, OUT),
+		PORT(spi_rx_i, BIT_TYPE, IN)
+		)
+		, INTEGER generic_int
+);
+
+COMPONENT(SPI_slave,
+DECL_PORTS(
+		PORT(clk_120, CLK_TYPE, IN),
+		PORT(clk_mcu, CLK_TYPE, IN),
+		PORT(reset_n, RST_TYPE, IN),
+		PORT(core2mem_i, blk2mem_t, IN),
+		PORT(mem2core_o, mem2blk_t, OUT),
+		PORT(spi_dma_i, d2p_8_t, IN),
+		PORT(spi_dma_o, p2d_8_t, OUT),
+		PORT(spi_csn_i, BIT_TYPE, IN),
+		PORT(spi_clk_i, BIT_TYPE, IN),
+		PORT(spi_tx_o, BIT_TYPE, OUT),
+		PORT(spi_rx_i, BIT_TYPE, IN)
+		)
+		, INTEGER generic_int
+);
+
+COMPONENT(csr_irq,
+DECL_PORTS(
+		PORT(clk_csr_irq, CLK_TYPE, IN), // might be the 'always on' clock in the future
+		PORT(reset_n, RST_TYPE, IN),
+		PORT(core2mem_i, blk2mem_t, IN),
+		PORT(irq_i, irq_t, IN), //Array of external IRQs
+		PORT(mem2core_o, mem2blk_t, OUT),
+		PORT(csr2core_o, csr2core_t, OUT)
+		),
+		INTEGER generic_int
+);
+
+
+
 SIG(boot_mode, BIT_TYPE);
 
 SIG(load_port, blk2mem_t);
@@ -173,12 +238,17 @@ SIG(all2core, mem2blk_t);
 SIG(uart2core, mem2blk_t);
 SIG(dma2core, mem2blk_t);
 SIG(hdmi2core, mem2blk_t);
+SIG(spi2core, mem2blk_t);
+SIG(spi_slv2core, mem2blk_t);
+SIG(csr_irq2core, mem2blk_t);
+
 SIG(dbg, UINT(8));
 SIG(gpios, UINT(32));
 SIG(gate_cell, BIT_TYPE);
 SIG(clk_mcu, CLK_TYPE);
 SIG(clk_24, CLK_TYPE);
 SIG(clk_120, CLK_TYPE);
+SIG(clk_240, CLK_TYPE);
 // use this to force a response from tb blocks
 SIG(tb2core, mem2blk_t);
 // SAMD21 I/F
@@ -189,6 +259,8 @@ SIG(uart_tx, BIT_TYPE);
 
 SIG(uart2dma, p2d_8_t);
 SIG(dma2uart, d2p_8_t);
+SIG(spi2dma, p2d_8_t);
+SIG(dma2spi, d2p_8_t);
 SIG(dma_request, blk2mem_t);
 SIG(dma_grant, BIT_TYPE);
 SIG(trap, BIT_TYPE);
@@ -203,6 +275,15 @@ SIG(hdmi2sdram_data, UINT(16));
 SIG(sdram2hdmi_data, UINT(16));
 SIG(dbg33, UINT(33));
 
+SIG(spi_clk, BIT_TYPE);
+SIG(spi_csn, BIT_TYPE);
+SIG(spi_mosi, BIT_TYPE);
+SIG(spi_miso, BIT_TYPE);
+SIG(spi_miso2, BIT_TYPE);
+SIG(spi_trig, BIT_TYPE);
+
+SIG(csr2core, csr2core_t);
+SIG(irq_vec, irq_t); // Array of 16 external IRQs
 
 //SIG(sUART_tx, BIT_TYPE);
 //SIG(sUART_rx, BIT_TYPE);
@@ -215,8 +296,21 @@ MAPPING(
 		PM(inclk0, clk_top),
 		PM(c0, clk_mcu),
 		PM(c1, clk_24),
-		PM(c2, clk_120)
+		PM(c2, clk_120),
+		PM(c3, clk_240),
 		)
+);
+
+BLK_INST(u0_csr_irq, csr_irq,
+MAPPING(
+		PM(clk_csr_irq, clk_mcu),
+		PM(reset_n, reset_n),
+		PM(core2mem_i, core2datamem),
+		PM(mem2core_o, csr_irq2core),
+		PM(irq_i, irq_vec),
+		PM(csr2core_o, csr2core)
+		),
+		HEX_INT(CSR_IRQ_REGS)
 );
 
 BLK_INST(u0_hdmi, hdmi,
@@ -235,7 +329,8 @@ MAPPING(
 		PM(green_o, green_o),
 		PM(red_o, red_o),
 		PM(pclk_o, pclk_o)
-		)
+		),
+		HEX_INT(HDMI_REGS)
 );
 
 
@@ -249,9 +344,12 @@ MAPPING(
 		PM(mem2dma_i, datamem2core),
 		PM(uart_dma_i, uart2dma),
 		PM(uart_dma_o, dma2uart),
+		PM(spi_dma_i, spi2dma),
+		PM(spi_dma_o, dma2spi),
 		PM(core_grant_i, dma_grant),
 		PM(core_request_o, dma_request)
-	)
+	),
+	HEX_INT(DMA_REGS)
 );
 
 
@@ -266,7 +364,8 @@ MAPPING(
 		PM(uart_dma_i, dma2uart),
 		PM(uart_tx_o, uart_tx),
 		PM(uart_rx_i, uart_rx)
-		)
+		),
+		HEX_INT(UART_REGS) //HEX_INT(40001FF0) //1073774528
 );
 
 BLK_INST(u0_risc_V_core, risc_V_core,
@@ -282,6 +381,7 @@ BLK_INST(u0_risc_V_core, risc_V_core,
 				PM(core2datamem_o,core2datamem),
 				PM(dma_request_i, dma_request),
 				PM(dma_grant_o, dma_grant),
+				PM(csr2core_i, csr2core),
 				PM(datamem2core_i, all2core),
 				)
 		);
@@ -294,6 +394,7 @@ BLK_INST(u0_mem, mem,
 				PM(core2mem_i,core2instmem),
 				PM(mem2core_o, instmem2core)
 				)
+				, 6144
 		);
 
 // Data RAM
@@ -304,6 +405,7 @@ BLK_INST(u1_mem, mem,
 				PM(core2mem_i,core2datamem),
 				PM(mem2core_o, datamem2core)
 				)
+				, 6144
 		);
 
 // Base address is situated in sram
@@ -316,7 +418,8 @@ BLK_INST(u0_peripherals, peripherals,
 				PM(core2mem_i,core2datamem),
 				PM(dbg_o, dbg),
 				PM(gpios_o, gpios)
-				)
+				),
+				HEX_INT(HDMI_REGS) // peripherals does display chars in dbg_file as well
 		);
 
 
@@ -337,25 +440,104 @@ BLK_INST( u0_sdram_ctrl, sdram_ctrl,
 				PM(cas_o,sdram_cas_o),
 				PM(dQm_o,sdram_dQm_o),
 				PM(dQ_io,sdram_dQ_io)
-				)
+				),
+				HEX_INT(SDRAM_REGS)
 		);
 
+#ifdef SPI_MASTER
+BLK_INST(u0_spi, SPI_master,
+MAPPING(
+		PM(clk_120, clk_240),
+		PM(clk_mcu, clk_mcu),
+		PM(reset_n, reset_n),
+		PM(core2mem_i, core2datamem),
+		PM(mem2core_o, spi2core),
+		PM(spi_dma_i, dma2spi),
+		PM(spi_dma_o, spi2dma),
+		PM(trig_i, spi_trig),
+		PM(spi_clk_o, spi_clk),
+		PM(spi_csn_o, spi_csn),
+		PM(spi_tx_o, spi_mosi),
+		PM(spi_rx_i, spi_miso)
+		/*,
+		(trig_i, BIT_TYPE, IN),    // signal that trigs transfers (should come from timer)
+		(, d2p_8_t, IN),
+		(spi_dma_o, p2d_8_t, OUT),
+		(spi_csn_o, BIT_TYPE, OUT),
+		(spi_clk_o, BIT_TYPE, OUT),
+		(spi_tx_o, BIT_TYPE, OUT),
+		(spi_rx_i, BIT_TYPE, IN)
+		)*/
+		),
+		HEX_INT(SPI_REGS)
+);
+#endif
+
+#ifdef SPI_SLAVE
+BLK_INST(u0_spi_slv, SPI_slave,
+MAPPING(
+		PM(clk_120, clk_240),
+		PM(clk_mcu, clk_mcu),
+		PM(reset_n, reset_n),
+		PM(core2mem_i, core2datamem),
+		PM(mem2core_o, spi_slv2core),
+		PM(spi_dma_i, dma2spi),
+		PM(spi_dma_o, spi2dma),
+		PM(spi_clk_i, spi_clk),
+		PM(spi_csn_i, spi_csn),
+		PM(spi_rx_i, spi_mosi),
+		PM(spi_tx_o, spi_miso)
+		/*,
+		(trig_i, BIT_TYPE, IN),    // signal that trigs transfers (should come from timer)
+		(, d2p_8_t, IN),
+		(spi_dma_o, p2d_8_t, OUT),
+		(spi_csn_o, BIT_TYPE, OUT),
+		(spi_clk_o, BIT_TYPE, OUT),
+		(spi_tx_o, BIT_TYPE, OUT),
+		(spi_rx_i, BIT_TYPE, IN)
+		)*/
+		),
+		HEX_INT(SPI_SLV_REGS)
+);
+#endif
+
+
+
 // Combine responses of memory and peripherals (for now sUART) ----------
-COMB_PROCESS(1, clk_mcu)
+COMB_PROCESS(1, clk_top)
 
 #ifdef VHDL
 	tb2core.data <= TO_UINT(0, 32);
 	tb2core.data_en <= BIT(0);
 #endif
 
-	all2core.data <= ( datamem2core.data or uart2core.data or dma2core.data or tb2core.data or hdmi2core.data);
-	all2core.data_en <= ( datamem2core.data_en or uart2core.data_en or dma2core.data_en or tb2core.data_en or hdmi2core.data_en);
+#ifdef SPI_SLAVE
+	all2core.data <= ( datamem2core.data or uart2core.data or dma2core.data or tb2core.data or hdmi2core.data or spi_slv2core.data or csr_irq2core.data);
+	all2core.data_en <= ( datamem2core.data_en or uart2core.data_en or dma2core.data_en or tb2core.data_en or hdmi2core.data_en or spi_slv2core.data_en or csr_irq2core.data_en);
+#elsif defined(SPI_MASTER)
+	all2core.data <= ( datamem2core.data or uart2core.data or dma2core.data or tb2core.data or hdmi2core.data or spi2core.data or csr_irq2core.data);
+	all2core.data_en <= ( datamem2core.data_en or uart2core.data_en or dma2core.data_en or tb2core.data_en or hdmi2core.data_en or spi2core.data_en or csr_irq2core.data_en);
+#else
+	all2core.data <= ( datamem2core.data or uart2core.data or dma2core.data or tb2core.data or hdmi2core.data or csr_irq2core.data);
+	all2core.data_en <= ( datamem2core.data_en or uart2core.data_en or dma2core.data_en or tb2core.data_en or hdmi2core.data_en or csr_irq2core.data_en);
+#endif
 
 
 	// A bit tricky for inouts
-	boot_mode <= B(PORT_BASE(bmkrD_io), 8); // available ?
+	boot_mode <= B(PORT_BASE(bmkrD_io), 7); // changed from 8 (is MISO)
 	uart_rx <= B(PORT_BASE(bmkrD_io), 14);
 	SIG_SET_BIT(PORT_BASE(bmkrD_io),13, uart_tx);
+
+#ifdef SPI_SLAVE
+	SIG_SET_BIT(PORT_BASE(bmkrD_io),10, spi_miso);
+	spi_mosi <= B(PORT_BASE(bmkrD_io), 8);
+	spi_clk <= B(PORT_BASE(bmkrD_io), 9);
+
+
+#endif
+
+
+
 #ifdef VHDL
 	load_port.wr_n <= BIT(1);
 #endif

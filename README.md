@@ -6,6 +6,35 @@ Risc-V small SoC (simple UART + DMA + HDMI console peripherals).
 Video demo of the SoC running on the Arduino Vidor: https://youtu.be/4wAXtRFF0tc
 (blurry video and awful speech inside ;)
 
+https://www.youtube.com/watch?v=dMSiSrPnSbE
+## Latest updates
+
+Too many, I should have committed a long time ago.
+
+### Platform improvements
+* Most important change is that Agravic now implements an event-driven simulator (Include_libs/scheduler2.h)
+* As a result, main.cpp and tb.h are way cleaner than before
+* Non-synchronous clocks can be created using FOREVER_PROCESS (see tb.h)
+* FOREVER_PROCESS can generate clocks. Though, it is a very simple piece of code that can't handle more complicated logic (e.g. conditions)
+* Despite the event-driven scheme, true combinational logic is not possible yet.
+* Though, the number of processes (synchronous or pseudo-combinational) per module is now 8 instead of 4.
+* FOREVER_PROCESSES create base clocks. Derived clocks can be created in regular processes (see Source/clk_gen.h)
+* Every <= operation on a clock signal creates 3 delta cycles (compute flop inputs, assign flop outputs, update combinational logic)
+* Delta cycles can be converted to ps delays in vcd output (define REPORT_DELTAS_AS_PS in scheduler2.h)
+* Arrays of arrays are now possible
+* Flops outputs update is only performed over modified flop inputs (improves simulation time)
+
+* One generic parameter per block is available. This is not enough, but this enables generic configuration of register base address and address span. 
+* Clean-up started in Include_libs/slv.h (C macros and arrays are now separate files)
+
+### Risc-V SoC improvements
+* Some bugs corrected (rv core, dma...)
+* CSR are now implemented as a memory device. CSR instructions generate memory accesses. CSR tests now pass!
+* Timer and IRQs are implemented inside the csr_irq block. However, this feature is not fully implemented (HW and FW).
+* Thanks to flop-update only performed on modified flops, memory models are now common to C++ model and VHDL implementations.
+* Memory size is a generic parameter. This enables defining different instruction and data memory sizes.
+* Cleaner register configuration using block generic parameter. Register configuration is shared by HW and FW (Source.reg_defs.h).
+
 ## Agravic has reached some level of maturity
 The Risc-V tiny SoC HW can now be downloaded to the Arduino Vidor FPGA development platform and is running properly so far.
 HDMI console mode (with programmable fonts) available via the micro-HDMI connector

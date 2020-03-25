@@ -4,15 +4,19 @@
 #
 # Generate a baremetal application
 
-PROGRAM ?= led
+PROGRAM ?= verif
 PROGRAM_CFLAGS = -Wall -g -Os
 ARCH = rv32i
 # ARCH = rv32im # to disable compressed instructions
-SRCS = $(PROGRAM).c
+SRCS = $(PROGRAM).cpp
 
 CC = /opt/riscv/bin/riscv64-unknown-elf-g++
 ZZ = /opt/riscv/bin/riscv64-unknown-elf-gcc
-#CPP = /opt/riscv/bin/riscv64-unknown-elf-g++
+CPP = /opt/riscv/bin/riscv64-unknown-elf-g++
+#//CC = /sw/FROM_sw_st_gnu_compil_comp/comp/riscv/riscv-gnu-toolchain-9.2.0/bin/riscv64-unknown-elf-g++
+#CC = riscv64-linux-gnu-g++-8
+#CCz = riscv64-linux-gnu-g++-8
+#ZZ = riscv64-linux-gnu-gcc-8
 
 OBJCOPY ?= $(subst gcc,objcopy,$(wordlist 1,1,$(ZZ)))
 OBJDUMP ?= $(subst gcc,objdump,$(wordlist 1,1,$(ZZ)))
@@ -29,15 +33,16 @@ LIBS = -lm
 #    -std=gnu++17 -Os -Wall -march=$(ARCH) -mabi=ilp32 -mcmodel=medlow -fmessage-length=0 -fsigned-char -ffunction-sections -fdata-sections -fno-common $(PROGRAM_CFLAGS)
 #	-fvisibility=hidden -nostdlib -nostartfiles $(PROGRAM_CFLAGS)
 
-OBJS := ${SRCS:.c=.o}  ${CRT:.S=.o}
+OBJS := ${SRCS:.cpp=.o}  ${CRT:.S=.o}
 DEPS = $(OBJS:%.o=%.d)
+INCS = -IInclude
 
 OUTFILES = $(PROGRAM).elf $(PROGRAM).bin $(PROGRAM).dis
 
 all: $(OUTFILES)
 
 $(PROGRAM).elf: $(OBJS) $(LINKER_SCRIPT)
-	$(CC) $(CFLAGS) -T $(LINKER_SCRIPT) $(OBJS) -o $@ $(LIBS)
+	$(CC) $(CFLAGS) -T $(LINKER_SCRIPT) $(OBJS) $(INCS) -o $@ $(LIBS)
 	$(OBJSIZE) $@
 %.dis: %.elf
 	$(OBJDUMP) -SD $^ > $@
@@ -55,7 +60,7 @@ $(PROGRAM).elf: $(OBJS) $(LINKER_SCRIPT)
 %.bin: %.elf
 	$(OBJCOPY) -O binary $^ $@
 
-%.o: %.c
+%.o: %.cpp
 	$(CC) $(CFLAGS) -MMD -c $(INCS) -o $@ $<
 
 %.o: %.S

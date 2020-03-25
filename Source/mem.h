@@ -3,7 +3,7 @@
 // have separate implementations for vhdl and c++, so that we don't get thousands of flops in the C++ design
 // C++ memory are just arrays
 // Write delay is obtained by delaying the write operation
-#ifdef VHDL
+#if not DEEP_PLATFORM_DEBUG // Memory initialization sends too many console messages
 START_OF_FILE(mem)
 INCLUDES
 USE_PACKAGE(structures)
@@ -17,91 +17,103 @@ DECL_PORTS(
 		PORT(reset_n, RST_TYPE, IN),
 		PORT(core2mem_i, blk2mem_t, IN),
 		PORT(mem2core_o, mem2blk_t, OUT)
-		)
+		),
+		INTEGER generic_int
 );
 
-#if 0
+#if 1
 
-TYPE(mem_t, ARRAY_TYPE(UINT(8),6144));
+COMPONENT(spram,
+DECL_PORTS(
+		PORT(clk_mem, CLK_TYPE, IN),
+		PORT(reset_n, CLK_TYPE, IN),
+		PORT(addr_i, UINT(data_addr_span-2), IN),
+		PORT(data_i, UINT(32), IN),
+		PORT(be_i, UINT(4), IN),
+		PORT(wrn_i, BIT_TYPE, IN),
+		PORT(data_o, UINT(32), OUT)
 
-SIG(mem0, mem_t);// internal;
-SIG(mem1, mem_t);// internal;
-SIG(mem2, mem_t);// internal;
-SIG(mem3, mem_t);// internal;
-//SIG(blk2mem_t0, blk2mem_t);
-SIG(mem2blk_t0, mem2blk_t);
+		),
+		INTEGER generic_int
+);
+
+
+SIG(addr, UINT(LEN(PORT_BASE(core2mem_i).addr)));
+CONST(max_addr, UINT(LEN(PORT_BASE(core2mem_i).addr))) := TO_UINT(generic_int, LEN(addr));
+SIG(data_rd, UINT(32));
+SIG(data_wr, UINT(32));
+SIG(be, UINT(4));
+SIG(wen, BIT_TYPE);
+SIG(rd_en, UINT(1));
+
 
 BEGIN
 
+	BLK_INST(ram0, spram,
+			MAPPING(
+			PM(clk_mem, clk_mem),
+			PM(reset_n, reset_n),
+			PM(addr_i, addr),
+			PM(data_i, data_wr),
+			PM(data_o, data_rd),
+			PM(be_i, be),
+			PM(wrn_i, wen)
+			)
+			, generic_int
+		);
 
 
 #ifndef VHDL
-uint32_t get(uint32_t baddr)
-{
-	slv<32> val = mem3((baddr)) &
-			mem2((baddr)) &
-			mem1((baddr)) &
-			mem0((baddr));
-	return TO_INTEGER(val);
-}
-void set(uint32_t addr, uint32_t val)
-{
-	mem3(addr) = (val >> 24) & 255;
-	mem2(addr) = (val >> 16) & 255;
-	mem1(addr) = (val >> 8) & 255;
-	mem0(addr) = (val) & 255;
+	uint32_t get(uint32_t baddr)
+	{
+		slv<32> val = ram0.mem0((baddr))(3) &
+				ram0.mem0((baddr))(2) &
+				ram0.mem0((baddr))(1) &
+				ram0.mem0((baddr))(0);
+		//gprintf("#GRd addr % val ", baddr, val);
+		return TO_INTEGER(val);
+	}
+	void set(uint32_t addr, uint32_t val)
+	{
+		//gprintf("#RSet addr % val %", addr, val);
+		ram0.mem0(addr)(3) = TO_UINT((val >> 24),8);
+		ram0.mem0(addr)(2) = TO_UINT((val >> 16),8);
+		ram0.mem0(addr)(1) = TO_UINT((val >> 8),8);
+		ram0.mem0(addr)(0) = TO_UINT((val),8);
 
-}
+	}
+
 #endif
 
-PROCESS(0, clk_mem, reset_n)
-VAR(baddr, UINT(13));
-VAR(rdata, UINT(32));
-BEGIN
-//	IF ( reset_n == BIT(0) ) THEN
-//		gprintf("#V addr ");//% ", &PORT_BASE(mem2core_o));//, &PORT_BASE(mem2core_o).data);
-//		PORT_BASE(mem2core_o).data <= TO_UINT(0, LEN(mem2blk_t0.data));
-//		PORT_BASE(mem2core_o).data_en <= BIT(0);
-	IF ( EVENT(clk_mem) and (clk_mem == BIT(1)) ) THEN
-		baddr := PORT_BASE(core2mem_i).addr;
-		rdata := 	mem3(TO_INTEGER(baddr)) &
-					mem2(TO_INTEGER(baddr)) &
-					mem1(TO_INTEGER(baddr)) &
-					mem0(TO_INTEGER(baddr));
-		IF ( ( PORT_BASE(core2mem_i).cs_n == BIT(0) ) and not( RANGE(baddr, 12, 11) == BIN(11) ) ) THEN
-				PORT_BASE(mem2core_o).data <= rdata;
-			//baddr := PORT_BASE(core2mem_i).addr;
-			//rdata := 	mem3(TO_INTEGER(baddr)) &
-			//			mem2(TO_INTEGER(baddr)) &
-			//			mem1(TO_INTEGER(baddr)) &
-			//			mem0(TO_INTEGER(baddr));
-			//PORT_BASE(mem2core_o).data <= rdata;
-			PORT_BASE(mem2core_o).data_en <= BIT(1);
-			IF (PORT_BASE(core2mem_i).wr_n == BIT(0)) THEN
-				//gprintf("#MMem write % @ % ", to_hex(PORT_BASE(core2mem_i).data), to_hex(PORT_BASE(core2mem_i).addr), PORT_BASE(core2mem_i).be);
-				//rmem(TO_INTEGER(PORT_BASE(core2mem_i).addr)) <= PORT_BASE(core2mem_i).data;
-				IF ( B(PORT_BASE(core2mem_i).be, 3) == BIT(1) ) THEN
-					mem3(TO_INTEGER(baddr)) <= RANGE(PORT_BASE(core2mem_i).data, 31, 24);
-				ENDIF
-				IF ( B(PORT_BASE(core2mem_i).be, 2) == BIT(1) ) THEN
-					mem2(TO_INTEGER(baddr)) <= RANGE(PORT_BASE(core2mem_i).data, 23, 16);
-				ENDIF
-				IF ( B(PORT_BASE(core2mem_i).be, 1) == BIT(1) ) THEN
-					mem1(TO_INTEGER(baddr)) <= RANGE(PORT_BASE(core2mem_i).data, 15, 8);
-				ENDIF
-				IF ( B(PORT_BASE(core2mem_i).be, 0) == BIT(1) ) THEN
-					mem0(TO_INTEGER(baddr)) <= RANGE(PORT_BASE(core2mem_i).data, 7, 0);
-				ENDIF
-				//PORT_BASE(mem2core_o).data <= PORT_BASE(core2mem_i).data;
-				PORT_BASE(mem2core_o).data_en <= BIT(0);
-			ENDIF
-		ELSE
-			PORT_BASE(mem2core_o).data <= TO_UINT(0, 32);
+	PROCESS(0, clk_mem, reset_n) // ----------------------------------------------------------
 
-			PORT_BASE(mem2core_o).data_en <= BIT(0);
+	BEGIN
+		IF ( reset_n == BIT(0) ) THEN
+			rd_en <= BIN(0);
+		ELSEIF ( EVENT(clk_mem) and (clk_mem == BIT(1)) ) THEN
+			IF ( (PORT_BASE(core2mem_i).cs_n == BIT(0)) and ((PORT_BASE(core2mem_i).addr) < max_addr) ) THEN
+				IF ((PORT_BASE(core2mem_i).wr_n == BIT(1))) THEN
+					rd_en <= BIN(1);
+					//gprintf("#MRead % addr %", data_rd, PORT_BASE(core2mem_i).addr);
+				ELSE
+					rd_en <= BIN(0);
+				ENDIF
+			ELSE
+				rd_en <= BIN(0);
+			ENDIF
+
 		ENDIF
-	ENDIF
-END_PROCESS
+	END_PROCESS
+
+	COMB_PROCESS(1, clk_mem)
+		addr <= ( ( PORT_BASE(core2mem_i).addr ) and SXT(BOOL2BIN( PORT_BASE(core2mem_i).addr < max_addr ), LEN(addr)) );
+		data_wr <= PORT_BASE(core2mem_i).data;
+		wen <= ( not PORT_BASE(core2mem_i).cs_n and not PORT_BASE(core2mem_i).wr_n and  BOOL2BIT(PORT_BASE(core2mem_i).addr < max_addr ) );
+		be <= PORT_BASE(core2mem_i).be;
+		PORT_BASE(mem2core_o).data <= ( data_rd and SXT(rd_en, 32));
+		PORT_BASE(mem2core_o).data_en <= B( rd_en, 0 );
+
+	END_COMB_PROCESS
 #else
 
 // Infer 4 6144x8 ram blocks
@@ -255,7 +267,7 @@ BLK_END;
 				)
 		);
 
-		TYPE(mem_t, ARRAY_TYPE(UINT(8),6144));
+		TYPE(mem_t, ARRAY_TYPE(UINT(8),generic_int));
 
 		mem_t mem0; //SIG(mem0, mem_t);// internal;
 		mem_t mem1; //SIG(mem1, mem_t);// internal;
@@ -290,10 +302,10 @@ BLK_END;
 		PROCESS(0, clk_mem, reset_n)
 		VAR(baddr, UINT(data_addr_span - 2));
 		VAR(rdata, UINT(32));
-		bool disp_ok;
+		bool disp_ok = 0;
 		BEGIN
 			IF ( reset_n == BIT(0) ) THEN
-				gprintf("#V addr ");//% ", &PORT_BASE(mem2core_o));//, &PORT_BASE(mem2core_o).data);
+				//gprintf("#V addr ");//% ", &PORT_BASE(mem2core_o));//, &PORT_BASE(mem2core_o).data);
 				PORT_BASE(mem2core_o).data <= TO_UINT(0, LEN(mem2blk_t0.data));
 				PORT_BASE(mem2core_o).data_en <= BIT(0);
 				RESET(addr);
@@ -306,7 +318,7 @@ BLK_END;
 				// And this required a wait cycle in CPU core for consecutive Write/read to the same address
 				IF (delayed_write == BIT(1)) THEN
 					//disp_ok = (addr > 0x16F0) && (addr < 0x1700);
-					if (name == "u1_mem" and disp_ok)
+					if (name == "u0_mem" and disp_ok)
 						gprintf("#MMem write % @ % ", to_hex(TO_INTEGER(data)), to_hex(TO_INTEGER(addr)), be);
 					//rmem(TO_INTEGER(PORT_BASE(core2mem_i).addr)) <= PORT_BASE(core2mem_i).data;
 
@@ -327,7 +339,7 @@ BLK_END;
 
 				baddr := PORT_BASE(core2mem_i).addr;
 
-				IF ( (PORT_BASE(core2mem_i).cs_n == BIT(0)) and not ( RANGE(baddr, 12, 11) == BIN(11) ) ) THEN
+				IF ( (PORT_BASE(core2mem_i).cs_n == BIT(0)) and  ( baddr < generic_int ) ) THEN
 					IF (PORT_BASE(core2mem_i).wr_n == BIT(1)) THEN
 						rdata := 	mem3(TO_INTEGER(baddr)) &
 									mem2(TO_INTEGER(baddr)) &
@@ -337,7 +349,8 @@ BLK_END;
 						PORT_BASE(mem2core_o).data_en <= BIT(1);
 						delayed_write <= BIT(0);
 						//disp_ok = (baddr > 0x16F0) && (baddr < 0x1700);
-						if (name == "u1_mem" and disp_ok)
+						//disp_ok = 1;
+						if (name == "u0_mem" and disp_ok)
 							gprintf("#BMem read % @ % ", to_hex(TO_INTEGER(rdata)), to_hex(TO_INTEGER(baddr)));
 					ELSE
 

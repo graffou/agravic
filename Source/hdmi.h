@@ -23,6 +23,8 @@ DECL_PORTS(
 		PORT(green_o, BIT_TYPE, OUT),
 		PORT(blue_o, BIT_TYPE, OUT)
 		)
+		, INTEGER generic_int
+
 );
 
 
@@ -426,7 +428,7 @@ BEGIN
 			IF (B(init_cnt, 0) == BIT(1)) THEN
 				wbuf_char <= init_msg( TO_INTEGER( BIN(1101) - RANGE(init_cnt, 4, 1)) );
 				dbg_init_cnt <= EXT( (BIN(1101) - RANGE(init_cnt, 4, 1)), 5);
-				gprintf("#VBUF % %", TO_INTEGER( BIN(1101) - RANGE(init_cnt, 4, 1)), init_msg( TO_INTEGER( BIN(1101) - RANGE(init_cnt, 4, 1)) ));
+				//gprintf("#VBUF % %", TO_INTEGER( BIN(1101) - RANGE(init_cnt, 4, 1)), init_msg( TO_INTEGER( BIN(1101) - RANGE(init_cnt, 4, 1)) ));
 			ENDIF
 			init_cnt <= init_cnt - 1;
 		ELSEIF ( (PC_write == TO_UINT(0, 5)) ) THEN
@@ -621,7 +623,7 @@ ELSEIF ( EVENT(clk_core) and (clk_core == BIT(1)) ) THEN
 	PORT_BASE(mem2core_o).data <= TO_UINT(0, 32);
 	PORT_BASE(mem2core_o).data_en <= BIT(0);
 
-	IF ( ( PORT_BASE(core2mem_i).cs_n == BIT(0) ) and (PORT_BASE(core2mem_i).addr == BIN(1111111111110)) ) THEN//( PORT_BASE(core2mem_i).wr_n == BIT(0) ) ) THEN
+	IF ( ( PORT_BASE(core2mem_i).cs_n == BIT(0) ) and (PORT_BASE(core2mem_i).addr == TO_UINT(generic_int, LEN(PORT_BASE(core2mem_i).addr)))) THEN //BIN(1111111111110)) ) THEN//( PORT_BASE(core2mem_i).wr_n == BIT(0) ) ) THEN
 		IF ( ( PORT_BASE(core2mem_i).wr_n == BIT(0) ) ) THEN //(PORT_BASE(core2mem_i).addr == BIN(1011111111110)) ) THEN
 			byte := RANGE(PORT_BASE(core2mem_i).data, 7, 0);
 			cmd := RANGE(PORT_BASE(core2mem_i).data, 31, 24);
@@ -730,7 +732,7 @@ IF ( reset_n == BIT(0) ) THEN
 			rsum_ones <= sum_ones;
 			IF ( ( (sum_ones >= BIN(0100)) or ( (sum_ones == BIN(0100)) and B(data_raw, 0) == BIT(1))) //) THEN
 					xor (ctrl_data == BIN(1) ) ) THEN // Invert condition
-				data_raw_sel := not data_raw; // xnor encoding
+				data_raw_sel := (not data_raw); // xnor encoding
 				use_xor := BIN(0);//VAR_SET_BIT(tmds_encoded_tmp, 8, BIN(1)); //specify encoding type
 			ELSE
 				data_raw_sel := data_raw; // xor encoding

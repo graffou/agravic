@@ -37,6 +37,8 @@ DECL_PORTS(
 		PORT(dQ_io, TRISTATE(16), INOUT)
 
 		)
+		, INTEGER generic_int
+
 );
 
 
@@ -61,6 +63,7 @@ SIG(first_data, BIT_TYPE); // selected device (arbitated)
 SIG(sdram_dQ, TRISTATE(16));
 SIG(req_test, sdram_req_t);
 SIG(dbg, BIT_TYPE); // selected device (arbitated)
+SIG(page_change_required, BIT_TYPE); // selected device (arbitated)
 
 //SIG(burst_cnt, UINT(8)); // actual burst size minus 1
 
@@ -80,6 +83,8 @@ BEGIN
 
 PROCESS(0, clk_sdram, reset_n)
 VAR(stop_tsfr, BOOLEAN);
+VAR(end_of_page, BOOLEAN);
+VAR(will_refresh, BOOLEAN);
 VAR(req, BASE_TYPE(sdram_req_t));
 
 
@@ -179,7 +184,9 @@ ELSEIF ( EVENT(clk_sdram) and (clk_sdram == BIT(1)) ) THEN
 		ENDIF
 
 		stop_tsfr := (burst_cnt == TO_UINT(0, LEN(burst_cnt)));
-		IF (col == BIN(11111111)) THEN // must change page
+		end_of_page := (col == BIN(11111111));
+
+		IF (end_of_page) THEN // must change page
 			en0_o <= BIT(0); //overriden in read mode
 			en1_o <= BIT(0);
 
@@ -192,17 +199,22 @@ ELSEIF ( EVENT(clk_sdram) and (clk_sdram == BIT(1)) ) THEN
 		ENDIF
 		col <= col + 1;
 		burst_cnt <= burst_cnt - 1;
+		// Improve this code in order to deal with interleved accesses
+		// If tsfr is close to completion, without page change predicted, and if no refresh is required soon
+		// then it would be safe to go to idle state to process the next command and initiate its precharging
+		will_refresh := (refresh_cnt > (refresh_max-rp_latency));
 		IF (stop_tsfr) THEN
 			state <= sdram_precharge;
 			next_state <= sdram_idle;
 			wait_cnt <= TO_UINT(rp_latency-1, LEN(wait_cnt));
-			next_state <= sdram_burst; // at least one idle state between bursts (idle state, process req)
+			// ????? next_state <= sdram_burst; // at least one idle state between bursts (idle state, process req)
 			en <= BIT(0);
 			en0_o <= BIT(0); //overriden in read mode
 			en1_o <= BIT(0);
-		ELSE // case tsfr end because of page end
-			wait_cnt <= TO_UINT(rp_latency, LEN(wait_cnt)); // no idle state between bursts
+		ELSEIF (end_of_page) THEN // case tsfr end because of page end
+			wait_cnt <= TO_UINT(rp_latency, LEN(wait_cnt)); // ??? no idle state between bursts
 			next_state <= sdram_bank_activate;
+			page_change_required <= BIT(0);
 		ENDIF
 
 
@@ -246,8 +258,8 @@ ELSEIF ( EVENT(clk_sdram) and (clk_sdram == BIT(1)) ) THEN
 		ELSEIF ( req_test.en == BIT(1) ) THEN
 			req := (req_test);
 			//req_test.en <= BIT(0);
-			req_test.rnw <= BIT(0);
-			req_test.sz <= BIN(00000000);
+			req_test.rnw <= not req_test.rnw;
+			req_test.sz <= BIN(10000000);
 			req_test.addr <= BIN(0011111111111111111100);
 			device <= not device;
 		ENDIF
@@ -260,6 +272,11 @@ ELSEIF ( EVENT(clk_sdram) and (clk_sdram == BIT(1)) ) THEN
 			bank <= RANGE(req.addr, 21, 20);
 			burst_cnt <= req.sz;
 			state <= sdram_bank_activate;
+			IF ( (EXT(RANGE(req.addr, 7, 0), 9) + EXT(req.sz, 9)) > TO_UINT(255,9) ) THEN
+				page_change_required <= BIT(1);
+			ELSE
+				page_change_required <= BIT(0);
+			ENDIF
 		ENDIF
 
 	ENDIF

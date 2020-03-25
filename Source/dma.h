@@ -21,13 +21,18 @@ DECL_PORTS(
 		// UART
 		PORT(uart_dma_i, p2d_8_t, IN),
 		PORT(uart_dma_o, d2p_8_t, OUT),
-
+		PORT(spi_dma_i, p2d_8_t, IN),
+		PORT(spi_dma_o, d2p_8_t, OUT),
 		PORT(core_grant_i, BIT_TYPE, IN),
 		PORT(core_request_o, blk2mem_t, OUT)
 		)
+		, INTEGER generic_int
+
 );
 
 SIG(boot_mode, BIT_TYPE);
+
+SIG(lock_bus, BIT_TYPE); // used to forbid dma requests when one was issued but not granted yet
 
 TYPE(dma_channels_t, ARRAY_TYPE(dma_channel_t,nCHANNELS)); // two dma channels
 SIG(dma_channels, dma_channels_t);
@@ -57,6 +62,11 @@ CONST(dma_send_to_periph, UINT(4)) := TO_UINT(12, DMA_STATE_SZ);
 CONST(dma_wait_for_ready, UINT(4)) := TO_UINT(13, DMA_STATE_SZ);
 CONST(dma_pre_idle, UINT(4)) := TO_UINT(15, DMA_STATE_SZ); // to set data_en = 0 before idle
 
+
+CONST(reg_base_addr, UINT(LEN(PORT_BASE(core2mem_i).addr))) := TO_UINT(generic_int, LEN(PORT_BASE(core2mem_i).addr));
+SIG(base_addr_test, UINT(LEN(PORT_BASE(core2mem_i).addr)));
+CONST(reg_addr_lsbs, INTEGER) := ( generic_int / 268435456);
+SIG(addr_lsbs_test, UINT(4));
 BEGIN
 
 
@@ -94,35 +104,42 @@ IF ( reset_n == BIT(0) ) THEN
 	PORT_BASE(core_request_o).addr <= TO_UINT(0, data_addr_span-2);
 	PORT_BASE(core_request_o).data <= TO_UINT(0, 32);
 	PORT_BASE(core_request_o).be <= BIN(0000);
-	PORT_BASE(core_request_o).cs_n <= '1';
-	PORT_BASE(core_request_o).wr_n <= '1';
+	PORT_BASE(core_request_o).cs_n <= BIT(1);
+	PORT_BASE(core_request_o).wr_n <= BIT(1);
 	PORT_BASE(uart_dma_o).data_en <= BIT(0);
+	PORT_BASE(spi_dma_o).data_en <= BIT(0);
 	boot_mode <= BIT(0);
+	lock_bus <= BIT(0);
 
 ELSEIF ( EVENT(clk_dma) and (clk_dma == BIT(1)) ) THEN
 	boot_mode <= boot_mode_i;
 
 	PORT_BASE(mem2core_o).data_en <= BIT(0);
 	PORT_BASE(mem2core_o).data <= TO_UINT(0, 32);
-	IF ( ( PORT_BASE(core2mem_i).cs_n == BIT(0) ) and ( RANGE( PORT_BASE(core2mem_i).addr, 12, 4) == BIN(111111110) ) ) THEN
+	IF ( ( PORT_BASE(core2mem_i).cs_n == BIT(0) ) and ( RANGE( PORT_BASE(core2mem_i).addr, HI(PORT_BASE(core2mem_i).addr), REG_NBITS) == RANGE( reg_base_addr, HI(reg_base_addr), REG_NBITS) ) ) THEN//( RANGE( PORT_BASE(core2mem_i).addr, 12, 4) == BIN(111111110) ) ) THEN
 	// Write registers
 		IF (PORT_BASE(core2mem_i).wr_n == BIT(0) ) THEN
 			val := PORT_BASE(core2mem_i).data;
 
 			// channel selection
-			IF (PORT_BASE(core2mem_i).addr == BIN(1111111100000)) THEN
-				cur_channel <= EXT(val, LEN(cur_channel));
+			//IF (PORT_BASE(core2mem_i).addr == BIN(1111111100000)) THEN
+			IF (RANGE(PORT_BASE(core2mem_i).addr, REG_NBITS-1, 0) == TO_UINT(0, REG_NBITS)) THEN
+					cur_channel <= EXT(val, LEN(cur_channel));
 			ENDIF
-			IF (PORT_BASE(core2mem_i).addr == BIN(1111111100001)) THEN
+			//IF (PORT_BASE(core2mem_i).addr == BIN(1111111100001)) THEN
+			IF (RANGE(PORT_BASE(core2mem_i).addr, REG_NBITS-1, 0) == TO_UINT(1, REG_NBITS)) THEN
 				dma_channels(TO_INTEGER(cur_channel)).addr <= EXT(val, data_addr_span);//LEN(dma_channels(TO_INTEGER(cur_channel)).addr));
 			ENDIF
-			IF (PORT_BASE(core2mem_i).addr == BIN(1111111100010)) THEN
+			//IF (PORT_BASE(core2mem_i).addr == BIN(1111111100010)) THEN
+			IF (RANGE(PORT_BASE(core2mem_i).addr, REG_NBITS-1, 0) == TO_UINT(2, REG_NBITS)) THEN
 				dma_channels(TO_INTEGER(cur_channel)).tsfr_sz <= EXT(val, DMA_TSFR_SZ);//LEN(dma_channels(TO_INTEGER(cur_channel)).tsfr_sz));
 			ENDIF
-			IF (PORT_BASE(core2mem_i).addr == BIN(1111111100011)) THEN
+			//IF (PORT_BASE(core2mem_i).addr == BIN(1111111100011)) THEN
+			IF (RANGE(PORT_BASE(core2mem_i).addr, REG_NBITS-1, 0) == TO_UINT(3, REG_NBITS)) THEN
 				dma_channels(TO_INTEGER(cur_channel)).timeout <= EXT(val, DMA_TIME_SZ);//LEN(dma_channels(TO_INTEGER(cur_channel)).timeout));
 			ENDIF
-			IF (PORT_BASE(core2mem_i).addr == BIN(1111111100100)) THEN
+			//IF (PORT_BASE(core2mem_i).addr == BIN(1111111100100)) THEN
+			IF (RANGE(PORT_BASE(core2mem_i).addr, REG_NBITS-1, 0) == TO_UINT(4, REG_NBITS)) THEN
 				dma_channels(TO_INTEGER(cur_channel)).source <= RANGE(val, 2, 0);
 				dma_channels(TO_INTEGER(cur_channel)).sink <= RANGE(val, 6, 4);
 				dma_channels(TO_INTEGER(cur_channel)).auto_inc <= RANGE(val, 11, 8);
@@ -139,7 +156,8 @@ ELSEIF ( EVENT(clk_dma) and (clk_dma == BIT(1)) ) THEN
 			ENDIF
 		ELSE
 			// Read registers
-			IF (PORT_BASE(core2mem_i).addr == BIN(1111111101000)) THEN // read state
+			//IF (PORT_BASE(core2mem_i).addr == BIN(1111111101000)) THEN // read state
+			IF (RANGE(PORT_BASE(core2mem_i).addr, REG_NBITS-1, 0) == TO_UINT(8, REG_NBITS)) THEN
 				PORT_BASE(mem2core_o).data_en <= BIT(1);
 				PORT_BASE(mem2core_o).data <= EXT(dma_channels(TO_INTEGER(cur_channel)).state, 32);
 			ENDIF
@@ -148,6 +166,7 @@ ELSEIF ( EVENT(clk_dma) and (clk_dma == BIT(1)) ) THEN
 
 	// boot mode: prepare DMA for code loading
 	IF ( (boot_mode_i == BIT(1)) and (boot_mode == BIT(0) ) ) THEN
+		lock_bus <= BIT(0);
 		cur_channel <= TO_UINT(0, log2_nCHANNELS);
 		dma_channels(0).source <= TO_UINT(0, 3);
 		dma_channels(0).addr <= TO_UINT(0, data_addr_span);
@@ -155,11 +174,14 @@ ELSEIF ( EVENT(clk_dma) and (clk_dma == BIT(1)) ) THEN
 		dma_channels(0).periph_mask <= TO_UINT(3,2); // 8-bit
 		dma_channels(0).data_mask <= TO_UINT(0,2); // 32-bit
 		dma_channels(0).state <= dma_wait_for_periph_data;
+		FOR(idx, 1, nCHANNELS-1)
+			dma_channels(idx).state <= dma_idle;
+		ENDLOOP
 	ENDIF
 	IF ( (boot_mode == BIT(1)) and (boot_mode_i == BIT(0) ) ) THEN
 		dma_channels(TO_INTEGER(cur_channel)).state <= dma_idle;
-		PORT_BASE(core_request_o).cs_n <= '1';
-		PORT_BASE(core_request_o).wr_n <= '1';
+		PORT_BASE(core_request_o).cs_n <= BIT(1);
+		PORT_BASE(core_request_o).wr_n <= BIT(1);
 	ENDIF
 
 	sel_channel := TO_UINT(0, LEN(sel_channel));
@@ -178,8 +200,8 @@ ELSEIF ( EVENT(clk_dma) and (clk_dma == BIT(1)) ) THEN
 		// DMA state machines
 		IF (not (dma_channels(idx).state == dma_idle) ) THEN
 			// Collect info from peripherals
-			periph_data_ens  := (BIN(0000000) & PORT_BASE(uart_dma_i).data_en);//EXT(PORT_BASE(uart_dma_i).data_en, LEN(periph_data_ens));
-			periph_data_rdys := (BIN(0000000) & PORT_BASE(uart_dma_i).rdy);//EXT(PORT_BASE(uart_dma_i).rdy, LEN(periph_data_rdys));
+			periph_data_ens  := (BIN(000000) & PORT_BASE(spi_dma_i).data_en & PORT_BASE(uart_dma_i).data_en);//EXT(PORT_BASE(uart_dma_i).data_en, LEN(periph_data_ens));
+			periph_data_rdys := (BIN(000000) & PORT_BASE(spi_dma_i).rdy & PORT_BASE(uart_dma_i).rdy);//EXT(PORT_BASE(uart_dma_i).rdy, LEN(periph_data_rdys));
 			rperiph_data_ens <= periph_data_ens; //dbg
 			rperiph_data_rdys <= periph_data_rdys;
 			// State wait for periph data-----------------------
@@ -191,6 +213,9 @@ ELSEIF ( EVENT(clk_dma) and (clk_dma == BIT(1)) ) THEN
 					IF (dma_channels(idx).source == BIN(000)) THEN
 						periph_data := EXT(PORT_BASE(uart_dma_i).data, 32);
 						PORT_BASE(uart_dma_o).grant <= BIT(1);
+					ELSEIF 	(dma_channels(idx).source == BIN(001)) THEN
+						periph_data := EXT(PORT_BASE(spi_dma_i).data, 32);
+						PORT_BASE(spi_dma_o).grant <= BIT(1);
 					ENDIF
 					// Fill
 					nshift2 := RANGE(dma_channels(idx).addr, 1, 0);
@@ -227,6 +252,8 @@ ELSEIF ( EVENT(clk_dma) and (clk_dma == BIT(1)) ) THEN
 				// Reset grant
 				IF (dma_channels(idx).source == BIN(000)) THEN
 					PORT_BASE(uart_dma_o).grant <= BIT(0);
+				ELSEIF (dma_channels(idx).source == BIN(001)) THEN
+					PORT_BASE(spi_dma_o).grant <= BIT(0);
 				ENDIF
 
 				// increment address
@@ -239,13 +266,14 @@ ELSEIF ( EVENT(clk_dma) and (clk_dma == BIT(1)) ) THEN
 						PORT_BASE(core_request_o).addr <= RANGE(dma_channels(idx).addr, HI(next_addr), 2);
 						PORT_BASE(core_request_o).data <= dma_channels(idx).tmp_data;
 						PORT_BASE(core_request_o).be <= dma_channels(idx).tmp_we;
-						PORT_BASE(core_request_o).cs_n <= '0';
-						PORT_BASE(core_request_o).wr_n <= '0';
+						PORT_BASE(core_request_o).cs_n <= BIT(0);
+						PORT_BASE(core_request_o).wr_n <= BIT(0);
 						dma_channels(idx).tmp_data <= TO_UINT(0, 32); // really required ?
 						dma_channels(idx).tmp_we <= BIN(0000);
 						dma_channels(idx).state <= dma_wait_for_wr_grant;
 						dma_channels(idx).addr <= next_addr;
 						dma_channels(idx).wait_time <= EXT(dma_channels(idx).priority, DMA_WAIT_TIME_SZ);
+						lock_bus <= BIT(1);
 					ELSE // access not granted: increase priority
 						dma_channels(idx).wait_time <= dma_channels(idx).wait_time + EXT(dma_channels(idx).priority, DMA_WAIT_TIME_SZ);
 					ENDIF
@@ -259,8 +287,9 @@ ELSEIF ( EVENT(clk_dma) and (clk_dma == BIT(1)) ) THEN
 
 			ELSEIF ( (dma_channels(idx).state == dma_wait_for_wr_grant) ) THEN
 				// write access transmitted by core
+				lock_bus <= BIT(0);
 				IF (core_grant_i == BIT(1)) THEN
-					PORT_BASE(core_request_o).cs_n <= '1';
+					PORT_BASE(core_request_o).cs_n <= BIT(1);
 					IF (dma_channels(idx).tsfr_sz == TO_UINT(0, DMA_TSFR_SZ)) THEN // End of transfer
 						dma_channels(idx).state <= dma_idle;
 					ELSE
@@ -272,23 +301,27 @@ ELSEIF ( EVENT(clk_dma) and (clk_dma == BIT(1)) ) THEN
 			// ---------- read from mem -> periph --------------------
 
 			ELSEIF (dma_channels(idx).state == dma_read_mem) THEN
-				IF ( sel_channel == TO_UINT(idx, log2_nCHANNELS) ) THEN
+				IF ( (lock_bus == BIT(0)) and  (sel_channel == TO_UINT(idx, log2_nCHANNELS) ) ) THEN
 					PORT_BASE(core_request_o).addr <= RANGE(dma_channels(idx).addr, HI(next_addr), 2);
 					PORT_BASE(core_request_o).data <= dma_channels(idx).tmp_data;
 					PORT_BASE(core_request_o).be <= dma_channels(idx).tmp_we; // don't care
-					PORT_BASE(core_request_o).cs_n <= '0';
-					PORT_BASE(core_request_o).wr_n <= '1';
+					PORT_BASE(core_request_o).cs_n <= BIT(0);
+					PORT_BASE(core_request_o).wr_n <= BIT(1);
 					dma_channels(idx).state <= dma_wait_for_rd_grant;
 					dma_channels(idx).wait_time <= EXT(dma_channels(idx).priority, DMA_WAIT_TIME_SZ);
 				ELSE
 					dma_channels(idx).wait_time <= dma_channels(idx).wait_time + EXT(dma_channels(idx).priority, DMA_WAIT_TIME_SZ);
 				ENDIF
-				PORT_BASE(uart_dma_o).data_en <= BIT(0);
+				IF (dma_channels(idx).source == BIN(000)) THEN
+					PORT_BASE(uart_dma_o).data_en <= BIT(0);
+				ELSEIF (dma_channels(idx).source == BIN(001)) THEN
+					PORT_BASE(spi_dma_o).data_en <= BIT(0);
+				ENDIF
 
 			ELSEIF ( (dma_channels(idx).state == dma_wait_for_rd_grant) ) THEN // state to suppress when bus is e.g AHB
 				IF (core_grant_i == BIT(1)) THEN
 					dma_channels(idx).state <= dma_wait_for_rd1;
-					PORT_BASE(core_request_o).cs_n <= '1';
+					PORT_BASE(core_request_o).cs_n <= BIT(1);
 				ENDIF
 			ELSEIF ( (dma_channels(idx).state == dma_wait_for_rd1) ) THEN // Wait for mem data being available
 				IF (PORT_BASE(mem2dma_i).data_en == BIT(1)) THEN
@@ -296,7 +329,7 @@ ELSEIF ( EVENT(clk_dma) and (clk_dma == BIT(1)) ) THEN
 					dma_channels(idx).state <= dma_wait_for_periph_rdy;
 				ENDIF
 			ELSEIF ( (dma_channels(idx).state == dma_wait_for_periph_rdy) ) THEN
-				IF ( B(periph_data_rdys, TO_INTEGER(dma_channels(idx).sink)) == BIT(1) ) THEN	// peripheral ready to receive
+				IF ( B(periph_data_rdys, TO_INTEGER(dma_channels(idx).source)) == BIT(1) ) THEN	// peripheral ready to receive
 					dma_channels(idx).tsfr_sz <= dma_channels(idx).tsfr_sz - 1;
 					dma_channels(idx).state <= dma_send_to_periph;
 				ENDIF
@@ -308,7 +341,10 @@ ELSEIF ( EVENT(clk_dma) and (clk_dma == BIT(1)) ) THEN
 					PORT_BASE(uart_dma_o).data <= EXT(periph_data,8);
 					PORT_BASE(uart_dma_o).data_en <= BIT(1);
 				ENDIF
-
+				IF (dma_channels(idx).source == BIN(001)) THEN
+					PORT_BASE(spi_dma_o).data <= EXT(periph_data,8);
+					PORT_BASE(spi_dma_o).data_en <= BIT(1);
+				ENDIF
 				next_addr := dma_channels(idx).addr + EXT(dma_channels(idx).auto_inc, LEN(next_addr));
 
 
@@ -326,10 +362,12 @@ ELSEIF ( EVENT(clk_dma) and (clk_dma == BIT(1)) ) THEN
 			ELSEIF ( (dma_channels(idx).state == dma_wait_for_ready) ) THEN	// let extra cycle to the peripheral to set its ready
 				dma_channels(idx).state <= dma_wait_for_periph_rdy; // wait for next periph data
 				PORT_BASE(uart_dma_o).data_en <= BIT(0);
+				PORT_BASE(spi_dma_o).data_en <= BIT(0);
 			ELSE // THIS IS PRE_IDLE STATE idle !!!!! NOOOOO !!!! not coming here if idle
 				IF (dma_channels(idx).source == BIN(000)) THEN
-					//periph_data := EXT(PORT_BASE(uart_dma_i).data, 32);
 					PORT_BASE(uart_dma_o).data_en <= BIT(0);
+				ELSEIF (dma_channels(idx).source == BIN(001)) THEN
+					PORT_BASE(spi_dma_o).data_en <= BIT(0);
 				ENDIF
 				dma_channels(idx).state <= dma_idle;
 

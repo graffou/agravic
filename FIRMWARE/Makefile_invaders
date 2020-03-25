@@ -34,6 +34,7 @@ LIBS = -lm
 
 OBJS := ${SRCS:.cpp=.o}  ${CRT:.S=.o}
 DEPS = $(OBJS:%.o=%.d)
+INCS = -IInclude
 
 OUTFILES = $(PROGRAM).elf $(PROGRAM).bin $(PROGRAM).dis
 

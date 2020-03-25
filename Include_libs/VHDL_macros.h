@@ -1,3 +1,5 @@
+#define DIV(a, b) a\b
+
 #define CONSTANT constant
 //#define CONST(a,n) constant a : std_logic_vector((n-1) downto 0)
 //#define CASE_CONST(a,n) constant a : std_logic_vector((n-1) downto 0)
@@ -38,6 +40,9 @@
 #define CASE_BIN(a) #a
 
 #define HEX(a) x ## Z@Z ## a ## Z@Z//STRING(a)
+#define CAT4(a,b,c,d) a ## b ## c ## d
+#define HEX_INT(a) 16 ## Y@Y ## a ## Y@Y
+#define HEX_INT(a) CAT4(16, Y@Y, a, Y@Y)
 //#define BIN(a) slv<sizeof(STRING(a))-1>(0b##a)
 
 #define BIT(a) IF_ELSE(a) ('1')('0')
@@ -54,6 +59,7 @@
 #define B(a,b) a(b)
 #define HI(a) a'high
 #define LEN(a) a'length
+#define ARRAY_LEN(a) a'length
 #define ELSEIF elsif
 #define THEN then
 #define ENDIF end if;
@@ -109,14 +115,14 @@
 #define DECL_PORT(a) PORT_DEF(EVAL1(get1_##a),EVAL1(get2_##a),EVAL1(get3_##a))
 #define DECL_PORTS(...) EVAL(MAP2(DECL_PORT_SEMI, DECL_PORT, __VA_ARGS__))
 
-#define ENTITY(type, ports, ...) IF_ELSE(HAS_ARGS(__VA_ARGS__))(template<int dummy0, __VA_ARGS>)(entity)  type is port(/*
+#define ENTITY(type, ports, ...) IF_ELSE(HAS_ARGS(__VA_ARGS__))(entity type is generic (generic_int: integer); port )( entity type is port ) (/*
 		*/ EVAL(DECL_PORTS(get_##ports)) /*
 		*/ ); end type; architecture rtl of type is component dummy_zkw_pouet is port(clk : in std_logic);end component//std::cerr << "CTOR " << name << "\n";}
 
 #define TESTBENCH(type) entity  type is /*
 		*/ begin end type; architecture rtl of type is component dummy_zkw_pouet is port(clk : in std_logic);end component//std::cerr << "CTOR " << name << "\n";}
 
-#define COMPONENT(type, ports, ...) IF_ELSE(HAS_ARGS(__VA_ARGS__))(template<int dummy0, __VA_ARGS>)(component)  type is port(/*
+#define COMPONENT(type, ports, ...) IF_ELSE(HAS_ARGS(__VA_ARGS__))(component type is generic (generic_int: integer); port)(component  type is port) (/*
 		*/ EVAL(DECL_PORTS(get_##ports)) /*
 		*/ ); end component //std::cerr << "CTOR " << name << "\n";}
 
@@ -140,7 +146,7 @@
 
 // instantiation of block inside hierarchy - all except testbench
 #define BLK_INST(name, type, port_map, ...) IF_ELSE(HAS_ARGS(__VA_ARGS__))\
-	(type<0,APPLY_GENERIC(__VA_ARGS__)>& name = *create_block(#name, this, APPLY_MAP(type<0,APPLY_GENERIC(__VA_ARGS__)>, port_map)))\
+	(name : type generic map(generic_int => __VA_ARGS__) port map( APPLY_MAP(type<0>, port_map)))\
 	(name : type port map( APPLY_MAP(type<0>, port_map)))
 
 
@@ -201,5 +207,9 @@ use IEEE.NUMERIC_STD.ALL;
 #define PACKAGE(a) package a is
 #define END_PACKAGE(a) end a;
 #define USE_PACKAGE(a) library work; use work.a.all;
+
+
+#define REG_NBITS ( (generic_int /  268435456 + 16) rem 16 ) // 4-lsbs of integer is a signed value, convert to 4-bit unsigned
+
 
 #define gprintf(...) -- gprintf(__VA_ARGS__)

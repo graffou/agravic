@@ -209,4 +209,5 @@ set_global_assignment -name VHDL_FILE peripherals.vhd
 set_global_assignment -name VHDL_FILE mem.vhd
 set_global_assignment -name QIP_FILE alt_mem.qip
 set_global_assignment -name QIP_FILE ../alt_ddio/alt_ddio.qip
+set_global_assignment -name OPTIMIZATION_MODE "HIGH PERFORMANCE EFFORT"
 set_instance_assignment -name PARTITION_HIERARCHY root_partition -to | -section_id Top

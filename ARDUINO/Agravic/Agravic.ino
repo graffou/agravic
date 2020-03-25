@@ -19,7 +19,7 @@
 #define FPGA_INT                          (33u) //B2 N2
 
 // set Giorno boot mode
-#define GIORNO_BOOT_MODE                          (8u) //B2 N2
+#define GIORNO_BOOT_MODE                          (7u) //B2 N2
 
 // For MKR pinout assignments see : https://systemes-embarques.fr/wp/brochage-connecteur-mkr-vidor-4000/
 

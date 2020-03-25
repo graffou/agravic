@@ -1,6 +1,4 @@
-//sed -e 's/:=/=/g' Source/main.cpp | g++ -std=c++17 -g3 -O3 -IInclude -IInclude_libs -ISource -o toto -xc++ -
-//For VHDL
-// g++ -std=c++17 -g3 -IInclude -IInclude_libs -E -P -xc++ -DVHDL Source/main.cpp | sed -e 's/==/=/g'
+
 #include <stdio.h>
 #include <iostream>
 #define DEBUG
@@ -14,18 +12,37 @@
 #include "macros.h"
 #include <vector>
 #include <utility>
+
+#define DEEP_PLATFORM_DEBUG 0 // To get all messages from the agravic platform
 #define gprintf gkprintf
+#if DEEP_PLATFORM_DEBUG
+#  define giprintf gkprintf
+#else
+#  define giprintf(...)
+#endif
+#define gzprintf gkprintf
+//#define gzprintf(...)
 
 #include "gmodule.h"
 #include "ports.h"
 #include "slv.h"
+#include "scheduler2.h"
 #include "kb.h"
 #include "input_parms.h"
 
 #include "structures.h"
 #include "slv_utils.h"
 #include "spram6144x8.h"
+
+// contains registers addresses and address span
+#include "../FIRMWARE/Include/reg_def.h"
+
 #include "sUART.h"
+#include "SPI_master.h"
+#include "SPI_slave.h"
+#include "SPI_wrapper.h"
+
+#include "spram.h"
 #include "mem.h"
 #include "peripherals.h"
 #include "dbg_mem.h"
@@ -35,6 +52,7 @@
 #include "clk_gen.h"
 #include "ddio.h"
 #include "sdram_ctrl.h"
+#include "csr_irq.h"
 
 
 #include "spram_font.h"
@@ -45,58 +63,64 @@
 
 #include "top.h"
 #include "tb.h"
-#include "screen_model.h"
+
 
 int main(int argc, char* argv[])
 {
 	CLI_PARM(bin_file, std::string);
 	bin_file.set_mandatory();
 	bin_file.set_help("CPU code file in binary format");
-	CLI_PARM_INIT(ncycles, int, 5000);
-	ncycles.set_help("Number of clock cycles the simulation will run");
-
+	CLI_PARM_INIT(time, int, 10); // default 10ms
+	time.set_help("Simulation duration in ms");
 	CLI_PARSE(argc, argv);
 
-
-	gprintf("#Ublk inst top");
+// instance of testbench
 	BLK_INST_TOP(
 			tb, tb_t,
 			);
 
-	tb.ncycles = ncycles.val;
-
-	tb.dut.check();
-	gprintf("#CInit file");
 	tb.init_file(bin_file);
-	//exit(0);
-	gprintf("#CInit vcd");
-	init_vcd(); //exit(0);
-	gprintf("#CInit clk");
-	tb.init_clk_rst();
-	tb.dut.check();
-	tb.clk.parse_modules();
-	gprintf("#CActivate vcd");
+    init_vcd();
+	// init simulator
+	scheduler.init();
+	
+	// run simulator
+	scheduler.run(time*256000000000);// convert to ps	and *256 (delta is 8lsb)
 
-	//vcd_file.set_timebase_ps(10000);// 10ns <=> 50MHz clk
-	vcd_file.set_timebase_ps(2083);// 2.8ns <=> 240MHz clk
-	vcd_file.activate();
-	tb.dut.check();
-
-	gprintf("#CRunning testbench");
-	tb.run();
-
-	// Obligatory order !!
-#if 0
-	init_vcd();
-	clk.parse_modules();
-
-	vcd_file.activate();
-#endif
-
-
-	gprintf("#VEnd of simulation, time is % ps % ms", vcd_file.vcd_time * vcd_file.timebase_ps, (vcd_file.vcd_time * vcd_file.timebase_ps)/1000000000.0);
+	// For risc-V compliance tests
 #ifdef NONREG
-	if (tb.success)
+	bool success = 1;
+	uint32_t addr, end_addr;
+	for (int i= 2048; i < 2100;i++)
+		gprintf("#Cmem content % %", to_hex(i), to_hex(tb.dut.u1_mem.get(i)));
+	for (int i= 0; i < 200;i++)
+		gprintf("#Mmem content % %", to_hex(i), to_hex(tb.dut.u0_mem.get(i)));
+	tb.sig_start_file >> std::hex >> addr;
+	std::string yo;
+	tb.sig_start_file >> std::hex >> yo; // reads end of line:
+	tb.sig_start_file >> std::hex >> end_addr;
+	gprintf("#VTesting signature from %Y to %Y", to_hex(addr), to_hex(end_addr));
+	addr = addr >> 2;
+	end_addr = end_addr >> 2;
+	gprintf("#VTesting signature from %Y to %Y", to_hex(addr), to_hex(end_addr));
+	while (not tb.check_file.eof())
+	{
+		uint32_t check_val;
+		tb.check_file >> std::hex >> check_val;
+		if (not tb.check_file.eof() and (addr <= end_addr) )
+		{
+			if (check_val == tb.dut.u1_mem.get(addr))
+				gprintf("#GChecking % % %", addr, to_hex(check_val), to_hex(tb.dut.u1_mem.get(addr)));
+			else
+			{
+				success = 0;
+				gprintf("#RChecking % % %", addr, to_hex(check_val), to_hex(tb.dut.u1_mem.get(addr)));
+			}
+		}
+
+		addr ++;
+	}
+	if (success)
 	{
 		for (int j = 0 ; j < 10 ; j++) gprintf("#G!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! PASSED !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
 	}
@@ -105,183 +129,6 @@ int main(int argc, char* argv[])
 		for (int j = 0 ; j < 10 ; j++) gprintf("#R!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! FAILED !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
 	}
 #endif
-	return tb.success;
 
-//	for (int i = 2; i < 256; i++)
-//		gprintf(" #define EVAL%d(...) EVAL1(EVAL%d(__VA_ARGS__))\n", i, i-1);
-
-	//toto<1> titi = gen_bind( link(toto<1>::in_stat, a), link(toto<1>::out_stat, b));
-	//toto<1> titi = gen_bind( toto<1>::out_stat, b);
-	//toto<1> titi = gen_bind(toto<1>::in_stat, a);
-	/*
-	std::cerr << "b = " << b << "\n";
-	std::cerr << "GO\n";
-	//titi.process0();
-	std::cerr << "b = " << b << "\n";
-
-	gprintf("titi::out %\n", titi.out);
-	gprintf("momo::out %\n", titi.my_momo.out);
-
-	a = 4;
-
-	titi.process0();
-	std::cerr << "b = " << b << "\n";
-	gprintf("titi::in %\n", titi.in);
-	gprintf("momo::in %\n", titi.my_momo.in);
-	gprintf("titi::out %\n", titi.out);
-	gprintf("momo::out %\n", titi.my_momo.out);
-
-	a = 4;
-
-*/
-	gmodule::list_modules();
-
-
-/*
-
-
-	gprintf("momo::in %\n", my_momo2.in);
-	gprintf("momo::out %\n", my_momo2.out);
-	my_momo2.process();
-	gprintf("momo::in %\n", my_momo2.in);
-	gprintf("momo::out %\n", my_momo2.out);
-	a = 8;
-	my_momo2.process();
-	gprintf("momo::in %\n", my_momo2.in);
-	gprintf("momo::out %\n", my_momo2.out);
-	gprintf("a %, b %\n", a, b);
-*/
-
-	/*
-	VAR(x,SLV_TYPE(3));
-	VAR(y,SLV_TYPE(3));
-	x := SLV(6,3);
-	std::cerr << x.n <<  "\n";
-	SLV(z, 12) := CAT(BIN(1111),CAT(x, BIN(00100)));
-	Signed<3> r := SIGNED(x);
-	slv<15> w := z * r;
-
-	std::cerr << x.n << "    " << std::hex << z.n << "   " << w.n << "\n";
-	if (EQ(z,BIN(111101000100))) THEN
-		std::cerr << "OK\n";
-	ELSE
-		std::cerr << "KO\n" << z << "  " << BIN(111101000100) << "\n";
-	ENDIF
-
-	slv<15> q := w + SLV(1, 15);
-	Signed<15> t := q + EXT(HEX(1000), LEN(t));
-	gkprintf("w = %, signed(w) = % % % and % or % xor %\n", (w), t, RANGE(t, HI(t) - 6, 0), SIGNED(w), w and t, w or t, w xor t);
-
-	TYPE(my_array_t, ARRAY_TYPE(SLV_TYPE(10), 10));
-	VAR(my_array, my_array_t);
-
-	int a = 2;
-	switch(a)
-	{
-		break;
-		case 0: std::cerr << 0;
-		break;
-		case 1: std::cerr << 1;
-		break;
-		default: std::cerr << "def";
-
-	}
-
-	SWITCH(a)
-		CASE(0) std::cerr << 0;
-		CASE(1) std::cerr << 1;
-		DEFAULT std::cerr << "def";
-	ENDCASE
-
-	REC(tata)
-		MEMBER(toto, SLV_TYPE(6));
-		MEMBER(tete, SLV_TYPE(7));
-	ENDREC
-
-	while(1)
-	{
-		kb();
-	}
-
-	//LIST(SLV_TYPE(3),SLV_TYPE(6),SLV_TYPE(3))
-#ifdef VHDL
-	EVAL(MAP(GREET, Mum, Dad, Adam, Joe))
-
-	EVAL(MAP2(GREET, BYE, Mum, Dad, Adam, Joe))
-
-	EVAL(MAP2(END_SEMICOLON, END_NOTHING,
-			PORT_IN(clk, BIT_TYPE),
-			PORT_IN(rst, BIT_TYPE),
-			PORT_OUT(val, SLV_TYPE(11)),
-			))
-	ENTITY(titi,PORT_IN(clk, BIT_TYPE),PORT_IN(rst, BIT_TYPE),PORT_OUT(val, SLV_TYPE(11)));
-	REC(tata)
-		MEMBER(toto, SLV_TYPE(6));
-		MEMBER(tete, SLV_TYPE(7));
-	ENDREC
-	ENTITY(titi,
-			PORT_IN(clk, BIT_TYPE), // truc
-			PORT_IN(rst, BIT_TYPE), //bidule
-			PORT_OUT(val, SLV_TYPE(11))
-			);
-	COMPONENT(titi,
-			PORT_IN(clk, BIT_TYPE), // truc
-			PORT_IN(rst, BIT_TYPE), //bidule
-			PORT_OUT(val, SLV_TYPE(11)),
-			PORT_OUT(mystruct, tata)
-			);
-	a VA b
-	TYPE(toto, ARRAY_TYPE(SLV_TYPE(6), 12));
-	SIG(titi, toto);
-	VAR(titi, toto);
-	CONST(titi, toto);
-	REC(tata)
-		MEMBER(toto, SLV_TYPE(6));
-		MEMBER(tete, SLV_TYPE(7));
-	ENDREC
-#endif
-*/
-
-	/*
-	PORT_DEF(toto, SLV_TYPE(4), IN)
-	STATIC_PORT_DEF(toto, SLV_TYPE(4), IN)
-	PORT_BIND(toto)
-
-	PORT_MAP(toto, titi, tata)
-	M(titi, tata)
-
-	PORT_MAP2(toto, M(titi11, tata))
-*/
-
-
-#if 0
-
-
-	BLK_INST(myblk, blk_t,
-			MAPPING(
-					PM(titi22, tata),
-					PM(yoyo, yiyi)
-					),
-					GENERIC(1,2)
-					)
-#endif
-/*
-	//PORT_MAPS(toto, )
-#define B(n) n is my favourite!
-DEFER1(B)(321)
-#define EVAL1(...) __VA_ARGS__
-
-EVAL1(A EMPTY() (123))
-
-
-#define EMPTY()
-#define A(n) I like the number n
-
-#define EVAL1(...) __VA_ARGS__
-
-EVAL1(A EMPTY() (123))
-
-EVAL1( PORT_MAP EMPTY() (type, M(titi, tata)))
-EVAL1( DEFER1(PORT_MAP) (type, M(titi, tata)))
-*/
 }
+

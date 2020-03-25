@@ -4,7 +4,7 @@
 // Written using the Agravic simulation and rtl generation platform
 
 #include "slv.h"
-
+#include "../FIRMWARE/Include/reg_def.h"// for VHDL generation
 // To add a CPU wait cycle when doing stores
 // Should not be needed, but sometimes helps for debug
 //#define STORE_CPU_WAIT
@@ -33,7 +33,8 @@ DECL_PORTS(
 		//PORT(dma2core_i, blk2mem_t, IN), // These are DMA write requests from peripherals / are transmitted when mem bus is not used by core
 		PORT(dma_request_i, blk2mem_t, IN),
 		PORT(dma_grant_o, BIT_TYPE, OUT),
-		PORT(datamem2core_i, mem2blk_t, IN)
+		PORT(datamem2core_i, mem2blk_t, IN),
+		PORT(csr2core_i, csr2core_t, IN),
 		// GPIOs
 		//PORT(gpios_o, UINT(32), OUT)
 		)
@@ -89,6 +90,7 @@ SIG(rimmediate_type, UINT(3));
 SIG(use_immediate, BIT_TYPE);
 SIG(raw_opcode, UINT(7));
 SIG(ropcode, UINT(7));
+SIG(rcsr_op_with_read, BIT_TYPE);
 SIG(rropcode, UINT(7));
 SIG(rfunct3, UINT(3));
 SIG(rop1, UINT(32));
@@ -178,8 +180,11 @@ SIG(dbg_cnt, UINT(7));
 SIG(dbg_cnt2, UINT(5));
 SIG(debug_write, BIT_TYPE);
 SIG(dbg_stop, UINT(8));
-
-
+SIG(dbg_sys_op, BIT_TYPE);
+SIG(dbg_can_read, BIT_TYPE);
+SIG(dbg_toggle, BIT_TYPE);
+SIG(dbg_csr_write, BIT_TYPE);
+SIG(dbg_csr_read, BIT_TYPE);
 
 BEGIN
 
@@ -252,6 +257,11 @@ VAR(load_from_instmem, BIT_TYPE);
 VAR(core_mem_access, BIT_TYPE); // 1 when core accesses data memory (and thus dma cannot)
 VAR(stop_PC, BOOLEAN); // 1 when core accesses data memory (and thus dma cannot)
 VAR(load_data_ok, BOOLEAN); // 1 when core accesses data memory (and thus dma cannot)
+VAR(csr_read, BIT_TYPE); // CSR inst. leads to CSR reg read -> cpu_wait state
+VAR(csr_write, BIT_TYPE); // CSR inst. leads to CSR reg read -> cpu_wait state
+VAR(csr_op, BIT_TYPE); // CSR operation required (CSRRW etc.)
+VAR(wfi, BIT_TYPE); //
+VAR(mret, BIT_TYPE); //
 
 BEGIN
 
@@ -260,9 +270,9 @@ BEGIN
 
 	IF ( reset_n == BIT(0) ) THEN
 	// reset statements
-		boot_mode <= BIT(0);
 		RESET(pipe);
-		RESET(PC);
+		//RESET(PC);
+		PC <= HEX(FFFFFFFC);
 		RESET(PCp);
 		cpu_wait <= BIT(0);
 		cpu_wait_early <= BIT(0);
@@ -307,12 +317,19 @@ BEGIN
 		mask_data_en <= BIT(0);
 		blk2mem_t0.cs_n <= BIT(1);
 		blk2mem_t0.wr_n <= BIT(1);
+#ifdef VHDL
 		code_loaded <= BIT(0);
 		code_loaded0 <= BIT(0);
+#else
+		// simulation: directly load code in TB
+		code_loaded <= BIT(1);
+		code_loaded0 <= BIT(1);
+#endif
 		boot_mode <= BIT(0);
-		boot_modep <= BIT(0);
+		boot_modep <= BIT(1); // !!!!!!!!! So that core does not start too fast after reset (simu only)
 		debug_write <= BIT(1);
 		RESET(dbg_stop);
+		rcsr_op_with_read <= BIT(0);
 
 		ELSEIF ( EVENT(clk_core) and (clk_core == BIT(1)) ) THEN
 			// rising edge
@@ -332,7 +349,6 @@ BEGIN
 			rcan_grant <= BIT(0);
 			boot_mode <= boot_mode_i;
 			boot_modep <= boot_mode;
-
 			// Instruction decoding -------------------------------------------------------------------
 			IF ( (B(pipe,0) == BIT(1)) and (cpu_wait == BIT(0)) and (flush == BIT(0)) ) THEN 			//IF ( (PORT_BASE(instmem2core_i).data_en == BIT(1)) and (cpu_wait == BIT(0)) ) THEN
 					rinstr <= instr;
@@ -360,7 +376,6 @@ BEGIN
 						alt_op <= B(instr, 30);
 					ENDIF
 
-					raw_opcode <= opcode;
 					rfunct3 <= funct3;
 					rfunct7 <= funct7;
 					rrs1 <= rs1;
@@ -399,6 +414,14 @@ BEGIN
 						rrd <= rd;
 					ENDIF
 
+					//determine whether next CSR instr requires pipeline stop
+					rcsr_op_with_read <= BOOL2BIT( ( (opcode == SYS) and  not (rd == BIN(00000)) ) or // regular CSRRWSC
+							( (funct7 == BIN(0001000)) and (rs2 == BIN(00101)) and (rd == BIN(00000)) ) ); //WFI
+					dbg_can_read <= BOOL2BIT( ( not (rd == BIN(00000)) ) );
+					dbg_sys_op <= BOOL2BIT( (opcode == SYS) );
+					dbg_toggle <= (not dbg_toggle);
+					raw_opcode <= opcode;
+
 					IF (immediate_type == no_type) THEN
 						use_immediate <= BIT(0);
 					ELSEIF ( (immediate_type == J_type) or (immediate_type == B_type) or (opcode == AUIPC) or
@@ -424,7 +447,8 @@ BEGIN
 			load_data_ok := ( ( (PORT_BASE(datamem2core_i).data_en == BIT(1)) and (load_mem == BIT(0)) and (mask_data_en == BIT(0))) // end of load from data mem
 									or ( (PORT_BASE(instmem2core_i).data_en == BIT(1)) and (load_mem == BIT(1))) );
 
-			stop_PC := ( ( (ropcode == LOAD) and cpu_wait == BIT(0) ) or
+			//stop_PC := ( ( (ropcode == LOAD) and cpu_wait == BIT(0) ) or
+			stop_PC := ( ( ( (ropcode == LOAD) or (rcsr_op_with_read == BIT(1)) ) and cpu_wait == BIT(0) ) or
 					   ( (cpu_wait == BIT(1)) and not load_data_ok )  or
 						(halt == BIT(1)) );//
 
@@ -477,14 +501,15 @@ BEGIN
 
 				sll_res := SHIFT_LEFT(op1, TO_INTEGER(RESIZE(op2, 5)));
 				srl_res_u := SHIFT_RIGHT(op1, TO_INTEGER(RESIZE(op2, 5)));
+				nshift := RESIZE(add_res, LEN(nshift)); // shift data for LH/LB/SH/SB
 				srl_res_s := UNSIGNED(SHIFT_RIGHT(SIGNED(op1), TO_INTEGER(RESIZE(op2, 5))));
 				and_res := op1 and op2;
 				or_res := op1 or op2;
 				xor_res := op1 xor op2;
-				nshift := RESIZE(add_res, LEN(nshift)); // shift data for LH/LB/SH/SB
 				trap := BIT(0);
 				taken := BIN(0);
 				csr_val := TO_UINT(0, 32);
+
 				radd_res <= add_res;
 				rsub_res <= sub_res;
 				rrs1_lt_rs2_u <= rs1_lt_rs2_u;
@@ -497,60 +522,51 @@ BEGIN
 				load_mem0 <= BIT(0);
 
 				SWITCH(ropcode) // Execute opcode
-					CASE(CASE_SYS) // CSR R/W
-						SWITCH(RANGE(rimmediate,11,0))
-							CASE(CASE_AMSTATUS) csr_val := mstatus;
-							//CASE(AMISA) csr_val := misa;
-							CASE(CASE_AMEDELEG) csr_val := medeleg;
-							CASE(CASE_AMIDELEG) csr_val := mideleg;
-							CASE(CASE_AMIE) csr_val := mie;
-							CASE(CASE_AMTVEC) csr_val := mtvec;
-							//CASE(AMCOUNTEREN) csr_val := mtcounteren;
-							CASE(CASE_AMIP) csr_val := mip;
-							CASE(CASE_AMSCRATCH) csr_val := mscratch;
-							CASE(CASE_AMEPC) csr_val := mepc;
-							CASE(CASE_AMCAUSE) csr_val := mcause;
-							DEFAULT csr_val := TO_UINT(0, LEN(csr_val));
-						ENDCASE
+					CASE(CASE_SYS) // CSR R/W -- is now a R/W to csr_irq block
+						csr_write := BOOL2BIT(not (rrs1 == TO_UINT(0, LEN(rrd))) ); // works for rs1 being reg id or rs1 being an immediate. Must be != 0 anyway (spec)
+						csr_read  := BOOL2BIT(not (rrd == TO_UINT(0, LEN(rrd))));
+						dbg_csr_write <= csr_write;
+						dbg_csr_read <= csr_read;
+						wfi := BIT(0);
+						mret := BIT(0);
 						SWITCH(rfunct3) // same for immediate and register: choice of op1 is made previously
-							CASE(CASE_CSRRW) csr_val := op1;
-							CASE(CASE_CSRRS) csr_val := csr_val or op1;
-							CASE(CASE_CSRRC) csr_val := csr_val and not op1;
-							CASE(CASE_CSRRWI) csr_val := op1;
-							CASE(CASE_CSRRSI) csr_val := csr_val or op1;
-							CASE(CASE_CSRRCI) csr_val := csr_val and not op1;
-							CASE(CASE_ECALL) // ECALL-EBREAK or MRET
+						CASE(CASE_ECALL) // ECALL-EBREAK-WFI or MRET: convert to R/W to crs_irq, but addr is irrelevant and contains cause
 							IF (use_immediate == BIT(0)) THEN // ECALL-EBREAK. strange statement (if not use _imm ... <= rimm.) but this actually uses the immediate reg reuse used for branches
-								//next_PC := mepc; flush <= BIT(1); pipe <= TO_UINT(0, LEN(pipe)); ropcode <= TO_UINT(0, LEN(ropcode));// TODO: Change mepc to appropriate register when not in machine mode
-								mepc <= rimmediate; cause := (BIN(0000000000000000000000000000) & (not B(rrs2, 0)) & BIN(0) & priv); trap := BIT(1); gprintf("#VECALL trap addr", to_hex(TO_INTEGER(mepc)));
-								//mepc <= rimmediate; cause := (BIN(000000000000000000000000000010) & priv); trap := BIT(1);
- 							ELSEIF ( ( rfunct7 == BIN(0011000) ) and ( rrs2 == BIN(00010) ) ) THEN  // MRET
-								next_PC := mepc; flush <= BIT(1); pipe <= TO_UINT(0, LEN(pipe)); ropcode <= TO_UINT(0, LEN(ropcode));// TODO: Change mepc to appropriate register when not in machine mode
-							ENDIF
-							//ELSE
-							//	trap := BIT(1); cause := ILLINSTR;
-							//ENDIF
+								//mepc <= rimmediate; cause := (BIN(0000000000000000000000000000) & (not B(rrs2, 0)) & BIN(0) & priv); trap := BIT(1); gprintf("#VECALL trap addr", to_hex(TO_INTEGER(mepc)));
+								blk2mem_t0.data <= rimmediate;
+								blk2mem_t0.addr <= ( RANGE(TO_UINT(HEX_INT(CSR_IRQ_REGS), data_addr_span - 2), data_addr_span - 3, 12) & EXT( ((not B(rrs2, 0)) & BIN(0) & priv), 12) );
+								trap := BIT(1); gprintf("#VECALL trap addr", to_hex(TO_INTEGER(PORT_BASE(csr2core_i).mepc)));
+								csr_read := BIT(0);
+							ELSEIF ( ( rfunct7 == BIN(0011000) ) and ( rrs2 == BIN(00010) ) ) THEN  // MRET
+								next_PC := PORT_BASE(csr2core_i).mepc; flush <= BIT(1); pipe <= TO_UINT(0, LEN(pipe)); ropcode <= TO_UINT(0, LEN(ropcode)); rcsr_op_with_read <= BIT(0); mret := BIT(1);// TODO: Change mepc to appropriate register when not in machine mode
+								csr_read := BIT(0);
+							ELSEIF ( ( rfunct7 == BIN(0001000) ) and ( rrs2 == BIN(00101) ) ) THEN  // WFI
+	 							csr_read := BIT(1); // nothing to actually read, but this stops the CPU. CSR_IRQ block acknowledges read on next IRQ
+	 							blk2mem_t0.data <= PCp; // Not sure of that
+	 							wfi := BIT(1);
+//HERE REQUEST READING SOME CSR register that only returns an enable signal when IRQ is up and loads MEPC with next_PC
+	 						ENDIF
 #ifdef NONREG
 								IF ( B(regs(3), 0) == BIN(1)) THEN  // program end
 										halt <= BIT(1);
 								ENDIF
 #endif
-							DEFAULT csr_val := TO_UINT(0, LEN(csr_val));
+						DEFAULT // not ecall: convert to R/W using CSR addr
+							blk2mem_t0.addr <= ( RANGE(TO_UINT(HEX_INT(CSR_IRQ_REGS), data_addr_span - 2), data_addr_span - 3, 12) & RANGE(rimmediate,11,0) );
+							blk2mem_t0.data <= op1;
+							// IF CSRRS/C (funct3(1) = 1), wr_n = 1 if csr_write. If CSRRW, force wr_n = 1 to block read (as coded in crs_irq)
+							blk2mem_t0.wr_n <= ( ( (B(rfunct3, 1)) and (not csr_write)) or (not B(rfunct3, 1) and csr_read) ) ;
+
 						ENDCASE
-						SWITCH(RANGE(rimmediate,11,0))
-							CASE(CASE_AMSTATUS) mstatus <= csr_val;
-							CASE(CASE_AMEDELEG) medeleg <= csr_val;
-							CASE(CASE_AMIDELEG) mideleg <= csr_val;
-							CASE(CASE_AMIE) mie <= csr_val;
-							CASE(CASE_AMTVEC) mtvec <= csr_val;
-							//CASE(AMCOUNTEREN) csr_val := mtcounteren;
-							CASE(CASE_AMIP) mip <= csr_val;
-							CASE(CASE_AMSCRATCH) mscratch <= csr_val;
-							CASE(CASE_AMEPC) mepc <= csr_val;
-							CASE(CASE_AMCAUSE) mcause <= csr_val;
-							DEFAULT csr_val := csr_val ;// TODO trap := BIT(1); cause := ILLINSTR;
-						ENDCASE
-						rd_val := csr_val;
+						blk2mem_t0.be <= (wfi & rfunct3);
+						blk2mem_t0.cs_n <= (mret);
+						// Just like for a regular read
+						cpu_wait <= csr_read; // stall the pipeline
+						rwb <= rrd; // Store writeback register and associated method
+						funct3wb <= BIN(010); // is 32-bit read
+						rshiftwb <= BIN(00);
+						load_mem0 <= BIT(0); // not intruction memory
+						mask_data_en <= csr_read;
 					CASE(CASE_MEM)
 					CASE(CASE_OP)
 						SWITCH(rfunct3)
@@ -609,15 +625,15 @@ BEGIN
 
 					CASE(CASE_LUI) rd_val := rimmediate;
 					CASE(CASE_AUIPC) rd_val := rimmediate; // Pc added at decoding stage
-					CASE(CASE_JAL) next_PC := rimmediate; rd_val := PCp; flush <= BIT(1); pipe <= TO_UINT(0, LEN(pipe));ropcode <= TO_UINT(0, LEN(ropcode));
+					CASE(CASE_JAL) next_PC := rimmediate; rd_val := PCp; flush <= BIT(1); pipe <= TO_UINT(0, LEN(pipe));ropcode <= TO_UINT(0, LEN(ropcode)); rcsr_op_with_read <= BIT(0);
 					CASE(CASE_JALR) next_PC := RESIZE( ( RANGE(add_res, 31,1) & BIN(0) ), LEN(PC)); // It seems that lsb could be used for stg else: clear lsb
-						rd_val := PCp; flush <= BIT(1); pipe <= TO_UINT(0, LEN(pipe)); rjalr <= rrd; ropcode <= TO_UINT(0, LEN(ropcode));
+						rd_val := PCp; flush <= BIT(1); pipe <= TO_UINT(0, LEN(pipe)); rjalr <= rrd; ropcode <= TO_UINT(0, LEN(ropcode)); rcsr_op_with_read <= BIT(0);
 					CASE(CASE_BRANCH)
 						taken := ( ( ( ( RANGE(rfunct3, 1,1) and (rs1_lt_rs2_u) ) or ( (not RANGE(rfunct3, 1,1)) and (rs1_lt_rs2_s) ) ) and RANGE(rfunct3,2,2) ) or
 								 ( rs1_eq_rs2 and not RANGE(rfunct3,2,2) ) ) xor RANGE(rfunct3, 0,0);
 
 						IF (taken == BIN(1)) THEN
-							next_PC := rimmediate; flush <= BIT(1); pipe <= TO_UINT(0, LEN(pipe)); ropcode <= TO_UINT(0, LEN(ropcode));
+							next_PC := rimmediate; flush <= BIT(1); pipe <= TO_UINT(0, LEN(pipe)); ropcode <= TO_UINT(0, LEN(ropcode)); rcsr_op_with_read <= BIT(0);
 						ENDIF
 					DEFAULT trap := BIT(1); cause := ILLINSTR;  if (not boot_mode == BIT(1)) THEN gprintf("ILLINSTR trap opcode");
 																ENDIF
@@ -626,10 +642,10 @@ BEGIN
 				rtaken <= taken;
 				rrd_val <= rd_val;
 
-				IF ( (not (ropcode == LOAD) and not (ropcode == STORE) ) or ( load_from_instmem == BIT(1) ) ) THEN
+				IF ( (not (ropcode == LOAD) and not (ropcode == STORE) and not (ropcode == SYS) ) or ( load_from_instmem == BIT(1) ) ) THEN
 					//blk2mem_t0.cs_n <= BIT(1);
 					blk2mem_t0 <= dma_request_i; // mem bus is free: transmit dma requests
-					dma_grant_o <= not PORT_BASE(dma_request_i).cs_n; // And signal access is granted
+					dma_grant_o <= (not PORT_BASE(dma_request_i).cs_n); // And signal access is granted
 					rcan_grant <= BIT(1);
 				ELSE
 					rcan_grant <= BIT(0);
@@ -642,8 +658,8 @@ BEGIN
 				exec <= BIT(0);
 				rd_val := BIN(10101010010101011010101001010101);
 				blk2mem_t0 <= dma_request_i; // mem bus is free: transmit dma requests
-				dma_grant_o <= not PORT_BASE(dma_request_i).cs_n; // And signal access is granted
-				rcan_grant <= BIT(1);
+				dma_grant_o <= (not PORT_BASE(dma_request_i).cs_n and not cpu_wait); // And signal access is granted
+				rcan_grant <= not cpu_wait;//BIT(1);
 			ENDIF
 
 			load_mem <= load_mem0;// Delay so that load_mem is not 1 just after load execution (this would trigger pipeline resume when accessing instruction memory)
@@ -655,9 +671,15 @@ BEGIN
 			ENDIF
 
 			// reset mask fata_en resulting of dma accesses
+#if 0		// does not work with successive loads
 			IF ( not(rwb == TO_UINT(0, LEN(rwb))) ) THEN
 				mask_data_en <= BIT(0);
 			ENDIF
+#else
+			IF (cpu_wait == BIT(1)) THEN
+				mask_data_en <= BIT(0);
+			ENDIF
+#endif
 
 			// Register writeback (load) -----------------------------------------------------------------
 			IF ( not(rwb == TO_UINT(0, LEN(rwb))) and ( mask_data_en == BIT(0) ) and ( ( (PORT_BASE(datamem2core_i).data_en == BIT(1)) and (load_mem == BIT(0))) or ( (PORT_BASE(instmem2core_i).data_en == BIT(1)) and (load_mem == BIT(1)) ) ) ) THEN
@@ -679,6 +701,7 @@ BEGIN
 					DEFAULT rd_val := TO_UINT(0, LEN(rd_val));
 				ENDCASE
 				wrd := rwb;
+				RESET(rwb);
 			ENDIF
 
 			regs(TO_INTEGER(wrd)) <= rd_val;
@@ -693,27 +716,8 @@ BEGIN
 			rrd_wrp <= rrd_wr;
 			rrrd <= wrd;
 			rrrdp <= rrrd;
-			//rrd_wr_en <= BIT(1);
-			//rrd_wr <= rd_val;
-			regs(0) <= TO_UINT(0, 32); // ensure that x0 is 0
 
-			// Loading code from load_port
-			IF (PORT_BASE(load_port_i).wr_n == BIT(0) ) THEN // loading code
-				//gprintf("#RLOADING CODE");
-				loading <= BIT(1);
-				inst_cs_n <= BIT(0);
-				next_PC := RESIZE( ( PORT_BASE(load_port_i).addr & BIN(00) ), LEN(PC) );
-				PCp <= PORT_BASE(load_port_i).data; // reuse these regs
-			ELSEIF ( loading == BIT(1) ) THEN
-					code_loaded <= BIT(1);
-				gprintf("#RCODE LOADED, starting Giorno core");
-				next_PC := TO_UINT(0, LEN(PC));
-				inst_cs_n <= BIT(0);
-				loading <= BIT(0);
-				flush <= BIT(1);
-				pipe <= TO_UINT(0, LEN(pipe));
-				cpu_wait <= BIT(0);
-			ENDIF
+			regs(0) <= TO_UINT(0, 32); // ensure that x0 is 0
 
 			// In boot mode, transmit dma requests to inst memory for UART code loading
 			IF ( (boot_mode == BIT(1)) and (boot_modep == BIT(0)) ) THEN // reset code loaded flag
@@ -723,7 +727,6 @@ BEGIN
 
 			IF (boot_modep == BIT(1)) THEN
 				next_PC := TO_UINT(0, LEN(PC));
-				//PCp <= PORT_BASE(dma_request_i).data;
 				inst_cs_n <= PORT_BASE(dma_request_i).cs_n;
 				code_loaded0 <= ( code_loaded0 or not PORT_BASE(dma_request_i).cs_n );
 
@@ -769,9 +772,9 @@ BEGIN
 			rtrap <= (trap and code_loaded);
 			// TRAP - try to optimize that later
 			IF ((not (loading == BIT(1)) and not (boot_mode == BIT(1))) and (trap == BIT(1))) THEN
-				trap_addr_base := mtvec and BIN(11111111111111111111111111111100);
-				IF (RANGE(mtvec, 1, 0) == BIN(01) ) THEN
-					trap_addr_offset := RANGE(cause, 31, 2) & BIN(00);
+				trap_addr_base := PORT_BASE(csr2core_i).mtvec and BIN(11111111111111111111111111111100);
+				IF ( (RANGE(mtvec, 1, 0) == BIN(01) ) and (B(cause, 31) == BIT(1)) ) THEN // interrupt mode w/ cause branch enabled
+					trap_addr_offset := RANGE(cause, 29, 0) & BIN(00);
 				ELSE
 					trap_addr_offset := TO_UINT(0, LEN(trap_addr_offset));
 				ENDIF

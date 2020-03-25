@@ -8,28 +8,6 @@ struct vcd_entry;
 
 struct gmodule;
 
-//
-/*
-struct block_desc
-{
-    gmodule* pmodule = NULL;
-    std::string name;
-
-    block_desc()
-    {
-        std::cerr << "BLOCK DESC CTOR " << " " << "\n";
-    }
-
-    template <class T>
-    block_desc(T name_i, gmodule* module_i)
-     {
-    	name = name_i;
-    	module = module_i;
-         //std::cerr << "BLOCK DESC CTOR " << " " << "\n";
-     }
-
-};
-*/
 
 static const char noname[5] = "none";
 const char vcd_characters[91] = "!%&'()*+,-./:;<=>?@[]^_`{|}~ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -47,7 +25,7 @@ struct vcd_entry
 	char ID[3] = "##"; // Non initialized vcd_entry -> no probing
 	bool binary = 0;
 
-	~vcd_entry(){gprintf("#VDestroying vcd entry %Y %Y ptr %!y", pmodule->name, name, this);}
+	~vcd_entry(){giprintf("#VDestroying vcd entry %Y %Y ptr %!y", pmodule->name, name, this);}
 
 	vcd_entry(){name = noname; driver = this;}
 	vcd_entry(sig_desc x_i)
@@ -88,7 +66,7 @@ struct vcd_entry
 		{
 			if (driver == this) // actual signal, not some port connected to a signal
 			{
-				gprintf("#Mvcd %s:% is self driven", pmodule->get_full_name(), name);
+				giprintf("#Mvcd %s:% is self driven", pmodule->get_full_name(), name);
 				if ( not_active() ) // might already be activated by activation of some ports //
 				{
 					ID[0] = vcd_characters[vcd_cnt / 90];
@@ -98,11 +76,11 @@ struct vcd_entry
 			}
 			else
 			{
-				gprintf("#Mvcd %s:% is driven by %s:%", pmodule->get_full_name(), name, driver->pmodule->get_full_name(), driver->name);
+				giprintf("#Mvcd %s:% is driven by %s:%", pmodule->get_full_name(), name, driver->pmodule->get_full_name(), driver->name);
 				// activate vcd trace of driving signal
 				if (driver->not_active())
 				{
-					gprintf("#GActivating driver");
+					giprintf("#GActivating driver");
 					driver->activate();
 					driver->binary = binary; // Driver not activated: copy binary flag to driver
 				}
@@ -117,7 +95,7 @@ struct vcd_entry
 		}
 		else
 		{
-			gprintf("#RMaximum count of VCD signals reached");
+			gkprintf("#RMaximum count of VCD signals reached");
 			exit(0);
 		}
 	}
@@ -147,9 +125,14 @@ struct vcd_file_t : public std::ofstream
 
 	~vcd_file_t()
 	{
-		gprintf("#RFlushing VCD, bytes: %", ptr-buf);
+		giprintf("#RFlushing VCD, bytes: %", ptr-buf);
 		  write(buf, (ptr-buf));
 
+	}
+
+	void init()
+	{
+		ptr = buf;
 	}
 
 	void set_timebase_ps(unsigned long long x_i)
@@ -292,7 +275,7 @@ struct vcd_file_t : public std::ofstream
 		{
 			gprintf("Activating VCD ------------------------------------------------------------------------------------------- \n");
 			gprintf(*this, "$comment\n");
-			gprintf(*this, "   PLATFORM_GS VCD generator v1.0 )\n");
+			gprintf(*this, "   AGRAVIC VCD generator v1.0 )\n");
 			gprintf(*this, "$end\n");
 			gprintf(*this, "$timescale %dps $end\n", timebase_ps);
 
@@ -300,10 +283,10 @@ struct vcd_file_t : public std::ofstream
 			for (int kk = 0; kk < gmodule::module_list.size(); kk++)
 			{
 
-				gprintf("#Bmodule %", gmodule::module_list[kk]->name);
+				giprintf("#Bmodule %", gmodule::module_list[kk]->name);
 				gmodule* target = gmodule::module_list[kk];
 #ifdef VCD_PRINT
-				gprintf("#UNEW MODULE %Y", target->get_full_name());
+				giprintf("#UNEW MODULE %Y", target->get_full_name());
 #endif
 				// Find hierarchy level common to current module and target module
 				gmodule* common = gmodule::module_list[kk];
@@ -311,26 +294,26 @@ struct vcd_file_t : public std::ofstream
 				{
 					int cur_level = current->hier_level;
 					int com_level = common->hier_level;
-					//gprintf("#Rcur % lvl % com % lvl % %b\n", current, cur_level, common, com_level, current->name);
+					//giprintf("#Rcur % lvl % com % lvl % %b\n", current, cur_level, common, com_level, current->name);
 
 					if (  ((cur_level) >= (com_level)) )
 					{
 						current = current->parent;
 						gprintf(*this, "$upscope $end\n");
-						//gprintf("#M$upscope $end()");
+						//giprintf("#M$upscope $end()");
 					}
 					if ( (cur_level <= com_level) )
 					{
 						common = common->parent;
 					}
-					//gprintf("cur % lvl % com % lvl % %\n", current, cur_level, common, com_level, current->name);
+					//giprintf("cur % lvl % com % lvl % %\n", current, cur_level, common, com_level, current->name);
 				}
 				// Now current is common hierarchy between previous hier. level and target module. Build scope to target module.
 				// Actually, there should be a single hierarchy level built at a time, but do as it there could be several
 				// The reason for that is that hierarchy level are built one at a time
 				while (current != target)
 				{
-					std::cerr << ',';
+					//std::cerr << ',';
 
 					// Find target level hierarchy corresponding to current+1
 					gmodule* reverse_path = target;
@@ -340,17 +323,17 @@ struct vcd_file_t : public std::ofstream
 					}
 
 					gprintf(*this, "$scope module %s $end\n", reverse_path->name);
-					//gprintf("#M$scope module %R $end", reverse_path->name);
+					//giprintf("#M$scope module %R $end", reverse_path->name);
 					current = reverse_path;
 
 				}
 
 				for (int jj = 0; jj < gmodule::module_list[kk]->vcd_list.size(); jj++)
 				{
-					//gprintf("vcd_list %\n", gmodule::module_list[kk]->vcd_list[jj]->name);
+					//giprintf("vcd_list %\n", gmodule::module_list[kk]->vcd_list[jj]->name);
 					if ( gmodule::module_list[kk]->vcd_list[jj]->ID[0] != '#')
 					{
-						gprintf("#VProbing %", gmodule::module_list[kk]->vcd_list[jj]->name);
+						giprintf("#VProbing %", gmodule::module_list[kk]->vcd_list[jj]->name);
 
 						if ((gmodule::module_list[kk]->vcd_list[jj]->nbits == 1) or (gmodule::module_list[kk]->vcd_list[jj]->binary))// wire for binary signals
 						{
@@ -365,7 +348,7 @@ struct vcd_file_t : public std::ofstream
 						}
 					}
 					//else
-					//	gprintf("#UAlready Probed %", gmodule::module_list[kk]->vcd_list[jj]->name);
+					//	giprintf("#UAlready Probed %", gmodule::module_list[kk]->vcd_list[jj]->name);
 
 				}
 			}
@@ -374,7 +357,7 @@ struct vcd_file_t : public std::ofstream
 			while (current->hier_level != 0)
 			{
 				gprintf(*this, "$upscope $end\n");
-				//gprintf("#M--->$upscope $end");
+				//giprintf("#M--->$upscope $end");
 				current = current->parent;
 
 			}
@@ -394,7 +377,7 @@ void activate_vcd(const gstring& x_i)
 	gmodule* pmodule;
 	bool bin = 0;
 	size_t n = x_i.find_last_of(':');
-	gprintf("n = %\n", n);
+	giprintf("n = %\n", n);
 	if (n == std::string::npos)
 		n = -1;
 	std::string module = x_i.substr(0, n);
@@ -402,10 +385,10 @@ void activate_vcd(const gstring& x_i)
 	std::string probe;
 	std::string mode;
 	n = probe_mode.find_last_of(' ');
-	//gprintf("n = %\n", n);
+	//giprintf("n = %\n", n);
 	if (n == std::string::npos)
 	{
-		gprintf("No space char found in % \n", probe_mode);
+		giprintf("No space char found in % \n", probe_mode);
 		probe = probe_mode;
 	}
 	else
@@ -417,7 +400,7 @@ void activate_vcd(const gstring& x_i)
 
 
 
-	gprintf("#K s % mod % pr % ", x_i, module, probe);
+	giprintf("#K s % mod % pr % ", x_i, module, probe);
 	for (int kk = 0; kk < gmodule::module_list.size(); kk++)
 	{
 		if ( module == gmodule::module_list[kk]->get_full_name())
@@ -425,7 +408,7 @@ void activate_vcd(const gstring& x_i)
 			for ( int i = 0; i < gmodule::module_list[kk]->vcd_list.size(); i++ )
 			{
 				std::string test = gmodule::module_list[kk]->vcd_list[i]->name;
-				//gprintf("#Gentry %m", test);
+				//giprintf("#Gentry %m", test);
 				if ( ( test[0] == '<' ) or ( test[0] == '>' ) ) // in or out
 					test = test.substr(1);
 
@@ -434,12 +417,12 @@ void activate_vcd(const gstring& x_i)
 					//gmodule::module_list[kk]->vcd_list[i]->activate();
 					if (bin)
 					{
-						gprintf("#mActivating %r:%b probe %g in binary mode", gmodule::module_list[kk]->get_full_name(), gmodule::module_list[kk]->vcd_list[i]->name, probe);
+						giprintf("#mActivating %r:%b probe %g in binary mode", gmodule::module_list[kk]->get_full_name(), gmodule::module_list[kk]->vcd_list[i]->name, probe);
 						gmodule::module_list[kk]->vcd_list[i]->binary = 1;
 					}
 					else
 					{
-						gprintf("#mActivating %r:%b probe %g", gmodule::module_list[kk]->get_full_name(), gmodule::module_list[kk]->vcd_list[i]->name, probe);
+						giprintf("#mActivating %r:%b probe %g", gmodule::module_list[kk]->get_full_name(), gmodule::module_list[kk]->vcd_list[i]->name, probe);
 						//gmodule::module_list[kk]->vcd_list[i]->nbits = 0;
 
 					}
@@ -483,14 +466,14 @@ vcd_entry dummy_vcd_entry = gen_sig_desc("DUMMY", gmodule::out_of_hier);
 template <class T>
 vcd_entry* create_vcd_entry(T name_i, gmodule* pmodule_i, int nbits_i)
 {
-	//gprintf(">CVE %\n", name_i);
+	//giprintf(">CVE %\n", name_i);
 	vcd_entry* pvcd_entry = new vcd_entry(gen_sig_desc(name_i, pmodule_i));
 	pvcd_entry->nbits = nbits_i;
 	if (nbits_i == 1)
 		pvcd_entry->binary = 1;
 	(pmodule_i->vcd_list).push_back(pvcd_entry);
-	gprintf("#CCreate vcd entry %R %R ptr %R", pmodule_i->name, name_i, pvcd_entry);
-	//gprintf("<CVE\n");
+	giprintf("#CCreate vcd entry %R %R ptr %R", pmodule_i->name, name_i, pvcd_entry);
+	//giprintf("<CVE\n");
 	return pvcd_entry;
 }
 

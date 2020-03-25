@@ -68,13 +68,13 @@ void init_vcd()
 
 
 
-	gprintf("#VInit VCD: Copying arrays or records drivers ------------------------------------------------");
+	giprintf("#VInit VCD: Copying arrays or records drivers ------------------------------------------------");
 	// First, find and copy drivers of members of array ports and records (whole module hierarchy)
 	for (int i = 0; i < gmodule::module_list.size(); i++)
 	{
 		for (int j = 0; j < gmodule::module_list[i]->vcd_list.size(); j++)
 		{
-			gprintf("#Mptr %", gmodule::module_list[i]->vcd_list[j]);
+			giprintf("#Mptr %", gmodule::module_list[i]->vcd_list[j]);
 			bool is_port = ( gmodule::module_list[i]->vcd_list[j]->name[0] == '>' or gmodule::module_list[i]->vcd_list[j]->name[0] == '<' );
 			bool is_self_driven = ( gmodule::module_list[i]->vcd_list[j]->driver == gmodule::module_list[i]->vcd_list[j] );
 			// If no mistake, only top entries of arrays/records have these nbits values
@@ -83,12 +83,12 @@ void init_vcd()
 			bool is_array_entry = (gmodule::module_list[i]->vcd_list[j]->nbits == -65536);
 			bool is_record_entry = (gmodule::module_list[i]->vcd_list[j]->nbits == -2048);
 			bool is_regular_entry = (gmodule::module_list[i]->vcd_list[j]->nbits >= 0);
-			gprintf("#G-->entry %m port %R self %R array %R record %R regular %R nbits %R drv name %M",gmodule::module_list[i]->vcd_list[j]->name,
+			giprintf("#G-->entry %m port %R self %R array %R record %R regular %R nbits %R drv name %M",gmodule::module_list[i]->vcd_list[j]->name,
 					is_port,is_self_driven,is_array_entry,is_record_entry,is_regular_entry,gmodule::module_list[i]->vcd_list[j]->nbits, gmodule::module_list[i]->vcd_list[j]->driver->name);
 
 			if (is_port and (is_array_entry or is_record_entry) )
 			{
-				if (in_port) gprintf("#UEND COPY1");
+				if (in_port) giprintf("#UEND COPY1");
 				if (not is_self_driven)
 				{
 					//start reporting drivers and copying IDs of array / record members
@@ -100,10 +100,10 @@ void init_vcd()
 					vcd_drv_idx = gmodule::module_list[i]->vcd_list[j]->driver->find_entry(gmodule::module_list[i]->vcd_list[j]->driver->name, pdrv_module);
 					if (vcd_drv_idx == -1) // not found !
 					{
-						gprintf("#RERROR! driver of array/record % not found", gmodule::module_list[i]->vcd_list[j]->name);
+						giprintf("#RERROR! driver of array/record % not found", gmodule::module_list[i]->vcd_list[j]->name);
 					}
 					in_port = 1;
-					gprintf("#Ucopying array or record drivers % drv %", gmodule::module_list[i]->vcd_list[j]->driver->name, pdrv_module);
+					giprintf("#Ucopying array or record drivers % drv %", gmodule::module_list[i]->vcd_list[j]->driver->name, pdrv_module);
 
 				}
 				else
@@ -114,7 +114,7 @@ void init_vcd()
 			else if ( (not is_port) or (is_regular_entry) ) // current array / record finished
 			{
 				if (in_port)
-					gprintf("#UEND COPY2");
+					giprintf("#UEND COPY2");
 				in_port = 0;
 			}
 			else if ( in_port )// We are actually in an array/record port not self driven
@@ -122,14 +122,14 @@ void init_vcd()
 				vcd_drv_idx++; //
 				if (vcd_drv_idx >= pdrv_module->vcd_list.size()) // Overflow, this should not occur so there is a bug
 				{
-					gprintf("#RERROR! OVF in vcd list of driver signal when reporting drivers idx % sz % here % there %", vcd_drv_idx, pdrv_module->vcd_list.size(), gmodule::module_list[i]->name, pdrv_module->name); exit(0);
+					giprintf("#RERROR! OVF in vcd list of driver signal when reporting drivers idx % sz % here % there %", vcd_drv_idx, pdrv_module->vcd_list.size(), gmodule::module_list[i]->name, pdrv_module->name); exit(0);
 				}
 				gmodule::module_list[i]->vcd_list[j]->driver = pdrv_module->vcd_list[vcd_drv_idx];
 			}
 		}
 	}
 
-	gprintf("#VInit VCD: reading vcd.scn configuration file ------------------------------------------------");
+	giprintf("#VInit VCD: reading vcd.scn configuration file ------------------------------------------------");
 	std::ifstream conf_vcd("vcd.scn");
 	char line[256];
 	bool comment = 0;

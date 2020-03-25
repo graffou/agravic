@@ -149,6 +149,8 @@ int main(int argc, char **argv) {
  #ifdef TEST_DMA  
    gprintf("CONF DMA\n");
    uint8_t dma_sink[16];
+   uint8_t dma_sink2[16];
+   uint8_t big_buf[1024];
   // Configure DMA
   *dma = 0; // channel 0
   *(dma+1) = reinterpret_cast<uint32_t>(dma_sink);// addr
@@ -189,13 +191,14 @@ int main(int argc, char **argv) {
   { 
     c = c * b;
     // This works with include<cmath> and linking with -lm, however this is a +18kB 
-    // in rom size and sin(x) takes 650µs with rv32i instruction set
+    // in rom size and sin(x) takes 650us with rv32i instruction set
     //d = sin(float(i)/10.0);
     gprintf("Le resultat c = %R\n", c); 
     //*var = 1000 + int32_t(d * 1000);
   }
+  gprintf("#VUART addr % ", uint32_t(uart));
 
-
+#if 0
   SET_CONSOLE(0);
 
 #define TEST_BUF_READ
@@ -253,27 +256,87 @@ while(1);
 	}
 	else
 	dbg_write(c);
-	
+  }
+#endif
 	
 
-  /*
-   for (int i = 0; i < 80;i++)
-   {
-		for (int j = 0; j < 40;j++)
-		{
-			*dbg = (PRINT_AT | (i << 8) | (j << 16) | (i+j));
-		}	
+#if 0
+  *spi_conf = ( (7 << 16) | (5 << 11) | (4 << 8) );
+	*spi_conf = ( (1 << 16) | (5 << 11) | (4 << 8) );
+	*spi_data = 0xFFC0803F;
+	 gprintf("#VSPI configurated\n");
+
+	 // Try with DMA
+	  *(dma+1) = reinterpret_cast<uint32_t>(dma_sink);// addr
+	  *(dma+4) = ( (1) | (0 << 4) | (1 << 8) | (3 << 12) | (0 << 14) | (1 << 16) ) ;//  source (en & src) | sink | addr inc | periph mask | data mask | priority
+	  *(dma+2) = 16;// tsfr sz
+	gprintf("#VDMA configurated\n");
+
+	  // 31-16: div / 15-11 csn_clk cycles | 10-8 tsfr_sz | 5 tx_rx | 2 rxpol | 1 pol
+	  *spi_conf_slv = ( (1 << 16) | (3 << 11) | (0 << 8)  | (1 << 5) );
+	  *spi_conf = ( (1 << 16) | (5 << 11) | (0 << 8)  | (1 << 5));
+	 gprintf("#VSPI configurated\n");
+
+	 while (not *spi_conf); // wiat for spi end
+	  *spi_conf = ( (1 << 16) | (5 << 11) | (0 << 8) | (1 << 5) );
+//	  *spi_conf_slv = ( (1 << 16) | (5 << 11) | (0 << 8) );
+	  *(dma+1) = reinterpret_cast<uint32_t>(dma_sink);// addr
+	  *(dma+2) = 16;// tsfr sz
+	  *(dma+4) = ( (1) | (0 << 4) | (1 << 8) | (3 << 12) | (0 << 14) | (1 << 16) ) ;//  source (en & src) | sink | addr inc | periph mask | data mask | priority
+
+
+	  //*spi_conf = ( (5 << 16) | (5 << 11) | (0 << 8) );
+
+	while (not *spi_conf); // wiat for spi end
+#endif
+
+	while (1){
+	// 16: period
+	// 11: csn_delay
+	// 8: tsfr_sz
+	// 5: tx+rx
+	// 3: auto csn
+	  *spi_conf_slv = ( (1 << 16) | (7 << 11) | (0 << 8)  | (0 << 5) |  (1 << 3) );
+	  *dma = 0; // channel 0
+	  *(dma+1) = reinterpret_cast<uint32_t>(big_buf);// addr
+	  *(dma+2) = 1024;// tsfr sz
+	  *(dma+3) = 1000;// no timeout
+	  *(dma+4) = ( (9) | (0 << 4) | (1 << 8) | (3 << 12) | (0 << 14) | (1 << 16) ) ;//  source (en & src) | sink | addr inc | periph mask | data mask | priority
+
+	  while ( *(dma+8));
+	  uint8_t prev;
+	  uint32_t nerrors = 0;
+	  gprintf("\n");
+	  gprintf("#BRead DMA SPI buffer:");
+	  for (int i = 0; i < 1024; i++)
+	  {
+		  if (i != 0)
+		  {
+			  bool err = (big_buf[i] != uint8_t(prev + 1) );
+			  nerrors += err;
+			  if (err)
+				  gprintf("#R% ", uint8_t(big_buf[i]));
+			  else
+				  gprintf("#G% ", uint8_t(big_buf[i]));
+		  }
+		  //gprintf("% ", uint8_t(big_buf[i]));
+		  prev = big_buf[i];
+
+	  }
+	  gprintf("\n");
+	  if (nerrors == 0)
+		  gprintf("#G\nIncremental buffer as expected");
+	  else
+		  gprintf("#R\n%B SPI reception errors", nerrors);
+
 	}
-	*/
-/*
-	gprintf("\n");	
-	char c = static_cast<char>(*uart);
-	for (int i = 7; i >= 0; i--)
-		if ( c >>i )
-			gprintf("1");
-		else
-			gprintf("0");
-*/	
-	//gprintf("popo %\n", char(*uart));
-   }
+
+
+
+	gprintf("#U****************** END OF SIMULATION *******************");
+
+
+	 // *spi_conf = ( (7 << 16) | (5 << 10) | (0 << 8) );
+
+
 }

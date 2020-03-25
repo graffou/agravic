@@ -6,9 +6,9 @@ library work; use work.risc_V_constants.all;
 
 
 
-entity risc_V_core is port( clk_core : IN std_logic; reset_n : IN std_logic; boot_mode_i : IN std_logic; trap_o : OUT std_logic; dbg_o : OUT unsigned ((33 -1) downto 0); load_port_i : IN blk2mem_t; core2instmem_o : OUT blk2mem_t; instmem2core_i : IN mem2blk_t; core2datamem_o : OUT blk2mem_t; dma_request_i : IN blk2mem_t; dma_grant_o : OUT std_logic; datamem2core_i : IN mem2blk_t ); end risc_V_core; architecture rtl of risc_V_core is component dummy_zkw_pouet is port(clk : in std_logic);end component;
-component register_file is port( clk : IN std_logic; reset_n : IN std_logic; addr_rs1_i : IN unsigned ((5 -1) downto 0); addr_rs2_i : IN unsigned ((5 -1) downto 0); addr_rd_i : IN unsigned ((5 -1) downto 0); wb_en_i : IN std_logic; wb_i : IN unsigned ((32 -1) downto 0); rs1_o : OUT unsigned ((32 -1) downto 0); rs2_o : OUT unsigned ((32 -1) downto 0) ); end component;
-component dbg_mem is port( clk : IN std_logic; reset_n : IN std_logic; addr_i : IN unsigned ((5 -1) downto 0); data_i : IN unsigned ((64 -1) downto 0); wen_i : IN std_logic; data_o : OUT unsigned ((64 -1) downto 0) ); end component;
+entity risc_V_core is port ( clk_core : IN std_logic; reset_n : IN std_logic; boot_mode_i : IN std_logic; trap_o : OUT std_logic; dbg_o : OUT unsigned ((33 -1) downto 0); load_port_i : IN blk2mem_t; core2instmem_o : OUT blk2mem_t; instmem2core_i : IN mem2blk_t; core2datamem_o : OUT blk2mem_t; dma_request_i : IN blk2mem_t; dma_grant_o : OUT std_logic; datamem2core_i : IN mem2blk_t; csr2core_i : IN csr2core_t ); end risc_V_core; architecture rtl of risc_V_core is component dummy_zkw_pouet is port(clk : in std_logic);end component;
+component register_file is port ( clk : IN std_logic; reset_n : IN std_logic; addr_rs1_i : IN unsigned ((5 -1) downto 0); addr_rs2_i : IN unsigned ((5 -1) downto 0); addr_rd_i : IN unsigned ((5 -1) downto 0); wb_en_i : IN std_logic; wb_i : IN unsigned ((32 -1) downto 0); rs1_o : OUT unsigned ((32 -1) downto 0); rs2_o : OUT unsigned ((32 -1) downto 0) ); end component;
+component dbg_mem is port ( clk : IN std_logic; reset_n : IN std_logic; addr_i : IN unsigned ((5 -1) downto 0); data_i : IN unsigned ((64 -1) downto 0); wen_i : IN std_logic; data_o : OUT unsigned ((64 -1) downto 0) ); end component;
 type reg_file_t is array(0 to (32 -1)) of unsigned ((32 -1) downto 0);
 signal regs : reg_file_t;
 signal PC : unsigned ((32 -1) downto 0);
@@ -33,6 +33,7 @@ signal rimmediate_type : unsigned ((3 -1) downto 0);
 signal use_immediate : std_logic;
 signal raw_opcode : unsigned ((7 -1) downto 0);
 signal ropcode : unsigned ((7 -1) downto 0);
+signal rcsr_op_with_read : std_logic;
 signal rropcode : unsigned ((7 -1) downto 0);
 signal rfunct3 : unsigned ((3 -1) downto 0);
 signal rop1 : unsigned ((32 -1) downto 0);
@@ -82,7 +83,7 @@ signal blk2mem_t0 : blk2mem_t;
 signal mem2blk_t0 : mem2blk_t;
 signal rinstr : unsigned ((32 -1) downto 0);
 signal rrinstr : unsigned ((32 -1) downto 0);
-signal inst_addr : unsigned ((15 - 2 -1) downto 0);
+signal inst_addr : unsigned ((24 - 2 -1) downto 0);
 signal inst_data : unsigned ((32 -1) downto 0);
 
 
@@ -122,8 +123,11 @@ signal dbg_cnt : unsigned ((7 -1) downto 0);
 signal dbg_cnt2 : unsigned ((5 -1) downto 0);
 signal debug_write : std_logic;
 signal dbg_stop : unsigned ((8 -1) downto 0);
-
-
+signal dbg_sys_op : std_logic;
+signal dbg_can_read : std_logic;
+signal dbg_toggle : std_logic;
+signal dbg_csr_write : std_logic;
+signal dbg_csr_read : std_logic;
 
 begin
 
@@ -173,6 +177,11 @@ variable load_from_instmem : std_logic;
 variable core_mem_access : std_logic;
 variable stop_PC : BOOLEAN;
 variable load_data_ok : BOOLEAN;
+variable csr_read : std_logic;
+variable csr_write : std_logic;
+variable csr_op : std_logic;
+variable wfi : std_logic;
+variable mret : std_logic;
 
 begin
 
@@ -181,9 +190,9 @@ begin
 
  IF ( reset_n = '0' ) then
 
-  boot_mode <= '0';
   pipe <= TO_UNSIGNED(0,pipe'length);
-  PC <= TO_UNSIGNED(0,PC'length);
+
+  PC <= x"FFFFFFFC";
   PCp <= TO_UNSIGNED(0,PCp'length);
   cpu_wait <= '0';
   cpu_wait_early <= '0';
@@ -228,12 +237,19 @@ begin
   mask_data_en <= '0';
   blk2mem_t0.cs_n <= '1' ;
   blk2mem_t0.wr_n <= '1' ;
+
   code_loaded <= '0';
   code_loaded0 <= '0';
+
+
+
+
+
   boot_mode <= '0';
-  boot_modep <= '0';
+  boot_modep <= '1' ;
   debug_write <= '1' ;
   dbg_stop <= TO_UNSIGNED(0,dbg_stop'length);
+  rcsr_op_with_read <= '0';
 
   elsif ( clk_core'event and (clk_core = '1' ) ) then
 
@@ -253,7 +269,6 @@ begin
    rcan_grant <= '0';
    boot_mode <= boot_mode_i;
    boot_modep <= boot_mode;
-
 
    IF ( (pipe(0) = '1' ) and (cpu_wait = '0') and (flush = '0') ) then
      rinstr <= instr;
@@ -281,7 +296,6 @@ begin
       alt_op <= instr(30);
      end if;
 
-     raw_opcode <= opcode;
      rfunct3 <= funct3;
      rfunct7 <= funct7;
      rrs1 <= rs1;
@@ -320,6 +334,14 @@ begin
       rrd <= rd;
      end if;
 
+
+     rcsr_op_with_read <= BOOL2BIT( ( (opcode = SYS) and not (rd = "00000") ) or
+       ( (funct7 = "0001000") and (rs2 = "00101") and (rd = "00000") ) );
+     dbg_can_read <= BOOL2BIT( ( not (rd = "00000") ) );
+     dbg_sys_op <= BOOL2BIT( (opcode = SYS) );
+     dbg_toggle <= (not dbg_toggle);
+     raw_opcode <= opcode;
+
      IF (immediate_type = no_type) then
       use_immediate <= '0';
      elsif ( (immediate_type = J_type) or (immediate_type = B_type) or (opcode = AUIPC) or
@@ -345,7 +367,8 @@ begin
    load_data_ok := ( ( (datamem2core_i.data_en = '1' ) and (load_mem = '0') and (mask_data_en = '0'))
          or ( (instmem2core_i.data_en = '1' ) and (load_mem = '1' )) );
 
-   stop_PC := ( ( (ropcode = LOAD) and cpu_wait = '0' ) or
+
+   stop_PC := ( ( ( (ropcode = LOAD) or (rcsr_op_with_read = '1' ) ) and cpu_wait = '0' ) or
         ( (cpu_wait = '1' ) and not load_data_ok ) or
       (halt = '1' ) );
 
@@ -398,14 +421,15 @@ begin
 
     sll_res := SHIFT_LEFT(op1, TO_INTEGER(RESIZE(op2, 5)));
     srl_res_u := SHIFT_RIGHT(op1, TO_INTEGER(RESIZE(op2, 5)));
+    nshift := RESIZE(add_res, nshift'length);
     srl_res_s := unsigned(SHIFT_RIGHT(signed(op1), TO_INTEGER(RESIZE(op2, 5))));
     and_res := op1 and op2;
     or_res := op1 or op2;
     xor_res := op1 xor op2;
-    nshift := RESIZE(add_res, nshift'length);
     trap := '0';
     taken := "0";
     csr_val := TO_UNSIGNED(0,32);
+
     radd_res <= add_res;
     rsub_res <= sub_res;
     rrs1_lt_rs2_u <= rs1_lt_rs2_u;
@@ -419,51 +443,50 @@ begin
 
     case ropcode is
      when CASE_SYS =>
-      case (rimmediate(11 downto 0)) is
-       when CASE_AMSTATUS => csr_val := mstatus;
-
-       when CASE_AMEDELEG => csr_val := medeleg;
-       when CASE_AMIDELEG => csr_val := mideleg;
-       when CASE_AMIE => csr_val := mie;
-       when CASE_AMTVEC => csr_val := mtvec;
-
-       when CASE_AMIP => csr_val := mip;
-       when CASE_AMSCRATCH => csr_val := mscratch;
-       when CASE_AMEPC => csr_val := mepc;
-       when CASE_AMCAUSE => csr_val := mcause;
-       when others => csr_val := TO_UNSIGNED(0,csr_val'length);
-      end case;
+      csr_write := BOOL2BIT(not (rrs1 = TO_UNSIGNED(0,rrd'length)) );
+      csr_read := BOOL2BIT(not (rrd = TO_UNSIGNED(0,rrd'length)));
+      dbg_csr_write <= csr_write;
+      dbg_csr_read <= csr_read;
+      wfi := '0';
+      mret := '0';
       case rfunct3 is
-       when CASE_CSRRW => csr_val := op1;
-       when CASE_CSRRS => csr_val := csr_val or op1;
-       when CASE_CSRRC => csr_val := csr_val and not op1;
-       when CASE_CSRRWI => csr_val := op1;
-       when CASE_CSRRSI => csr_val := csr_val or op1;
-       when CASE_CSRRCI => csr_val := csr_val and not op1;
-       when CASE_ECALL =>
+      when CASE_ECALL =>
        IF (use_immediate = '0') then
 
-        mepc <= rimmediate; cause := ("0000000000000000000000000000" & (not rrs2(0)) & "0" & priv); trap := '1' ; -- gprintf("#VECALL trap addr", to_hex(TO_INTEGER(mepc)));
+        blk2mem_t0.data <= rimmediate;
+        blk2mem_t0.addr <= ( (TO_UNSIGNED(16#BFFFE000#,24 - 2)(24 - 3 downto 12)) & RESIZE(((not rrs2(0)) & "0" & priv), 12) );
+        trap := '1' ; -- gprintf("#VECALL trap addr", to_hex(TO_INTEGER(csr2core_i.mepc)));
+        csr_read := '0';
+       elsif ( ( rfunct7 = "0011000" ) and ( rrs2 = "00010" ) ) then
+        next_PC := csr2core_i.mepc; flush <= '1' ; pipe <= TO_UNSIGNED(0,pipe'length); ropcode <= TO_UNSIGNED(0,ropcode'length); rcsr_op_with_read <= '0'; mret := '1' ;
+        csr_read := '0';
+       elsif ( ( rfunct7 = "0001000" ) and ( rrs2 = "00101" ) ) then
+         csr_read := '1' ;
+         blk2mem_t0.data <= PCp;
+         wfi := '1' ;
 
-        elsif ( ( rfunct7 = "0011000" ) and ( rrs2 = "00010" ) ) then
-        next_PC := mepc; flush <= '1' ; pipe <= TO_UNSIGNED(0,pipe'length); ropcode <= TO_UNSIGNED(0,ropcode'length);
-       end if;
-       when others => csr_val := TO_UNSIGNED(0,csr_val'length);
-      end case;
-      case (rimmediate(11 downto 0)) is
-       when CASE_AMSTATUS => mstatus <= csr_val;
-       when CASE_AMEDELEG => medeleg <= csr_val;
-       when CASE_AMIDELEG => mideleg <= csr_val;
-       when CASE_AMIE => mie <= csr_val;
-       when CASE_AMTVEC => mtvec <= csr_val;
+        end if;
 
-       when CASE_AMIP => mip <= csr_val;
-       when CASE_AMSCRATCH => mscratch <= csr_val;
-       when CASE_AMEPC => mepc <= csr_val;
-       when CASE_AMCAUSE => mcause <= csr_val;
-       when others => csr_val := csr_val ;
+
+
+
+
+      when others =>
+       blk2mem_t0.addr <= ( (TO_UNSIGNED(16#BFFFE000#,24 - 2)(24 - 3 downto 12)) & (rimmediate(11 downto 0)) );
+       blk2mem_t0.data <= op1;
+
+       blk2mem_t0.wr_n <= ( ( (rfunct3(1)) and (not csr_write)) or (not rfunct3(1) and csr_read) ) ;
+
       end case;
-      rd_val := csr_val;
+      blk2mem_t0.be <= (wfi & rfunct3);
+      blk2mem_t0.cs_n <= (mret);
+
+      cpu_wait <= csr_read;
+      rwb <= rrd;
+      funct3wb <= "010";
+      rshiftwb <= "00";
+      load_mem0 <= '0';
+      mask_data_en <= csr_read;
      when CASE_MEM =>
      when CASE_OP =>
       case rfunct3 is
@@ -522,15 +545,15 @@ begin
 
      when CASE_LUI => rd_val := rimmediate;
      when CASE_AUIPC => rd_val := rimmediate;
-     when CASE_JAL => next_PC := rimmediate; rd_val := PCp; flush <= '1' ; pipe <= TO_UNSIGNED(0,pipe'length);ropcode <= TO_UNSIGNED(0,ropcode'length);
+     when CASE_JAL => next_PC := rimmediate; rd_val := PCp; flush <= '1' ; pipe <= TO_UNSIGNED(0,pipe'length);ropcode <= TO_UNSIGNED(0,ropcode'length); rcsr_op_with_read <= '0';
      when CASE_JALR => next_PC := RESIZE( ( (add_res(31 downto 1)) & "0" ), PC'length);
-      rd_val := PCp; flush <= '1' ; pipe <= TO_UNSIGNED(0,pipe'length); rjalr <= rrd; ropcode <= TO_UNSIGNED(0,ropcode'length);
+      rd_val := PCp; flush <= '1' ; pipe <= TO_UNSIGNED(0,pipe'length); rjalr <= rrd; ropcode <= TO_UNSIGNED(0,ropcode'length); rcsr_op_with_read <= '0';
      when CASE_BRANCH =>
       taken := ( ( ( ( (rfunct3(1 downto 1)) and (rs1_lt_rs2_u) ) or ( (not (rfunct3(1 downto 1))) and (rs1_lt_rs2_s) ) ) and (rfunct3(2 downto 2)) ) or
          ( rs1_eq_rs2 and not (rfunct3(2 downto 2)) ) ) xor (rfunct3(0 downto 0));
 
       IF (taken = "1") then
-       next_PC := rimmediate; flush <= '1' ; pipe <= TO_UNSIGNED(0,pipe'length); ropcode <= TO_UNSIGNED(0,ropcode'length);
+       next_PC := rimmediate; flush <= '1' ; pipe <= TO_UNSIGNED(0,pipe'length); ropcode <= TO_UNSIGNED(0,ropcode'length); rcsr_op_with_read <= '0';
       end if;
      when others => trap := '1' ; cause := ILLINSTR; if (not boot_mode = '1' ) then -- gprintf("ILLINSTR trap opcode");
                 end if;
@@ -539,10 +562,10 @@ begin
     rtaken <= taken;
     rrd_val <= rd_val;
 
-    IF ( (not (ropcode = LOAD) and not (ropcode = STORE) ) or ( load_from_instmem = '1' ) ) then
+    IF ( (not (ropcode = LOAD) and not (ropcode = STORE) and not (ropcode = SYS) ) or ( load_from_instmem = '1' ) ) then
 
      blk2mem_t0 <= dma_request_i;
-     dma_grant_o <= not dma_request_i.cs_n;
+     dma_grant_o <= (not dma_request_i.cs_n);
      rcan_grant <= '1' ;
     else
      rcan_grant <= '0';
@@ -555,8 +578,8 @@ begin
     exec <= '0';
     rd_val := "10101010010101011010101001010101";
     blk2mem_t0 <= dma_request_i;
-    dma_grant_o <= not dma_request_i.cs_n;
-    rcan_grant <= '1' ;
+    dma_grant_o <= (not dma_request_i.cs_n and not cpu_wait);
+    rcan_grant <= not cpu_wait;
    end if;
 
    load_mem <= load_mem0;
@@ -568,9 +591,15 @@ begin
    end if;
 
 
-   IF ( not(rwb = TO_UNSIGNED(0,rwb'length)) ) then
+
+
+
+
+
+   IF (cpu_wait = '1' ) then
     mask_data_en <= '0';
    end if;
+
 
 
    IF ( not(rwb = TO_UNSIGNED(0,rwb'length)) and ( mask_data_en = '0' ) and ( ( (datamem2core_i.data_en = '1' ) and (load_mem = '0')) or ( (instmem2core_i.data_en = '1' ) and (load_mem = '1' ) ) ) ) then
@@ -592,6 +621,7 @@ begin
      when others => rd_val := TO_UNSIGNED(0,rd_val'length);
     end case;
     wrd := rwb;
+    rwb <= TO_UNSIGNED(0,rwb'length);
    end if;
 
    regs(TO_INTEGER(wrd)) <= rd_val;
@@ -607,26 +637,7 @@ begin
    rrrd <= wrd;
    rrrdp <= rrrd;
 
-
    regs(0) <= TO_UNSIGNED(0,32);
-
-
-   IF (load_port_i.wr_n = '0' ) then
-
-    loading <= '1' ;
-    inst_cs_n <= '0';
-    next_PC := RESIZE( ( load_port_i.addr & "00" ), PC'length );
-    PCp <= load_port_i.data;
-   elsif ( loading = '1' ) then
-     code_loaded <= '1' ;
-    -- gprintf("#RCODE LOADED, starting Giorno core");
-    next_PC := TO_UNSIGNED(0,PC'length);
-    inst_cs_n <= '0';
-    loading <= '0';
-    flush <= '1' ;
-    pipe <= TO_UNSIGNED(0,pipe'length);
-    cpu_wait <= '0';
-   end if;
 
 
    IF ( (boot_mode = '1' ) and (boot_modep = '0') ) then
@@ -636,7 +647,6 @@ begin
 
    IF (boot_modep = '1' ) then
     next_PC := TO_UNSIGNED(0,PC'length);
-
     inst_cs_n <= dma_request_i.cs_n;
     code_loaded0 <= ( code_loaded0 or not dma_request_i.cs_n );
 
@@ -682,9 +692,9 @@ begin
    rtrap <= (trap and code_loaded);
 
    IF ((not (loading = '1' ) and not (boot_mode = '1' )) and (trap = '1' )) then
-    trap_addr_base := mtvec and "11111111111111111111111111111100";
-    IF ((mtvec(1 downto 0)) = "01" ) then
-     trap_addr_offset := (cause(31 downto 2)) & "00";
+    trap_addr_base := csr2core_i.mtvec and "11111111111111111111111111111100";
+    IF ( ((mtvec(1 downto 0)) = "01" ) and (cause(31) = '1' ) ) then
+     trap_addr_offset := (cause(29 downto 0)) & "00";
     else
      trap_addr_offset := TO_UNSIGNED(0,trap_addr_offset'length);
     end if;

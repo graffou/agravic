@@ -55,7 +55,7 @@ struct gated_clk_desc: public sig_desc
 		pmodule = pmodule_i;
 		parent_clk = &(clk_i.get());
 		gating_signal = &(gating_signal_i.get());
-		//gprintf("#VCreating gated clk %Y from %Y", name_i, parent_clk->pvcd_entry->name);
+		//giprintf("#VCreating gated clk %Y from %Y", name_i, parent_clk->pvcd_entry->name);
 	}
 
 };
@@ -84,7 +84,7 @@ struct control_signals
 	int reset_n = 0;
 	control_signals(){
 		clk = -1;
-		reset_n = -1;
+		reset_n = -2;
 	}
 	template <class T1, class T2>
 	control_signals(T1& x, T2& y)
@@ -168,7 +168,7 @@ struct gmodule
             name = name_i;
 
             parent = parent_i;
-            std::cerr << "Const module 2: " << name << " parent ptr " << parent << " out of hier ptr " << gmodule::out_of_hier << "\n";
+            //std::cerr << "Const module 2: " << name << " parent ptr " << parent << " out of hier ptr " << gmodule::out_of_hier << "\n";
             hier_level = (parent_i->hier_level) + 1;
             module_list.push_back(this);
 
@@ -221,11 +221,11 @@ struct gmodule
   if (flop_list.size())
   {
   for (int i = 0; i < flop_list.size();i++)
-  gprintf("#Mmodule %R flop %R ptr %R", get_full_name(), flop_list[i].name,  flop_list[i].signal_ptr);
+  giprintf("#Mmodule %R flop %R ptr %R", get_full_name(), flop_list[i].name,  flop_list[i].signal_ptr);
   }
   else
   {
-  gprintf("#Mmodule %R flops %R", get_full_name(), '0');
+  giprintf("#Mmodule %R flops %R", get_full_name(), '0');
   }
 */
         }
@@ -236,11 +236,11 @@ struct gmodule
               if (flop_list.size())
               {
               for (int i = 0; i < flop_list.size();i++)
-              gprintf("#K%s:% ", get_full_name(), flop_list[i].name);
+              giprintf("#K%s:% ", get_full_name(), flop_list[i].name);
               }
               else
               {
-              gprintf("#Mmodule %R flops %R", get_full_name(), '0');
+              giprintf("#Mmodule %R flops %R", get_full_name(), '0');
               }
             */
         }
@@ -274,6 +274,7 @@ string get_full_name() const;
 void display_signals();
 void display_signals_full();
 */
+    uint64_t forever_process_flags = 0; // Flags whether processes are 'forever': can't execute them twice at initialization
     // define four processes that return 0 / so that they are not registered since not declared as non-virtual in the block
     virtual control_signals process0()
     {
@@ -307,6 +308,35 @@ void display_signals_full();
     	return res;
     }
 
+    virtual control_signals process4()
+    {
+    	control_signals res;
+    	//res.clk = NULL;
+    	//res.reset_n = NULL;
+    	return res;
+    }
+
+    virtual control_signals process5()
+    {
+    	control_signals res;
+    	//res.clk = NULL;
+    	//res.reset_n = NULL;
+    	return res;
+    }
+    virtual control_signals process6()
+    {
+    	control_signals res;
+    	//res.clk = NULL;
+    	//res.reset_n = NULL;
+    	return res;
+    }
+    virtual control_signals process7()
+    {
+    	control_signals res;
+    	//res.clk = NULL;
+    	//res.reset_n = NULL;
+    	return res;
+    }
 };
 
 std::vector<gmodule*> gmodule::module_list;

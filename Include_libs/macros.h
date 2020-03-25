@@ -1444,6 +1444,7 @@ IF_ELSE(HAS_ARGS(__VA_ARGS__))\
   )
 
 #define _MAP2() MAP2
+#define MAKETEMP(type, ...) type<0, __VA_ARGS__>
 
 
 #define GREET(x) Hello, x!
