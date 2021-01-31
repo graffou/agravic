@@ -1,6 +1,6 @@
 # January'21 updates
 
-* This risc-V SoC has been used for 6 months to test BTLE/802.15.4 IPs in C++.
+* This risc-V SoC has been used for +9 months to test BTLE/802.15.4 IPs in C++ simulation environment.
 * Verilog IPs can easily be compiled with verilator and be integrated to this C++ SoC. The cycle eval method provided by verilator is easily scheduled by the Agravic simulator.
 The SoC has been running the verilated IPs and the ~500kB BTLE/MAC link layer firmware, which heavily runs on IRQ processing with WFI core stalling.
 This FW is compiled using a regular risc-V toolchain, and: so far, so good.
