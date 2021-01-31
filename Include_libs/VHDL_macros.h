@@ -28,6 +28,7 @@
 // For unsigned ints only
 #define EXT(x, n) RESIZE(x, n)
 #define SXT(x, n) UNSIGNED(RESIZE(SIGNED(x), n))
+#define SABS(a) sabs(a)
 
 #define TO_INT(a,n) TO_SIGNED(a,n)
 #define TO_UINT(a,n) TO_UNSIGNED(a,n)
@@ -86,6 +87,11 @@
 #define PORT_INOUT(a,t) a : inout t
 #define END_SEMICOLON(a) a;
 #define END_COMMA(a) a,
+#define EQU(a, b) (a = TO_UINT(b, LEN(a)))
+#define GT(a, b) (a > TO_UINT(b, LEN(a)))
+#define GTE(a, b) (a >= TO_UINT(b, LEN(a)))
+#define LT(a, b) (a < TO_UINT(b, LEN(a)))
+#define LTE(a, b) (not (a > TO_UINT(b, LEN(a))))
 
 #define END_NOTHING(a) a
 #define ENTITYz(name, ...) entity name is port( EVAL(MAP2(END_SEMICOLON, END_NOTHING, __VA_ARGS__)) ) end
@@ -115,16 +121,16 @@
 #define DECL_PORT(a) PORT_DEF(EVAL1(get1_##a),EVAL1(get2_##a),EVAL1(get3_##a))
 #define DECL_PORTS(...) EVAL(MAP2(DECL_PORT_SEMI, DECL_PORT, __VA_ARGS__))
 
-#define ENTITY(type, ports, ...) IF_ELSE(HAS_ARGS(__VA_ARGS__))(entity type is generic (generic_int: integer); port )( entity type is port ) (/*
-		*/ EVAL(DECL_PORTS(get_##ports)) /*
-		*/ ); end type; architecture rtl of type is component dummy_zkw_pouet is port(clk : in std_logic);end component//std::cerr << "CTOR " << name << "\n";}
+#define ENTITY(type, ports, ...) IF_ELSE(HAS_ARGS(__VA_ARGS__))(entity type is generic (generic_int: integer); port )( entity type is port ) (\
+		EVAL(DECL_PORTS(get_##ports)) \
+		); end type; architecture rtl of type is component dummy_zkw_pouet is port(clk : in std_logic);end component//std::cerr << "CTOR " << name << "\n";}
 
-#define TESTBENCH(type) entity  type is /*
-		*/ begin end type; architecture rtl of type is component dummy_zkw_pouet is port(clk : in std_logic);end component//std::cerr << "CTOR " << name << "\n";}
+#define TESTBENCH(type) entity  type is \
+		\ begin end type; architecture rtl of type is component dummy_zkw_pouet is port(clk : in std_logic);end component//std::cerr << "CTOR " << name << "\n";}
 
-#define COMPONENT(type, ports, ...) IF_ELSE(HAS_ARGS(__VA_ARGS__))(component type is generic (generic_int: integer); port)(component  type is port) (/*
-		*/ EVAL(DECL_PORTS(get_##ports)) /*
-		*/ ); end component //std::cerr << "CTOR " << name << "\n";}
+#define COMPONENT(type, ports, ...) IF_ELSE(HAS_ARGS(__VA_ARGS__))(component type is generic (generic_int: integer); port)(component  type is port) (\
+		 EVAL(DECL_PORTS(get_##ports)) \
+		); end component //std::cerr << "CTOR " << name << "\n";}
 
 #define END_ENTITY //}
 
@@ -161,15 +167,6 @@
 #define BASE_TYPE(type) type
 
 
-/*
-    component clk_gating_cell is
-        port (
-            inclk  : in  std_logic := 'X'; -- inclk
-            ena    : in  std_logic := 'X'; -- ena
-            outclk : out std_logic         -- outclk
-        );
-    end component clk_gating_cell;
-*/
 
 #define DECL_GATED_CLK(name) signal name : std_logic
 
@@ -179,6 +176,15 @@
             ena    => gate,  \
             outclk => name  \
         )
+
+#define CLOCK_MUX(name, clk1, clk2, sel) \
+    name##_clk_mux_cell : component clk_mux  port map ( \
+            inclk1x  => clk2,  \
+            inclk0x  => clk1,  \
+            clkselect    => sel,  \
+            outclk => name  \
+        )
+
 
 
 

@@ -74,7 +74,7 @@ void init_vcd()
 	{
 		for (int j = 0; j < gmodule::module_list[i]->vcd_list.size(); j++)
 		{
-			giprintf("#Mptr %", gmodule::module_list[i]->vcd_list[j]);
+			giprintf("#Mj = % ptr %", j, gmodule::module_list[i]->vcd_list[j]);
 			bool is_port = ( gmodule::module_list[i]->vcd_list[j]->name[0] == '>' or gmodule::module_list[i]->vcd_list[j]->name[0] == '<' );
 			bool is_self_driven = ( gmodule::module_list[i]->vcd_list[j]->driver == gmodule::module_list[i]->vcd_list[j] );
 			// If no mistake, only top entries of arrays/records have these nbits values
@@ -183,4 +183,13 @@ void kb()
 		std::cerr << "exit kb loop\n";
 	}
 
+}
+
+// Read scenario file
+// reads configuration data for current time
+// and returns next configuration time
+// for scheduling next configuration event in a forever process
+uint64_t parse_scn_file()
+{
+return -1;
 }

@@ -14,6 +14,7 @@
 #define UNSIGNED_TYPE(n) slv<n>
 #define INT(n) Signed<n>
 #define UINT(n) slv<n>
+#define CPX_INT(n) cpx_int<n>
 #define TRISTATE(n) tristate<n>
 
 #define RESIZE(a,n)  a.template resize<n>()
@@ -21,6 +22,7 @@
 #define TO_UNSIGNED(a,n) slv<n>(a)
 #define TO_SIGNED(a,n) Signed<n>(a)
 #define TO_UINT(a,n) slv<n>(a)
+#define TO_BIT(a) slv<1>(a)
 #define TO_INT(a,n) Signed<n>(a)
 #define TO_INTEGER(a) conv_integer(a)
 
@@ -37,8 +39,10 @@
 #define EQ(a,b) (a==b)
 #define EXT(a,b) slv<b>(adjust<b>((a).n))
 #define SXT(a,b) slv<b>(adjust<b>(conv_signed(a).conv_int()))
+#define SSXT(a,b) Signed<b>(adjust<b>(conv_signed(a).conv_int()))
 #define SIGNED(a) conv_signed(a)
 #define UNSIGNED(a) conv_unsigned(a)
+#define SABS(a) (a).sabs()
 #define RANGE(a,b,c) (a.template range<b,c>())
 #define SUBVECTOR(a,b,c) (a.template range<b>(c)) // Version of RANGE which extracts a vector of len b from pos c
 #define SLV_RANGE(a,b,c) a.range<b,c>() // for further concatenation in vhdl
@@ -68,9 +72,14 @@
 #define SIG(a, t)  t a = gen_sig_desc(#a, this)
 #define DECL_GATED_CLK(name)
 #define GATED_CLK(name, clk_i, gate)  clk_t name = gen_gated_clk_desc(#name, this, clk_i, gate)
-#define GATE_CLK(clk_i, gated_clk, gating_signal) gated_clk.gate_clk(clk_i, gating_signal)
-//#define VAR(a, t)  t a //= gen_sig_desc(#a, this)
-#define VAR(a, t) static t a // More like VHDL behavior, however static vars might generate latches
+#define GATED_CLK_INV_POL(name, clk_i, gate)  clk_t name = gen_gated_clk_desc(#name, this, clk_i, gate, 0)
+// For a clock mux, declare clock from clk1 with positive polarity, then reassign it to clk2 with negative polarity: this should push newly created clock to both clk1 and clk2 clk children trees
+// Beware of the "no delay" switch behavior, which is not the case in a real implementation case
+//#define CLOCK_MUX(name, clk1, clk2, sel) clk_t name = gen_gated_clk_desc(#name, this, clk2, sel); name = gen_gated_clk_desc(#name, this, clk1, sel, 0);
+#define CLK_MUX(name, clk1, clk2, sel) clk_t name = gen_clk_duo(#name, this, clk1, clk2, sel);
+#define GATE_CLK(clk_i, gated_clk, gating_signal) gated_clk.gate_clk(clk_i, gating_signal,1)
+#define VAR(a, t)  t a //= gen_sig_desc(#a, this)
+//#define VAR(a, t) static t a // More like VHDL behavior, however static vars might generate latches
 #define CONST(a, t)   const t a
 #define CASE_CONST(a, t)   const int a
 #define MEMBER(a, t) t a
@@ -90,6 +99,21 @@
 #define SHIFT_RIGHT(a, b) a.srl(b)
 #define FOR(a,b,c) for (int a = b; a <= c; a++) {
 #define ENDLOOP }
+#define EQU(a, b) (a == TO_UINT(b, LEN(a)))
+#define GT(a, b) (a > TO_UINT(b, LEN(a)))
+#define GTE(a, b) (a >= TO_UINT(b, LEN(a)))
+#define LT(a, b) (a < TO_UINT(b, LEN(a)))
+#define LTE(a, b) (not (a > TO_UINT(b, LEN(a))))
+
+#define SAT(x, n) x.template sat<n>()
+#define SYM_SAT(x, n) x.template sym_sat<n>()
+#define PSAT(x, n) x.template psat<n>()
+#define TRUNC_STD(x, n) x.template trunc_std<n>()
+#define SROUND(x, n) x.template sround<n>()
+#define SROUND_SAT(x, n) x.template sround_sat<n>()
+#define VAR_TRUNC_STD(x, y, n) x.template trunc_std<n>(y)
+#define VAR_SROUND(x, y, n) x.template sround<n>(y)
+#define VAR_SROUND_SAT(x, y, n) x.template sround_sat<n>(y)
 
 
 #ifndef VHDL
@@ -157,7 +181,7 @@
 #define DECL_FIELD(a) FIELD_DEF(EVAL1(get1_##a),EVAL1(get2_##a))
 #define DECL_FIELDS(...) EVAL(MAP(DECL_FIELD, __VA_ARGS__))
 
-#define FIELD_ACT_VCD(name)  name.pvcd_entry->activate();
+#define FIELD_ACT_VCD(name) name.pvcd_entry->binary = binary; name.pvcd_entry->activate();
 #define FIELD_ASSIGN(name)  name <= x.name;
 #define FIELD_EQ(name)  name = x.name;
 
@@ -251,6 +275,8 @@
 		void operator = (const type##_base& x){\
 		EVAL(EQ_FIELDS(get_##ports)) } \
 		static const int length = -2048;\
+		static const int high = -2048;\
+		static const int size = -2048;\
 		void copy_children(const type& x_i){}\
 		}
 #endif
@@ -295,7 +321,8 @@
 #define FOREVER_WAIT_AND_LOOP(n) cnt = 0; create_event(cur_time + (n<<8), current_forever_process);}else if (cnt == __LINE__){
 
 #define FOREVER_END  cnt = 0;} else if (cnt == -1){cnt = 0;/*giprintf("#RFOREVER init");*/} return(__control_signals__); }
-
+#define EXIT_AND_BACK_AFTER(n) create_event(cur_time + (n<<8), current_forever_process);
+#define POST_HCI_EVENT(n) create_event(cur_time + (n<<8), hci_process);
 // process_void for trial purposes, when no clk nor reset
 #define PROCESS_VOID(number) constexpr control_signals process##number(){  __control_signals__.clk = -1; __control_signals__.reset_n = -1;
 //#define COMB_PROCESS(number, signal1) constexpr control_signals process##number(){ __control_signals__.clk = signal1.get().n; __control_signals__.reset_n = -1; //giprintf("#### % % % ####", name, signal1.get().n, signal2.get().n);

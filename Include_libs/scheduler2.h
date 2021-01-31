@@ -215,13 +215,16 @@ struct scheduler_t
 		}
 		
 		//vcd_file.init(); // erase what has been written when calling processe to find forever processes
-		gprintf("#TPARSE MODULES ---------------------------------------N=%", tree::trees.size());
+		gprintfz("#TPARSE MODULES ---------------------------------------N=%", tree::trees.size());
 		// find clocktrees to register processes
 		for (int i = 0; i < tree::trees.size(); i++)
 		{
 			event_pool.init();
 			if (tree::trees[i]->is_clk())
+			{
+				gprintfz("#VParse modules for clk %Y", tree::trees[i]->pvcd_entry->name);
 				tree::trees[i]->parse_modules();
+			}
 		}
 		
 		gprintf("#TEVENT POOL INIT ---------------------------------------");

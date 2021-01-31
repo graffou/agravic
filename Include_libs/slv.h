@@ -15,6 +15,7 @@ struct Signed;
 struct clk_t;
 
 std::ofstream advisor;
+std::ifstream scn_file;
 bool sim_abort = 0;
 
 struct flop
@@ -44,12 +45,7 @@ struct base_slv
 	{
 		n = x;
 	}
-	 /*
-	constexpr operator int() const
-		{
-			return n;
-		}
-		*/
+
 	const static int length = N;
 	const static int high = N-1;
 	static const int size = 1;
@@ -134,23 +130,7 @@ _Pragma ("GCC diagnostic pop")
 	slv(uint64_t x_i)
 	{
 		//std::cerr << "??" << x_i << " " << n << "!!\n";
-/*
-		if ((N!=64) and (x_i & (~mask)))
-		{
 
-			if (pvcd_entry && (pvcd_entry != &dummy_vcd_entry))
-			{
-				//gprintf("#R% pvcd % of size % being assigned %", "xx", pvcd_entry, N, x_i);
-
-				gzprintf("#R% of size % being assigned %", pvcd_entry->name, N, x_i);
-			}
-			else
-				gzprintf("#R% pvcd % of size % being assigned % (%s)", "unknown", pvcd_entry, N, x_i, pvcd_entry);
-
-			bit_adjust();
-			sim_abort = 1;//exit(0);
-		}
-*/
 		n = x_i;
 		bit_adjust();
 		//std::cerr << "!!" << n << "!!\n";
@@ -221,7 +201,7 @@ _Pragma ("GCC diagnostic pop")
 	}
 
 	template<int P>
-	slv<N+P> operator*(const Signed<P>& x_i)
+	Signed<N+P> operator*(const Signed<P>& x_i)
 	{
 		return slv<N+P>( adjust<N+P>( n * x_i.conv_int() ) );
 	}
@@ -258,7 +238,7 @@ _Pragma ("GCC diagnostic pop")
 			if ( (pvcd_entry->ID[0] != '#') and (x_i.n != n) )
 			{
 				n = x_i.n; // assign signal
-				vcd_file.vcd_dump_ull((n), &pvcd_entry->ID[0], pvcd_entry->nbits);
+				vcd_file.vcd_dump_ull((n), pvcd_entry);//&pvcd_entry->ID[0], pvcd_entry->nbits);
 			}
 			else
 				n = x_i.n; // assign signal
@@ -286,7 +266,7 @@ _Pragma ("GCC diagnostic pop")
 				if (pvcd_entry->ID[0] != '#')
 				{
 					giprintf("#Rwriting vcd value %", _d);
-					vcd_file.vcd_dump_ull((_d), &pvcd_entry->ID[0], pvcd_entry->nbits);
+					vcd_file.vcd_dump_ull((_d),pvcd_entry);// &pvcd_entry->ID[0], pvcd_entry->nbits);
 				}
 				else
 				{
@@ -300,7 +280,7 @@ _Pragma ("GCC diagnostic pop")
 				init = 2;
 				n = x_i.n;
 				if (pvcd_entry->ID[0] != '#')
-					vcd_file.vcd_dump_ull((n), &pvcd_entry->ID[0], pvcd_entry->nbits);
+					vcd_file.vcd_dump_ull((n), pvcd_entry);//&pvcd_entry->ID[0], pvcd_entry->nbits);
 			}
 		}
 		//giprintf("#GU<= %R %R %M", pvcd_entry->pmodule->name, pvcd_entry->name, int(init));
@@ -427,7 +407,7 @@ _Pragma ("GCC diagnostic pop")
 #ifndef NO_VCD
 		if ( (pvcd_entry->ID[0] != '#') and (_d != n) )
 		{
-			vcd_file.vcd_dump_ull((_d), &pvcd_entry->ID[0], pvcd_entry->nbits);
+			vcd_file.vcd_dump_ull((_d), pvcd_entry);//&pvcd_entry->ID[0], pvcd_entry->nbits);
 		}		//giprintf("#R% in % out %", pvcd_entry->name, _d, n);
 #endif
 		n = _d;
@@ -444,12 +424,18 @@ _Pragma ("GCC diagnostic pop")
 	{
 		return *this;
 	}
-/*
-	constexpr operator int() const
-		{
-			return n;
-		}
-*/
+
+	template <int P>
+	slv<P> sat()
+	{
+		if (conv_int()>>(P))
+			return slv<P>((1<<P)-1);
+		else
+			return slv<P>(conv_int());
+	}
+
+	// does nothing, an SLV has no children, but records / arrays / cpx_int methods do
+	void copy_children(slv<N> x){}
 };
 
 template<int N>
@@ -468,15 +454,13 @@ struct const_slv
 	const static int high = N-1;
 	static const int size = 1;
 };
-// finally unused ?
-/*
-template< template<int> class T, int N>
-constexpr int length( T<N> x )
-{
-	return N;
-}
-*/
-// Signed version of slv
+
+
+template<int N> struct cpx_int;
+template<int N> struct imag;
+
+
+// Signed version of slv -----------------------------------------------------
 template<int N>
 struct Signed:slv<N>
 {
@@ -494,13 +478,7 @@ struct Signed:slv<N>
 		{
 		//gprintf("#VSdone");
 		}
-	// forbidden in vhdl!
-	/*
-	Signed(slv<N> x_i)
-	{
-		slv<N>::n = x_i.n;
-	}
-*/
+
 	Signed(const Signed<N>& x_i)
 	{
 		//gprintf("Signed(%s)", x_i.n);
@@ -521,13 +499,69 @@ struct Signed:slv<N>
 			return (slv<N>(slv<N>::n));
 		}
 
+
+	Signed<N> operator+(const Signed<N>& x_i)
+	{
+		return Signed<N>( (slv<N>::n + x_i.slv<N>::n) & slv<N>::mask );
+	}
+
+	cpx_int<N> operator+(const imag<N>& x_i);
+	cpx_int<N> operator-(const imag<N>& x_i);
+
+	Signed<N> operator-(const Signed<N>& x_i)
+	{
+		return Signed<N>( (slv<N>::n - x_i.slv<N>::n) & slv<N>::mask );
+	}
+
+	//unary -- same size, as in vhdl package
+	Signed<N> operator-()
+	{
+		return Signed<N>( (-slv<N>::n) & slv<N>::mask );
+	}
+
+	bool operator==(const Signed<N>& x_i) const
+	{
+		return(slv<N>::n == x_i.slv<N>::n);
+	}
+
+	bool operator>(const Signed<N>& x_i)
+	{
+		return(conv_int() > x_i.conv_int());
+	}
+
+	bool operator>=(const Signed<N>& x_i)
+	{
+		return(conv_int() >= x_i.conv_int());
+	}
+
+	bool operator<(const Signed<N>& x_i)
+	{
+		return(conv_int() < x_i.conv_int());
+	}
+
+	template<int P>
+	Signed<N+P> operator*(const Signed<P>& x_i)
+	{
+		return Signed<N+P>( adjust<N+P>( conv_int() * x_i.conv_int() ) );
+	}
+
+	template<int P>
+	Signed<N+P> operator*(const slv<P>& x_i)
+	{
+		return Signed<N+P>( conv_int() * x_i.n );
+	}
+
+
 	void clock()
 	{
 		if ( (slv<N>::pvcd_entry->ID[0] != '#') and (slv<N>::_d != slv<N>::n) )
 		{
-			vcd_file.vcd_dump_ll(_d_conv_int(), &slv<N>::pvcd_entry->ID[0], slv<N>::pvcd_entry->nbits);
+			vcd_file.vcd_dump_ll(_d_conv_int(), slv<N>::pvcd_entry);// &slv<N>::pvcd_entry->ID[0], slv<N>::pvcd_entry->nbits);
 			slv<N>::n = slv<N>::_d;
 		}
+		else
+			slv<N>::n = slv<N>::_d;
+
 	}
 
 	template <int m>
@@ -536,15 +570,122 @@ struct Signed:slv<N>
 		return Signed<m>(conv_int());
 	}
 
+	//positive saturation (when being sure that negative saturation cannot happen, typically during rounding operations)
+	template <int P>
+	Signed<P> pos_sat()
+	{
+		int64_t nn = conv_int();
+		if ((nn > 0) and (nn>>(P-1)))
+			return Signed<P>((1<<(P-1))-1);
+		else
+			return Signed<P>(conv_int());
+	}
+
+	//regular saturation
+	template <int P>
+	Signed<P> sat()
+	{
+		int64_t nn = conv_int();
+		if ( (nn < 0) and ((nn >> (P-1)) != -1) )
+			return Signed<P>(-(1<<(P-1)));
+		if ( (nn > 0) and (conv_int()>>(P-1)) )
+			return Signed<P>((1<<(P-1))-1);
+		else
+			return Signed<P>(conv_int());
+	}
+
+	//regular saturation (symmetric output)
+	template <int P>
+	Signed<P> sym_sat()
+	{
+		int64_t nn = conv_int();
+		if ( (nn < 0) and ((nn >> (P-1)) != -1) )
+			return Signed<P>(-(1<<(P-1))+1);
+		if ( (nn > 0) and (conv_int()>>(P-1)) )
+			return Signed<P>((1<<(P-1))-1);
+		else
+			return Signed<P>(conv_int());
+	}
+
+	//positive saturation (and convert to unsigned by saturating negative values to 0)
+	template <int P>
+	slv<P> psat()
+	{
+		if (conv_int() < 0)
+			return slv<P>(0); // neg sat to 0);
+		else if (conv_int()>>(P))
+			return slv<P>((1<<(P))-1); // pos sat
+		else
+			return slv<P>(conv_int());
+	}
+
 	Signed<N> srl(int x_i)
 		{
 			return Signed<N>(adjust<N>(conv_int() >> x_i));
 		}
+
+	template<int P>
+	Signed<N-P> trunc_std()
+	{
+		return Signed<N-P>(srl(P));
+	}
+
+	template<int P, int M>
+	Signed<P> trunc_std(const slv<M>& nshift)
+	{
+		return Signed<P>(adjust<P>(conv_int() >> nshift.n)); // is adjust required ?
+	}
+
+	template<int P>
+	Signed<N-P> sround()
+	{
+		int mybit = (slv<N>::n >> (P-1)) & 1;
+		return Signed<N-P>(srl(P)) + mybit;
+	}
+
+	template<int P, int M>
+	Signed<P> sround(const slv<M>& nshift)
+	{
+		int mybit = (slv<N>::n >> (nshift.n-1)) & 1;
+		return Signed<P>(adjust<P>(conv_int() >> nshift.n)) + mybit;// is adjust required ?
+	}
+
+	template<int P>
+	Signed<N-P> sround_sat()
+	{
+		int mybit = (slv<N>::n >> (P-1)) & 1;
+		return (Signed<N-P+1>(adjust<N-P+1>(conv_int() >> P)) + mybit).template pos_sat<N-P>();// is adjust required ?
+	}
+
+	template<int P, int M>
+	Signed<P> sround_sat(const slv<M>& nshift)
+	{
+		int mybit = (slv<N>::n >> (nshift.n-1)) & 1;
+		return ( Signed<P+1>(adjust<P+1>(conv_int() >> nshift.n)) + mybit ).template pos_sat<P>();// is adjust required ?
+	}
+
+	// approximated absolute value: -1 bias for negative values, but (N-1)-bit output
+	slv<N-1> sabs()
+	{
+		return ( (slv<N>::n >> (N-1)) ? slv<N-1>(~slv<N>::n) : slv<N-1>(slv<N>::n) );
+	}
+
+	// Correct absolute value
+	slv<N> abs()
+	{
+		return ( (slv<N>::n >> (N-1)) ? slv<N>( (~slv<N>::n)+1) : slv<N>(slv<N>::n) );
+	}
+
+	// approximated invert
+	Signed<N> sneg()
+	{
+		return Signed<N>(adjust<N>(~slv<N>::n));// is adjust required ?
+	}
+
 	//This method is a copy of the one in slv
 	//This is utterly ugly, but I can't see any efficient way of sharing the code, except letting it in slv and use a function pointer for vcd_dump_ll / vcd_dump_ull
 	// or add a member that flags a signed slv ?
 	//Maybe I'll fix that in the future
-
 	inline void operator<=(const Signed<N>& x_i)
 	{
 		//gzprintf("#GAssign slv %", slv<N>::pvcd_entry->name);
@@ -562,7 +703,7 @@ struct Signed:slv<N>
 			if ( (slv<N>::pvcd_entry->ID[0] != '#') and (x_i.n != slv<N>::n) )
 			{
 				slv<N>::n = x_i.n; // assign signal
-				vcd_file.vcd_dump_ll(conv_int(), &slv<N>::pvcd_entry->ID[0], slv<N>::pvcd_entry->nbits);
+				vcd_file.vcd_dump_ll(conv_int(), slv<N>::pvcd_entry);//&slv<N>::pvcd_entry->ID[0], slv<N>::pvcd_entry->nbits);
 			}
 			else
 				slv<N>::n = x_i.n; // assign signal
@@ -588,7 +729,7 @@ struct Signed:slv<N>
 				slv<N>::n = x_i.n; // reset value
 
 				if (slv<N>::pvcd_entry->ID[0] != '#')
-					vcd_file.vcd_dump_ll(_d_conv_int(), &slv<N>::pvcd_entry->ID[0], slv<N>::pvcd_entry->nbits);
+					vcd_file.vcd_dump_ll(_d_conv_int(), slv<N>::pvcd_entry);//&slv<N>::pvcd_entry->ID[0], slv<N>::pvcd_entry->nbits);
 				register_flop(__control_signals__.clk, static_cast<flop*>(this));
 			}
 			else
@@ -597,7 +738,7 @@ struct Signed:slv<N>
 				slv<N>::init = 2;
 				slv<N>::n = x_i.n;
 				if (slv<N>::pvcd_entry->ID[0] != '#')
-					vcd_file.vcd_dump_ll(conv_int(), &slv<N>::pvcd_entry->ID[0], slv<N>::pvcd_entry->nbits);
+					vcd_file.vcd_dump_ll(conv_int(), slv<N>::pvcd_entry);//&slv<N>::pvcd_entry->ID[0], slv<N>::pvcd_entry->nbits);
 			}
 		}
 	}
@@ -637,7 +778,7 @@ struct tristate:slv<N>
 		if ( (slv<N>::pvcd_entry->ID[0] != '#') and ( (slv<N>::_d != slv<N>::n) or (z_flags_d != z_flags) ) )
 		{
 			//giprintf("#VDUMP ZZZ % % % % %", slv<N>::pvcd_entry->name, slv<N>::_d, slv<N>::n, z_flags_d, z_flags);
-			vcd_file.vcd_dump_tristate(slv<N>::_d, z_flags_d, &slv<N>::pvcd_entry->ID[0], slv<N>::pvcd_entry->nbits);
+			vcd_file.vcd_dump_tristate(slv<N>::_d, z_flags_d, slv<N>::pvcd_entry);//&slv<N>::pvcd_entry->ID[0], slv<N>::pvcd_entry->nbits);
 			slv<N>::n = slv<N>::_d;
 			z_flags = z_flags_d;
 		}
@@ -747,7 +888,7 @@ struct tristate:slv<N>
 			if ( (slv<N>::pvcd_entry->ID[0] != '#') and ( (x_i.n != slv<N>::n) or (z_flags != 0) ) )
 			{
 				slv<N>::n = x_i.n; // assign signal
-				vcd_file.vcd_dump_ll(slv<N>::n, &slv<N>::pvcd_entry->ID[0], slv<N>::pvcd_entry->nbits);
+				vcd_file.vcd_dump_ll(slv<N>::n, slv<N>::pvcd_entry);//&slv<N>::pvcd_entry->ID[0], slv<N>::pvcd_entry->nbits);
 			}
 			else
 				slv<N>::n = x_i.n; // assign signal
@@ -772,7 +913,7 @@ struct tristate:slv<N>
 				slv<N>::n = x_i.n; // reset value
 
 				if (slv<N>::pvcd_entry->ID[0] != '#')
-					vcd_file.vcd_dump_tristate(slv<N>::_d, z_flags, &slv<N>::pvcd_entry->ID[0], slv<N>::pvcd_entry->nbits);
+					vcd_file.vcd_dump_tristate(slv<N>::_d, z_flags, slv<N>::pvcd_entry);//&slv<N>::pvcd_entry->ID[0], slv<N>::pvcd_entry->nbits);
 				register_flop(__control_signals__.clk, static_cast<flop*>(this));
 			}
 			else
@@ -781,7 +922,7 @@ struct tristate:slv<N>
 				slv<N>::init = 2;
 				slv<N>::n = x_i.n;
 				if (slv<N>::pvcd_entry->ID[0] != '#')
-					vcd_file.vcd_dump_tristate(slv<N>::n, z_flags, &slv<N>::pvcd_entry->ID[0], slv<N>::pvcd_entry->nbits);
+					vcd_file.vcd_dump_tristate(slv<N>::n, z_flags, slv<N>::pvcd_entry);//&slv<N>::pvcd_entry->ID[0], slv<N>::pvcd_entry->nbits);
 			}
 		}
 	}
@@ -802,7 +943,7 @@ struct tristate:slv<N>
 			if ( (slv<N>::pvcd_entry->ID[0] != '#') and (not eq(x_i)) )
 			{
 				set_q(x_i); // assign signal
-				vcd_file.vcd_dump_ll(slv<N>::n, &slv<N>::pvcd_entry->ID[0], slv<N>::pvcd_entry->nbits);
+				vcd_file.vcd_dump_ll(slv<N>::n, slv<N>::pvcd_entry);//&slv<N>::pvcd_entry->ID[0], slv<N>::pvcd_entry->nbits);
 			}
 			else
 				set_q(x_i); // assign signal
@@ -828,7 +969,7 @@ struct tristate:slv<N>
 				set_d(x_i);
 
 				if (slv<N>::pvcd_entry->ID[0] != '#')
-					vcd_file.vcd_dump_tristate(slv<N>::_d, z_flags, &slv<N>::pvcd_entry->ID[0], slv<N>::pvcd_entry->nbits);
+					vcd_file.vcd_dump_tristate(slv<N>::_d, z_flags, slv<N>::pvcd_entry);//&slv<N>::pvcd_entry->ID[0], slv<N>::pvcd_entry->nbits);
 				register_flop(__control_signals__.clk, static_cast<flop*>(this));
 			}
 			else
@@ -837,7 +978,7 @@ struct tristate:slv<N>
 				slv<N>::init = 2;
 				set_q(x_i);
 				if (slv<N>::pvcd_entry->ID[0] != '#')
-					vcd_file.vcd_dump_tristate(slv<N>::n, z_flags, &slv<N>::pvcd_entry->ID[0], slv<N>::pvcd_entry->nbits);
+					vcd_file.vcd_dump_tristate(slv<N>::n, z_flags, slv<N>::pvcd_entry);//&slv<N>::pvcd_entry->ID[0], slv<N>::pvcd_entry->nbits);
 			}
 		}
 	}
@@ -852,13 +993,20 @@ struct tristate:slv<N>
 };
 // \tristate-----------------------------------
 
+// ----------------------------- CLOCKS/RESETS ---------------------------------------------------
+uint64_t cur_time = 0; // simulator time
+template<class T>
+void create_event(const uint64_t& t, T evt_type);
+
 // special derivation for clocktrees, reset trees...
 struct tree : slv<1>
 {
 	bool evt = 0;
 	slv<1> en = 1; // dummy tree gating
 	slv<1>* p_en = &en; // default: no clock gating
+	slv<1> p_en_pol = 1; // defines polarity of gating signal: p_en_pol = 1 => enable / else enable_bar
 	std::vector<tree*> children;
+	std::vector<slv<1>> children_pol;
 	int n = 0; // enables signal ID
 	//static int n_trees; // enables signal ID
 
@@ -903,7 +1051,7 @@ struct tree : slv<1>
 	void operator=(const slv<1>& x_i)
 	{
 		//giprintf("@B % val %R en % in % ", pvcd_entry->name, static_cast<slv<1>>(*this), *p_en, x_i);
-		if (*p_en == slv<1>(1))
+		if (*p_en == p_en_pol) //slv<1>(1))
 		{
 			if ( not (x_i == static_cast<slv<1>>(*this)) )
 				evt = 1;//slv<1>(1);
@@ -918,10 +1066,11 @@ struct tree : slv<1>
 		}
 	}
 
+#ifdef OLD_GATED_CLOCKS
 	void operator<=(const slv<1>& x_i)
 	{
 		//giprintf("@G % val %R en % in % ", pvcd_entry->name, static_cast<slv<1>>(*this), *p_en, x_i);
-		if (*p_en == slv<1>(1))
+		if (*p_en == p_en_pol) //slv<1>(1))
 		{
 			if ( not (x_i == static_cast<slv<1>>(*this)) )
 				evt = 1;
@@ -937,7 +1086,55 @@ struct tree : slv<1>
 		//giprintf("#R ->evt % new val %", evt, static_cast<slv<1>>(*this));
 
 	}
+#else
+	void operator<=(const slv<1>& x_i)
+	{
+		//giprintf("@G % val %R en % in % ", pvcd_entry->name, static_cast<slv<1>>(*this), *p_en, x_i);
+		if (1)//*p_en == p_en_pol) //slv<1>(1))
+		{
+			if ( not (x_i == static_cast<slv<1>>(*this)) )
+			{
+				evt = 1;
+			}
+			else
+				evt = 0;
+			slv<1>::operator<=(x_i);
+		}
+		else
+		{
+			evt = 0;
+			slv<1>::operator<=(0);
+		}
+		//giprintf("#R ->evt % new val %", evt, static_cast<slv<1>>(*this));
 
+	}
+	/*
+	void assign_gated_clock(const slv<1>& x_i, const slv<1>& pol_i)
+	{
+		gprintf("#BAGC % val %R en % pol % in % ", pvcd_entry->name, static_cast<slv<1>>(*this), *p_en, pol_i, x_i);
+		if (*p_en == pol_i) //slv<1>(1))
+		{
+			if ( not (x_i == static_cast<slv<1>>(*this)) )
+			{
+				evt = 1;
+				create_event(cur_time, this);
+				for (int i = 0; i < children.size(); i++)
+					children[i]->assign_gated_clock(x_i, children_pol[i]);
+			}
+			else
+				evt = 0;
+			slv<1>::operator<=(x_i);
+		}
+		else
+		{
+			evt = 0;
+			//do not force value (does not work in clock muxes) slv<1>::operator<=(0);
+		}
+		//giprintf("#R ->evt % new val %", evt, static_cast<slv<1>>(*this));
+
+	}*/
+
+#endif
 	// So that the get method can be called for a tree signal or a port<tree>
 	tree& get()
 	{
@@ -1001,6 +1198,7 @@ struct tree : slv<1>
 		for (int i=0; i < children.size(); i++)
 		{
 			x_i.children.push_back(children[i]);
+			x_i.children_pol.push_back(children_pol[i]);
 			giprintf("#UIn %Y copying child %Y to driving signal %Y", pvcd_entry->name, children[i]->pvcd_entry->name, x_i.pvcd_entry->name);
 		}
 	}
@@ -1012,9 +1210,7 @@ struct tree : slv<1>
 std::vector<tree*> tree::trees;
 
 //void create_event(const uint64_t& t, int forever_process_id);
-uint64_t cur_time = 0;
-template<class T>
-void create_event(const uint64_t& t, T evt_type);
+
 
 struct clk_t : public tree
 {
@@ -1047,10 +1243,21 @@ struct clk_t : public tree
 	clk_t(const gated_clk_desc& x_i) : tree(x_i)
 	{
 		p_en = x_i.gating_signal;
+		slv<1>pol = (x_i.p_en_pol ? slv<1>(1) : slv<1>(0) );
 		x_i.parent_clk->children.push_back(this);
+		x_i.parent_clk->children_pol.push_back(pol);
 		giprintf("#BAdding child %R to clk %R", this->pvcd_entry->name, (x_i.parent_clk)->pvcd_entry->name);
 	}
-
+	clk_t(const clk_duo& x_i) : tree(x_i.clk1) // Yes it's a bit strange, but clk1 and clk2 are two gated clock descriptions with the same name
+	{
+		p_en = x_i.clk1.gating_signal;
+		x_i.clk1.parent_clk->children.push_back(this);
+		x_i.clk1.parent_clk->children_pol.push_back(1);
+		giprintf("#BAdding child %R to clk %R", this->pvcd_entry->name, (x_i.clk1.parent_clk)->pvcd_entry->name);
+		x_i.clk2.parent_clk->children.push_back(this);
+		x_i.clk2.parent_clk->children_pol.push_back(0); //invert pol
+		giprintf("#BAdding child %R to clk %R", this->pvcd_entry->name, (x_i.clk2.parent_clk)->pvcd_entry->name);
+	}
 	template<class T9>
 	void gate_clock( clk_t& parent_clk, T9& gating_signal)
 	{
@@ -1112,9 +1319,10 @@ struct clk_t : public tree
 	// All relevant processes are registered and will be executed on clock events
 	void parse_modules( )
 	{
-		giprintf("#CParse modules");
+		giprintf("#C--------------Parse modules");
 		for (int i = 0; i < gmodule::module_list.size(); i++)
 		{
+			//giprintf("#CParsing module %R", gmodule::module_list[i]->name);
 			giprintf("#CParsing module %R", gmodule::module_list[i]->name);
 
 			control_signals x;
@@ -1128,6 +1336,8 @@ struct clk_t : public tree
 			if (x.clk >= 0) static_cast<clk_t*>(tree::trees[x.clk])->init_changed_flops_list();
 
 			giprintf("#mRead clk is %R and trial clk is %R", x.clk, n);
+			if ( (n>= 0) and (x.clk>0) )
+			giprintf("#mRead clk is %R and trial clk is %R Yo! n = %", tree::trees[x.clk]->pvcd_entry->name, tree::trees[n]->pvcd_entry->name, n);
 			if (x.clk == n) // process has this clk in sensitivity list
 			{
 				if (x.reset_n == -1) // comb
@@ -1136,6 +1346,7 @@ struct clk_t : public tree
 				}
 				else
 				{
+					gprintf("#VRegistering process 0 nb processes %Y", processes.size());
 					processes.push_back((std::bind(&gmodule::process0, gmodule::module_list[i])));
 				}
 
@@ -1278,11 +1489,11 @@ struct clk_t : public tree
 
 
 #ifdef GATED_CLOCKS
-		for (int i = 0; i < children.size(); i++)
+/*		for (int i = 0; i < children.size(); i++)
 		{
 			children[i]->parse_modules();
 
-		}
+		}*/
 		giprintf("#BEnd Parse modules");
 
 #endif
@@ -1292,6 +1503,7 @@ struct clk_t : public tree
 	inline void exec_processes()
 	{
 		//giprintf("#UProcesses: %", processes.size());
+		//gprintf("#U% Processes: %", pvcd_entry->name, processes.size());
 		init_changed_flops_list();
 		for (int i = 0; i < processes.size(); i++)
 		{
@@ -1310,7 +1522,7 @@ struct clk_t : public tree
 	inline void exec_clock()
 	{
 		//if (nchanged_flops)
-		//giprintf("#VCLOCK flops: %Y changed %Y in %Y", flop_list.size(), nchanged_flops, pvcd_entry->name);
+		//gprintf("#VCLOCK flops: %Y changed %Y in %Y changed sz %", flop_list.size(), nchanged_flops, pvcd_entry->name, changed_flop_list.size());
 #if 0
 		for (int i = 0; i < flop_list.size(); i++)
 		{
@@ -1348,9 +1560,23 @@ struct clk_t : public tree
 #else
 		tree::operator<=(x_i);
 		delta = 0;
-		//giprintf("#Rclk event from <= % @ curtime % -> %", pvcd_entry->name, cur_time, cur_time+1);
+		//gprintf("#Rclk event from <= % @ curtime % -> %", pvcd_entry->name, cur_time, cur_time+1);
 		//create_event(cur_time+1, this);
-		if (this->event()) create_event(cur_time+1, this);
+		if (this->event())
+		{
+			create_event(cur_time+1, this);
+			for (int i = 0; i < children.size(); i++)
+			{
+				slv<1>* tata = children[i]->p_en;
+				//gprintf("#VChild of % % p_en % pol % sz % %", pvcd_entry->name, children[i]->pvcd_entry->name, *(tata), children_pol[i], children.size(), children_pol.size());
+				if ( (*tata) == children_pol[i]) // gated clk active
+				{
+					//gprintf("#RRun % ", children[i]->pvcd_entry->name);
+					clk_t* toto = static_cast<clk_t*>(children[i]);
+					toto->operator<=(x_i);
+				}
+			}
+		}
 #endif		
 		//giprintf("#mEND clock <= val %R", x_i);
 	}
@@ -1367,7 +1593,11 @@ struct clk_t : public tree
 		{
 			//giprintf("#b en %", *(children[i]->p_en) );
 			//static_cast<clk_t*>(children[i])->init_changed_flops_list();
+#	ifdef OLD_GATED_CLOCKS
 			children[i]->tree::operator<=(x_i);
+#else
+			//children[i]->tree::assign_gated_clock(x_i, children_pol[i]);
+#endif
 			//static_cast<slv<1>>(*children[i])<=(x_i);
 			//giprintf("#Mval %", (*children[i]));
 		}
@@ -1490,6 +1720,15 @@ template<int N >
  int conv_integer(const slv<N>& x_i)
 {
 	uint64_t nn = x_i.conv_int();
+	//gprintf("#m N % x_i % nn %", N, x_i, nn);
+	//Signed<32> r = Signed<32>(x_i.n);
+	return int(nn);
+}
+
+template<int N >
+ int conv_integer(const Signed<N>& x_i)
+{
+	int64_t nn = x_i.conv_int();
 	//gprintf("#m N % x_i % nn %", N, x_i, nn);
 	//Signed<32> r = Signed<32>(x_i.n);
 	return int(nn);

@@ -47,17 +47,31 @@ struct gated_clk_desc: public sig_desc
 	//const char* name;
 	clk_t* parent_clk;
 	slv<1>* gating_signal;
+	bool p_en_pol;
 	gated_clk_desc(){}
 	template<class T, class T2, class T3>
-	gated_clk_desc(T name_i, gmodule* pmodule_i,  T2& clk_i,  T3& gating_signal_i)
+	gated_clk_desc(T name_i, gmodule* pmodule_i,  T2& clk_i,  T3& gating_signal_i, bool p_en_pol_i = 1)
 	{
 		name = name_i;
 		pmodule = pmodule_i;
+		p_en_pol = p_en_pol_i;
 		parent_clk = &(clk_i.get());
 		gating_signal = &(gating_signal_i.get());
 		//giprintf("#VCreating gated clk %Y from %Y", name_i, parent_clk->pvcd_entry->name);
 	}
 
+};
+
+// For mux21 clock
+struct clk_duo
+{
+	gated_clk_desc clk1;
+	gated_clk_desc clk2;
+	clk_duo(gated_clk_desc clk1_i, gated_clk_desc clk2_i)
+	{
+		clk1 = clk1_i;
+		clk2 = clk2_i;
+	}
 };
 
 template<class T>
@@ -66,9 +80,16 @@ sig_desc gen_sig_desc(T name_i, gmodule* pmodule_i)
 	return sig_desc(name_i, pmodule_i);
 }
 template<class T, class T2, class T3> //T2 might be clk or port<clk>
-gated_clk_desc gen_gated_clk_desc(T name_i, gmodule* pmodule_i, T2& clk_i, T3& gating_signal_i)
+gated_clk_desc gen_gated_clk_desc(T name_i, gmodule* pmodule_i, T2& clk_i, T3& gating_signal_i, bool p_en_pol_i = 1)
 {
-	return gated_clk_desc(name_i, pmodule_i, clk_i, gating_signal_i);
+	return gated_clk_desc(name_i, pmodule_i, clk_i, gating_signal_i, p_en_pol_i);
+}
+
+template<class T, class T2, class T3, class T4> //T2 might be clk or port<clk>
+clk_duo gen_clk_duo(T name_i, gmodule* pmodule_i, T2& clk1_i, T4& clk2_i, T3& gating_signal_i)
+{
+	// invert enable polarity for second clock
+	return clk_duo(gen_gated_clk_desc(name_i, pmodule_i, clk1_i, gating_signal_i, 1), gen_gated_clk_desc(name_i, pmodule_i, clk2_i, gating_signal_i, 0));
 }
 // return type of process
 // null pointers when calling a non-existing one (virtual method called)

@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <sstream>
+#include <fstream>
 
 //extern void printf(...);
 //#include <stdio.h>
@@ -602,7 +603,9 @@ struct gstring : public string
          unsigned long long int val = 0;
          int nn = 0;
          if (find_string("0x", nn))
-             nn += 2;
+             nn = 2;
+		 else
+			 nn = 0;
          for (int i = nn; i<size(); i++)
          {
              int titi = uint(operator()(i))-(48+7*(operator()(i)>57)+32*(operator()(i)>96));
@@ -684,7 +687,7 @@ void gkprintf(T00& x)
 {
     gstring os;
     os = to_string(x);
-#ifndef PC_GRUIK
+#if 0 //ndef PC_GRUIK
     printf(os.c_str());
 #else
     std::cerr << os;
@@ -833,4 +836,137 @@ while ( (nn <= nbins) || (nn == 1) )
 //gprintf("dec2hex % nbins % : % \n", val, nbins, x);
 return x;
 }
+
+
+
+
 #endif //DEBUG
+
+// A class for probes (avoids writing std::blah blah)
+#ifndef __SYNTHESIS__
+struct probe : public std::ofstream
+{
+    gstring filename;
+    bool dummy;
+	
+    probe() //: std::ofstream(name, std::ios::out)
+        {
+            dummy = true;
+#ifndef SILENT_FILES
+            gkprintf("Creating probe without filename\n");
+#endif
+        };
+		
+    probe(const char* name) : std::ofstream(name, std::ios::out)
+        {
+            filename = name; dummy = false;
+#ifndef SILENT_FILES
+            gkprintf("Opening probe % \n", filename);
+#endif
+        };
+
+
+    probe(const char* name, bool b) : std::ofstream(name, std::ios::app)
+        {
+            filename = name; dummy = true;
+#ifndef SILENT_FILES
+            gkprintf("Opening probe % for append \n", filename);
+#endif
+            if(0) b = !b;// Avoid b not used warning
+        };
+
+   void init(const char* name)
+        {
+            if (name[0]=='\0')//.empty()) //name == "") // no filename -> dummy probe 
+            {
+                filename = "Dummy";
+                dummy = 1;
+            }
+            else
+            {  
+                filename = name;
+                gkprintf("Opening probe2 %G", filename);
+                this->open(name);
+                dummy = 0;
+            }
+        }
+    void close(void)
+        {
+#ifndef SILENT_FILES
+            gkprintf("Closing probe % \n", filename);
+#endif
+            if (!dummy)
+                std::ofstream::close();
+        }
+
+    template <class T>
+    void operator()(T& x)
+        {
+            (*this) << x << "\n";
+        }
+
+
+};
+#else
+struct probe : public pouet
+{probe(const char* name){}};
+#endif
+
+
+// A class for probes (avoids writing std::blah blah)
+#ifndef __SYNTHESIS__
+struct input : public std::ifstream
+{
+    gstring filename;
+    bool dummy;
+	
+    input() //: std::ofstream(name, std::ios::out)
+        {
+            dummy = true;
+#ifndef SILENT_FILES
+            gkprintf("Creating input without filename\n");
+#endif
+        };
+		
+    input(const char* name) : std::ifstream(name, std::ios::in)
+        {
+            filename = name; dummy = false;
+#ifndef SILENT_FILES
+            gkprintf("Opening input % \n", filename);
+#endif
+        };
+
+   void init(const char* name)
+        {
+            if (name[0]=='\0')//.empty()) //name == "") // no filename -> dummy input 
+            {
+                filename = "Dummy";
+                dummy = 1;
+            }
+            else
+            {  
+                filename = name;
+                gkprintf("Opening input2 %G", filename);
+                this->open(name);
+                dummy = 0;
+            }
+        }
+    void close(void)
+        {
+#ifndef SILENT_FILES
+            gkprintf("Closing input % \n", filename);
+#endif
+            if (!dummy)
+                std::ifstream::close();
+        }
+	
+	bool eof() {return std::ifstream::eof() or not 	std::ifstream::is_open();}
+
+};
+#else
+struct input : public pouet
+{input(const char* name){}};
+#endif
+
+// A class for probes (avoids writing std::blah blah)
+

@@ -13,6 +13,22 @@ struct array_base
 		if (n >= N) { gkprintf("R#ERROR: accessing element % of array 0 to %", n, N-1); exit(0);}
 		return array_base<T,N>::v[n];
 	}
+	
+	template <int M, int P>
+	array_base<T, M> shift(Signed<P> n)
+	{
+	    array_base<T, M> res;
+	    for (int i = 0; i < M; i++)
+	    {
+	        int idx = i - conv_integer(n);
+	        if ( (idx >= 0) and (idx < N) )
+	        {
+	            res.v[i] = v[idx];
+	        }      
+	    }
+	    return res;
+	}
+	
 };
 
 
@@ -70,7 +86,7 @@ struct array< T1<T,N> > : T1<T,N> //, vcd_entry
 		pvcd_entry = create_vcd_entry(x_i.name, x_i.pmodule, N);
 
 		pvcd_entry->nbits = -65536; // marks an array of vcd entries
-		x_i.pmodule->vcd_list.push_back(pvcd_entry);//static_cast<vcd_entry*>(this));
+		//x_i.pmodule->vcd_list.push_back(pvcd_entry);//static_cast<vcd_entry*>(this));
 		for (int i = 0; i < N; i++)
 		{
 #if 0
@@ -78,7 +94,7 @@ struct array< T1<T,N> > : T1<T,N> //, vcd_entry
 			array_base<T,N>::v[i].pvcd_entry = create_vcd_entry(name, x_i.pmodule, (*this).length + array_base<T,N>::v[i].length);
 #else // trying to make arrays of records possible
 			std::string name = x_i.name + '(' + std::to_string(i) + ')';
-			int nbits = (*this).length + array_base<T,N>::v[i].length;
+			int nbits = ( (*this).length | array_base<T,N>::v[i].length);
 			array_base<T,N>::v[i].conf_vcd_entry(gen_sig_desc(name, x_i.pmodule));//, (*this).length + array_base<T,N>::v[i].length);
 			array_base<T,N>::v[i].pvcd_entry->nbits = nbits; //gen_sig_desc(name, x_i.pmodule);//, (*this).length + array_base<T,N>::v[i].length);
 #endif
@@ -130,6 +146,14 @@ struct array< T1<T,N> > : T1<T,N> //, vcd_entry
 		}
 	}
 
+	void operator<=(const T1<T,N>& x_i)
+	{
+		for (int i = 0; i < N; i++)
+		{
+			array_base<T,N>::v[i].operator<=(x_i.v[i]);
+		}
+	}
+
 	void activate()
 	{
 		for (int i = 0; i < N; i++)
@@ -148,5 +172,7 @@ struct array< T1<T,N> > : T1<T,N> //, vcd_entry
 
 
 	static const int length = -65536;
+	static const int high = -65536;
+	static const int size = -65536;
 	static const int array_length = N;
 };

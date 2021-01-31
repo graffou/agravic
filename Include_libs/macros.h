@@ -1476,6 +1476,10 @@ IF_ELSE(HAS_ARGS(__VA_ARGS__))\
 
 #define SQR(a) a * a
 
+#define TO_STR(a) #a
+
+#define ADD_INST_TO_NAME(a, b) a b // TO_STR( EVAL(b) )
+
 //#define LIST(...) __VA_ARGS__
 
 

@@ -12,9 +12,6 @@ template <class T, bool in>
     struct port : std::reference_wrapper<T>
 {
     gmodule* pmodule;
-    //vcd_entry* pvcd_entry;
-    //string name;
-    //T* pdummy = new T; // so that reference wrapper can be constructed (needs stg to refer to)
     T dummy;// = new T; // so that reference wrapper can be constructed (needs stg to refer to)
     bool initialized = 0; // Flags that node is connected to a valid signal
     port<T, in>* parent_node = NULL; // keep trace of parent node to propagate the actual reference signal when found
@@ -22,7 +19,6 @@ template <class T, bool in>
     port() : std::reference_wrapper<T>(dummy)
         {
             pmodule = NULL;
-            //name = "";
         }
 
 
@@ -30,28 +26,10 @@ template <class T, bool in>
     port(const sig_desc& x) : std::reference_wrapper<T>(dummy), dummy(x)
         {
     		giprintf("#BIn port CTOR from sigdesc %", x.name);
-            //string port_name = x.name;
-            //string port_dir = in ? "<" : ">";
-            //port_name.insert(0, port_dir);
-    		//!!!!! better use port macro to insert > or <
-        	//giprintf("#U naming %Y ptr %Y dummy ptr %Y pvcd %Y", x.name, this, &dummy, dummy.pvcd_entry);
 
             int port_hint = in ? -1 : -2; // use nbits to code port dir (number of bits of a port will not be used anyway)
-            //dummy.pvcd_entry->name = x.name;//port_name.c_str();
-            //dummy.conf_vcd_entry(x.pmodule, port_name.c_str());
-            //dummy.pvcd_entry->nbits = port_hint;
-            //dummy(x.pmodule, port_name.c_str(), port_hint, 0);
-/*             if (in) */
-/*                 T(x.pmodule, (x.name.insert(0, '<').c_str(), -1, 0); */
-/*             else */
-/*                 T(x.pmodule, (x.name.insert(0, '>').c_str(), -2, 0); */
 
-            pmodule = x.pmodule;
-            //giprintf("#U naming %Y ptr %Y dummy ptr %Y pvcd %Y", x.name, this, &dummy, dummy.pvcd_entry);
-            //*(dummy.pvcd_entry) = gen_sig_desc(x.name, pmodule);
-            //dummy.pvcd_entry = create_vcd_entry(x.name, pmodule, port_hint);
-            //name = x.name;
-            //giprintf("#bcreating % of % ptr = %r ref %", name, pmodule->name, dummy, &std::reference_wrapper<T>::get());
+            pmodule = x.pmodule
             giprintf("#MNew port name % ptr %", dummy.pvcd_entry->name, this);
         }
 
@@ -77,15 +55,9 @@ template <class T, bool in>
             else giprintf("#REnd propagate");
         }
 
-    //void operator()(const std::reference_wrapper<T>& x) // is bound to another reference (port)
         void operator()( port<T, in>& x) // is bound to another reference (port)
         {
-        	//std::cerr << "?" << x.get() << "?";
-            std::reference_wrapper<T>::operator=(x); // copy ref.
-        	//std::cerr << "?";
-            //giprintf("#bbinding (ref) % of % ptr = %r org = %r", name, pmodule->name, &std::reference_wrapper<T>::get(), &x.get());
-        	//std::cerr << "?";
-           //x.parent_node = this;
+           std::reference_wrapper<T>::operator=(x); // copy ref.
            giprintf("#MBinding %s to %R", dummy.pvcd_entry->name, x.dummy.pvcd_entry->name);
 
            port<T, in>* node = &x;
@@ -103,46 +75,29 @@ template <class T, bool in>
 
     void operator()( T& x) // is bound to a signal
         {
-    		//giprintf("#V % name % mod % ", name, pmodule->name);
-    		//giprintf("#V name:: % in % signal %", dummy.pvcd_entry->name, pmodule->name, x.name);
-    		dummy.copy_children(x);
+     		dummy.copy_children(x);
     		giprintf("#V //name:: % in % ptr %Y", dummy.pvcd_entry->name, pmodule->name, this);
             std::reference_wrapper<T> tmp(x); // create reference to that signal
             std::reference_wrapper<T>::operator=(tmp); // copy reference
             dummy.pvcd_entry->driver = x.pvcd_entry->driver; // Used to trace back the path to driver signal (and activate it / use its identifiers)
-
-            //giprintf("#R % ", tmp);
-            //if (pdummy != NULL)
-            //    delete pdummy; //delete dummy
-            //giprintf("#bbinding (sig) % of % ptr = %r org = %r pdummy %g", name, pmodule->name, &std::reference_wrapper<T>::get(), &x, dummy);
-    		giprintf("#BBinding %s:% to drv %R", dummy.pvcd_entry->pmodule->name, dummy.pvcd_entry->name, dummy.pvcd_entry->driver->name);
+            giprintf("#BBinding %s:% to drv %R", dummy.pvcd_entry->pmodule->name, dummy.pvcd_entry->name, dummy.pvcd_entry->driver->name);
             propagate(x);
         }
 
     //template <class T2>
     void operator=(const T& x)
         {
-            //std::cerr << x;
-            //if (pmodule)
             abort<in>(dummy.pvcd_entry->name, pmodule->get_full_name());
-            //std::cerr << "get " << std::reference_wrapper<T>::get();
-
             std::reference_wrapper<T>::get() = x;
-            //std::cerr << '/';
         }
 
     template<class T2>
     void operator<=(const T2& x)
         {
-            //std::cerr << x;
-            //if (pmodule)
 #ifdef CHECK_PORTS_MAPPING
             abort<in>(dummy.pvcd_entry->name, pmodule->get_full_name());
 #endif
-            //std::cerr << "get " << std::reference_wrapper<T>::get();
-            //std::cerr << '.';
             std::reference_wrapper<T>::get() <= x;
-            //std::cerr << '/';
         }
 
     T& base_type()
@@ -154,295 +109,12 @@ template <class T, bool in>
     	return std::reference_wrapper<T>::get();
     }
 
-   	static const int high = -1;
-    	static const int length = -1;
-    	static const int size = -1;
+   	static const int high = T::high;
+    	static const int length = T::length;
+    	static const int size = T::size;
 
 
 };
-
-// For slv class
-    template < template<int> class T, int N,  bool in>
-        struct port<T<N>, in> : std::reference_wrapper<T<N>>
-    {
-        gmodule* pmodule;
-        //vcd_entry* pvcd_entry;
-        //string name;
-        //T<N>* pdummy = new T<N>; // so that reference wrapper can be constructed (needs stg to refer to)
-        T<N> dummy;// = new T<N>; // so that reference wrapper can be constructed (needs stg to refer to)
-        bool initialized = 0; // Flags that node is connected to a valid signal
-        port<T<N>, in>* parent_node = NULL; // keep trace of parent node to propagate the actual reference signal when found
-
-        port() : std::reference_wrapper<T<N>>(dummy)
-            {
-                pmodule = NULL;
-                //name = "";
-            }
-
-
-        // constructor links port to its parent module
-        port(const sig_desc& x) : std::reference_wrapper<T<N>>(dummy), dummy(x)
-            {
-                //string port_name = x.name;
-                //string port_dir = in ? "<" : ">";
-                //port_name.insert(0, port_dir);
-        		//!!!!! better use port macro to insert > or <
-            giprintf("#U naming %Y ptr %Y dummy ptr %Y pvcd %Y", x.name, this, &dummy, dummy.pvcd_entry);
-
-                int port_hint = in ? -1 : -2; // use nbits to code port dir (number of bits of a port will not be used anyway)
-                //dummy.pvcd_entry->name = x.name;//port_name.c_str();
-                //dummy.conf_vcd_entry(x.pmodule, port_name.c_str());
-                //dummy.pvcd_entry->nbits = port_hint;
-                //dummy(x.pmodule, port_name.c_str(), port_hint, 0);
-    /*             if (in) */
-    /*                 T<N>(x.pmodule, (x.name.insert(0, '<').c_str(), -1, 0); */
-    /*             else */
-    /*                 T<N>(x.pmodule, (x.name.insert(0, '>').c_str(), -2, 0); */
-
-                pmodule = x.pmodule;
-                //dummy.pvcd_entry = create_vcd_entry(x.name, pmodule, port_hint);
-
-                giprintf("#U naming %Y ptr %Y dummy ptr %Y pvcd %Y", x.name, this, &dummy, dummy.pvcd_entry);
-                //*(dummy.pvcd_entry) = gen_sig_desc(x.name, pmodule);
-                //name = x.name;
-                //giprintf("#bcreating % of % ptr = %r ref %", name, pmodule->name, dummy, &std::reference_wrapper<T<N>>::get());
-                giprintf("#MNew port name % ", dummy.pvcd_entry->name);
-            }
-
-        ~port()
-            {
-                //std::cerr << "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
-            }
-
-         operator T<N>()
-             {
-                 return std::reference_wrapper<T<N>>::get();//static_cast<std::reference_wrapper<T<N>>>(*this);
-             }
-
-         T<N>& base_type()
-		{
-        	 return std::reference_wrapper<T<N>>::get();
-		}
-
-        void propagate( T<N>& x )
-            {
-                if (parent_node != NULL)
-                {
-                    giprintf("#RPropagate... %s:% to %s:%", dummy.pvcd_entry->pmodule->name, dummy.pvcd_entry->name, parent_node->dummy.pvcd_entry->pmodule->name, parent_node->dummy.pvcd_entry->name);
-                    parent_node->operator()(x);
-                    parent_node->dummy.pvcd_entry->driver = x.pvcd_entry;
-                    giprintf("#R!!Propagate... parent ref ptr % ", &(parent_node->get()));
-                }
-            }
-
-        //void operator()(const std::reference_wrapper<T<N>>& x) // is bound to another reference (port)
-            void operator()( port<T<N>, in>& x) // is bound to another reference (port)
-            {
-            	//std::cerr << "?" << x.get() << "?";
-                std::reference_wrapper<T<N>>::operator=(x); // copy ref.
-            	//std::cerr << "?";
-                //if (pdummy != NULL)
-                //    delete pdummy; // delete dummy
-                //giprintf("#bbinding (ref) % of % ptr = %r org = %r", name, pmodule->name, &std::reference_wrapper<T<N>>::get(), &x.get());
-            	//std::cerr << "?";
-               //x.parent_node = this;
-
-               port<T<N>, in>* node = &x;
-               if ((node->parent_node) == NULL) giprintf("#GFree parent in");// :%s ", (node)->dummy.pvcd_entry->name);
-               while ( (node->parent_node) != NULL)
-               {
-            	   giprintf("#RDelegating to: ", (node)->dummy.pvcd_entry->name);
-            	   node = (node)->parent_node;
-               }
-
-               node->parent_node = this;
-               giprintf("#CSetting parent of %R as %R", (node)->dummy.pvcd_entry->name, dummy.pvcd_entry->name);
-
-            }
-
-        void operator()( T<N>& x) // is bound to a signal
-            {
-        		//giprintf("#BBinding %s:% to %s:%", dummy.pvcd_entry->pmodule->name, dummy.pvcd_entry->name);
-        		//giprintf("#V % name % mod % ", name, pmodule->name);
-        		//giprintf("#V name % ", dummy.pvcd_entry->name);
-                std::reference_wrapper<T<N>> tmp(x); // create reference to that signal
-                std::reference_wrapper<T<N>>::operator=(tmp); // copy reference
-                dummy.pvcd_entry->driver = x.pvcd_entry->driver; // Used to trace back the path to driver signal (and activate it / use its identifiers)
-                //giprintf("1 % module % \n", dummy.pvcd_entry->name, pmodule->name);
-                //giprintf("2 %\n", x.pvcd_entry);
-                //giprintf("2 %\n", x.pvcd_entry->name);
-                //dummy.pvcd_entry->driver = x.pvcd_entry->driver; // Used to trace back the path to dirver signal (and activate it / use its identifiers)
-        		giprintf("#BBinding %s:% to drv %R", dummy.pvcd_entry->pmodule->name, dummy.pvcd_entry->name, dummy.pvcd_entry->driver->name);
-                //giprintf("#R % ", tmp);
-                //if (pdummy != NULL)
-                //    delete pdummy; //delete dummy
-                //giprintf("#bbinding (sig) % of % ptr = %r org = %r pdummy %g", name, pmodule->name, &std::reference_wrapper<T<N>>::get(), &x, dummy);
-                propagate(x);
-            }
-
-        //template <class T2>
-        void operator=(const T<N>& x)
-            {
-                //std::cerr << x;
-                //if (pmodule)
-                abort<in>(dummy.pvcd_entry->name, pmodule->get_full_name());
-                //std::cerr << "get " << std::reference_wrapper<T>::get();
-
-                std::reference_wrapper<T<N>>::get() = x;
-                //std::cerr << '/';
-            }
-
-        template <class T2>
-        void operator<=(const T2& x)
-        //void operator<=(const T<N>& x)
-            {
-                //std::cerr << x;
-                //if (pmodule)
-#ifdef CHECK_PORTS_MAPPING
-                abort<in>(dummy.pvcd_entry->name, pmodule->get_full_name());
-#endif
-                //std::cerr << "get " << std::reference_wrapper<T>::get();
-                //std::cerr << "!!";
-                std::reference_wrapper<T<N>>::get() <= x;
-                //std::cerr << "!!";
-               //std::cerr << '/';
-            }
-
-
-       	static const int high = N-1;
-        static constexpr  int length = N;
-        static const int size = 1;
-
-    };
-
-
-#if 0
-    template <int N>
-    class slv;
-
-    template <int N, bool in>
-        struct port<slv<N>,in> : std::reference_wrapper<slv<N>>
-    {
-        gmodule* pmodule;
-        //vcd_entry* pvcd_entry;
-        //string name;
-        //T* pdummy = new T; // so that reference wrapper can be constructed (needs stg to refer to)
-        slv<N> dummy;// = new T; // so that reference wrapper can be constructed (needs stg to refer to)
-        bool initialized = 0; // Flags that node is connected to a valid signal
-        port<slv<N>, in>* parent_node = NULL; // keep trace of parent node to propagate the actual reference signal when found
-
-        port() : std::reference_wrapper<slv<N>>(dummy)
-            {
-                pmodule = NULL;
-                //name = "";
-            }
-
-
-        // constructor links port to its parent module
-        port(const sig_desc& x) : std::reference_wrapper<slv<N>>(dummy), dummy(x)
-            {
-                //string port_name = x.name;
-                //string port_dir = in ? "<" : ">";
-                //port_name.insert(0, port_dir);
-        		//!!!!! better use port macro to insert > or <
-
-                int port_hint = in ? -1 : -2; // use nbits to code port dir (number of bits of a port will not be used anyway)
-                //dummy.pvcd_entry->name = x.name;//port_name.c_str();
-                //dummy.conf_vcd_entry(x.pmodule, port_name.c_str());
-                dummy.pvcd_entry->nbits = port_hint;
-                //dummy(x.pmodule, port_name.c_str(), port_hint, 0);
-    /*             if (in) */
-    /*                 T(x.pmodule, (x.name.insert(0, '<').c_str(), -1, 0); */
-    /*             else */
-    /*                 T(x.pmodule, (x.name.insert(0, '>').c_str(), -2, 0); */
-
-                pmodule = x.pmodule;
-                *(dummy.pvcd_entry) = gen_sig_desc(x.name, pmodule);
-                //name = x.name;
-                //giprintf("#bcreating % of % ptr = %r ref %", name, pmodule->name, dummy, &std::reference_wrapper<T>::get());
-                giprintf("#MNew port name % ", dummy.pvcd_entry->name);
-            }
-
-        ~port()
-            {
-                //std::cerr << "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
-            }
-
-    /*     operator T() */
-    /*         { */
-    /*             return static_cast<std::reference_wrapper<T>>(*this); */
-    /*         } */
-
-        void propagate( slv<N>& x )
-            {
-                if (parent_node != NULL)
-                {
-                    parent_node->operator()(x);
-                    giprintf("#RPropagate...");
-                }
-            }
-
-        //void operator()(const std::reference_wrapper<T>& x) // is bound to another reference (port)
-            void operator()( port<slv<N>, in>& x) // is bound to another reference (port)
-            {
-            	std::cerr << "?" << x.get() << "?";
-                std::reference_wrapper<slv<N>>::operator=(x); // copy ref.
-            	std::cerr << "?";
-                //if (pdummy != NULL)
-                //    delete pdummy; // delete dummy
-                //giprintf("#bbinding (ref) % of % ptr = %r org = %r", name, pmodule->name, &std::reference_wrapper<T>::get(), &x.get());
-            	std::cerr << "?";
-               x.parent_node = this;
-            }
-
-        void operator()( slv<N>& x) // is bound to a signal
-            {
-        		//giprintf("#V % name % mod % ", name, pmodule->name);
-        		giprintf("#V name % ", dummy.pvcd_entry->name);
-                std::reference_wrapper<slv<N>> tmp(x); // create reference to that signal
-                std::reference_wrapper<slv<N>>::operator=(tmp); // copy reference
-                dummy.driver = &x; // Used to trace back the path to dirver signal (and activate it / use its identifiers)
-
-                //giprintf("#R % ", tmp);
-                //if (pdummy != NULL)
-                //    delete pdummy; //delete dummy
-                //giprintf("#bbinding (sig) % of % ptr = %r org = %r pdummy %g", name, pmodule->name, &std::reference_wrapper<T>::get(), &x, dummy);
-                propagate(x);
-            }
-
-        //template <class T2>
-        void operator=(const slv<N>& x)
-            {
-                //std::cerr << x;
-                //if (pmodule)
-                abort<in>(dummy.pvcd_entry->name, pmodule->get_full_name());
-                //std::cerr << "get " << std::reference_wrapper<T>::get();
-
-                std::reference_wrapper<slv<N>>::get() = x;
-                //std::cerr << '/';
-            }
-
-        void operator<=(const slv<N>& x)
-            {
-                //std::cerr << x;
-                //if (pmodule)
-                abort<in>(dummy.pvcd_entry->name, pmodule->get_full_name());
-                //std::cerr << "get " << std::reference_wrapper<T>::get();
-
-                std::reference_wrapper<slv<N>>::get() <= x;
-                //std::cerr << '/';
-            }
-
-        operator slv<N>(){
-        	return std::reference_wrapper<slv<N>>::get();
-        }
-
-    	static const int high = N-1;
-    	static const int length = N;
-    	static const int size = 1;
-
-    };
-#endif
 
 // Define binary operators, Catapult style
 
