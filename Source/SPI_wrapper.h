@@ -75,15 +75,15 @@ MAPPING(
 		PM(spi_csn_o, spi_csn_o),
 		PM(spi_tx_o, spi_tx_o),
 		PM(spi_rx_i, spi_rx_i)
-		/*,
-		(trig_i, BIT_TYPE, IN),    // signal that trigs transfers (should come from timer)
-		(, d2p_8_t, IN),
-		(spi_dma_o, p2d_8_t, OUT),
-		(spi_csn_o, BIT_TYPE, OUT),
-		(spi_clk_o, BIT_TYPE, OUT),
-		(spi_tx_o, BIT_TYPE, OUT),
-		(spi_rx_i, BIT_TYPE, IN)
-		)*/
+//		,
+//		(trig_i, BIT_TYPE, IN),    // signal that trigs transfers (should come from timer)
+//		(, d2p_8_t, IN),
+//		(spi_dma_o, p2d_8_t, OUT),
+//		(spi_csn_o, BIT_TYPE, OUT),
+//		(spi_clk_o, BIT_TYPE, OUT),
+//		(spi_tx_o, BIT_TYPE, OUT),
+//		(spi_rx_i, BIT_TYPE, IN)
+//		)
 		),
 		generic_int
 );

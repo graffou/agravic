@@ -1,0 +1,68 @@
+# Copyright lowRISC contributors.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Generate a baremetal application
+
+PROGRAM ?= dhrystone
+PROGRAM_CFLAGS = -Wall -g -O1
+ARCH = rv32i
+# ARCH = rv32im # to disable compressed instructions
+SRCS = $(PROGRAM).cpp
+
+CC = /opt/riscv/bin/riscv64-unknown-elf-g++
+ZZ = /opt/riscv/bin/riscv64-unknown-elf-gcc
+#CPP = /opt/riscv/bin/riscv64-unknown-elf-g++
+
+OBJCOPY ?= $(subst gcc,objcopy,$(wordlist 1,1,$(ZZ)))
+OBJDUMP ?= $(subst gcc,objdump,$(wordlist 1,1,$(ZZ)))
+OBJSIZE ?= $(subst gcc,size,$(wordlist 1,1,$(ZZ)))
+
+LINKER_SCRIPT ?= link.ld
+CRT ?= crt0.S
+CFLAGS ?= -march=$(ARCH) -mabi=ilp32 -static -mcmodel=medany \
+	-fvisibility=hidden -nostdlib -nostartfiles -ffunction-sections -fdata-sections $(PROGRAM_CFLAGS) -fno-inline-functions
+#	-fvisibility=hidden --specs=nano.specs  -lnosys -fno-threadsafe-statics -fno-common -fmessage-length=0 -fno-exceptions  -ffunction-sections -fdata-sections $(PROGRAM_CFLAGS)
+
+LIBS = -lm
+#CFLAGS ?= -march=$(ARCH) -mabi=ilp32 -static -mcmodel=medany \
+#    -std=gnu++17 -Os -Wall -march=$(ARCH) -mabi=ilp32 -mcmodel=medlow -fmessage-length=0 -fsigned-char -ffunction-sections -fdata-sections -fno-common $(PROGRAM_CFLAGS)
+#	-fvisibility=hidden -nostdlib -nostartfiles $(PROGRAM_CFLAGS)
+
+OBJS := ${SRCS:.cpp=.o} ${CRT:.S=.o}
+DEPS := $(OBJS:%.o=%.d)
+INCS := -IInclude
+OUTFILES = $(PROGRAM).elf $(PROGRAM).bin $(PROGRAM).dis
+
+all: $(OUTFILES)
+
+$(PROGRAM).elf: $(OBJS) $(LINKER_SCRIPT)
+	$(CC) $(CFLAGS) -T $(LINKER_SCRIPT) $(OBJS) -o $@ $(LIBS)
+	$(OBJSIZE) $@
+%.dis: %.elf
+	$(OBJDUMP) -SD $^ > $@
+
+# Note: this target requires the srecord package to be installed.
+# XXX: This could be replaced by objcopy once
+# https://sourceware.org/bugzilla/show_bug.cgi?id=19921
+# is widely available.
+# XXX: Currently the start address 0x00000000 is hardcoded. It could/should be
+# read from the elf file, but is lost in the bin file.
+# Switching to objcopy will resolve that as well.
+#%.vmem: %.bin
+#	srec_cat $^ -binary -offset 0x0000 -byte-swap 4 -o $@ -vmem
+
+%.bin: %.elf
+	$(OBJCOPY) -O binary $^ $@
+	
+%.o: %.cpp
+	$(CC) $(CFLAGS) -MMD -c $(INCS) -o $@ $<
+
+%.o: %.S
+	$(CC) $(CFLAGS) -MMD -c $(INCS) -o $@ $<
+
+clean:
+	$(RM) -f *.o *.d
+
+distclean: clean
+	$(RM) -f $(OUTFILES)

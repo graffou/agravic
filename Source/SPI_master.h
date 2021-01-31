@@ -362,21 +362,21 @@ BEGIN
 				master_clk <= (not master_clk);
 				spi_clk_o  <= (not master_clk);
 			ENDIF
-/*
-			//Receiver part
-			IF ( (tx_rx == BIT(1)) and (next_cnt == cnt_strobe) and (sending == BIT(1)) ) THEN
-#ifdef LOOPBACK_TEST
-				rx_byte_tmp := ( RANGE( rx_byte, 6, 0) & (spi_tx) );
-#else
-				rx_byte_tmp := ( RANGE( rx_byte, 6, 0) & spi_rx_i );
-#endif
-				IF ( ( tsfr_cnt == BIN(111) ) ) THEN // last tx bit is last rx bit as well
-					fifo_rx( TO_INTEGER( RANGE(fifo_wptr_rx, 1, 0)) ) <= rx_byte_tmp;
-					fifo_wptr_rx <= fifo_wptr_rx + 1;
-				ENDIF
-				rx_byte <= rx_byte_tmp;
-			ENDIF
-*/
+
+//			//Receiver part
+//			IF ( (tx_rx == BIT(1)) and (next_cnt == cnt_strobe) and (sending == BIT(1)) ) THEN
+//#ifdef LOOPBACK_TEST
+//				rx_byte_tmp := ( RANGE( rx_byte, 6, 0) & (spi_tx) );
+//#else
+//				rx_byte_tmp := ( RANGE( rx_byte, 6, 0) & spi_rx_i );
+//#endif
+//				IF ( ( tsfr_cnt == BIN(111) ) ) THEN // last tx bit is last rx bit as well
+//					fifo_rx( TO_INTEGER( RANGE(fifo_wptr_rx, 1, 0)) ) <= rx_byte_tmp;
+//					fifo_wptr_rx <= fifo_wptr_rx + 1;
+//				ENDIF
+//				rx_byte <= rx_byte_tmp;
+//			ENDIF
+
 		ELSEIF (spi_state == spi_start) THEN // csn low, then wait csn_clk_ncycles, then send
 			tsfr_cnt <= TO_UINT(0, LEN(tsfr_cnt));
 			spi_csn_o <= BIT(0);
@@ -414,11 +414,11 @@ BEGIN
 
 	ENDIF
 END_PROCESS
-/*
-COMB_PROCESS(1, clk_120)
-BEGIN
-	ext_clk <= spi_clk_io;
 
-ENDIF
-*/
+//COMB_PROCESS(1, clk_120)
+//BEGIN
+//	ext_clk <= spi_clk_io;
+//
+//ENDIF
+
 BLK_END;

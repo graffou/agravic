@@ -53,6 +53,7 @@ RECORD(d2p_16_t,
 		DECL_FIELDS(
 				FIELD(data, UINT(16)),
 				FIELD(grant, BIT_TYPE),
+				FIELD(req, BIT_TYPE), // 1 when dma is requesting data
 				FIELD(data_en, BIT_TYPE)
 				)
 );
@@ -72,6 +73,7 @@ RECORD(d2p_8_t,
 				FIELD(data, UINT(8)),
 				FIELD(grant, BIT_TYPE),
 				FIELD(init, BIT_TYPE),
+				FIELD(req, BIT_TYPE), // 1 when dma is requesting data
 				FIELD(data_en, BIT_TYPE)
 				)
 );
@@ -91,6 +93,7 @@ RECORD(d2p_t,
 		DECL_FIELDS(
 				FIELD(data, UINT(32)),
 				FIELD(grant, BIT_TYPE),
+				FIELD(req, BIT_TYPE), // 1 when dma is requesting data
 				FIELD(data_en, BIT_TYPE)
 				)
 );
@@ -133,12 +136,15 @@ RECORD(csr2core_t,
 				FIELD(mepc, UINT(32)),
 				FIELD(mtvec, UINT(32)),
 				FIELD(irq, BIT_TYPE), // one single wire, source is given by cause
+				FIELD(wakeup, BIT_TYPE), // For WFI with no active interrupt
 				FIELD(trap, BIT_TYPE), // traps can occur from CSR read
 				FIELD(cause, UINT(6)),
 				FIELD(priv, UINT(2)) // is it right ? Future use anyway
 				)
 );
 
+TYPE(irq_dma_t, ARRAY_TYPE(BIT_TYPE, nCHANNELS)); // for now, a single IRQ per DMA channel
 TYPE(irq_t, ARRAY_TYPE(BIT_TYPE,16));
+
 
 END_PACKAGE(structures)

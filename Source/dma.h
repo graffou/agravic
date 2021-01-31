@@ -1,8 +1,6 @@
 #include "../Include_libs/slv.h"
 
 
-#define nCHANNELS 2
-#define log2_nCHANNELS 1
 
 START_OF_FILE(dma)
 INCLUDES
@@ -23,6 +21,7 @@ DECL_PORTS(
 		PORT(uart_dma_o, d2p_8_t, OUT),
 		PORT(spi_dma_i, p2d_8_t, IN),
 		PORT(spi_dma_o, d2p_8_t, OUT),
+		PORT(irq_dma_o, irq_dma_t, OUT),
 		PORT(core_grant_i, BIT_TYPE, IN),
 		PORT(core_request_o, blk2mem_t, OUT)
 		)
@@ -44,7 +43,7 @@ SIG(rmask_we, UINT(4));
 SIG(rmask, UINT(32));
 SIG(next_addr_mask, UINT(data_addr_span));
 SIG(addr_mask, UINT(data_addr_span));
-
+SIG(irq_dma, irq_dma_t);
 CONST(dma_idle, UINT(4)) := TO_UINT(0, DMA_STATE_SZ);
 // periph -> mem
 CONST(dma_wait_for_periph_data, UINT(4)) := TO_UINT(1, DMA_STATE_SZ);
@@ -95,6 +94,8 @@ IF ( reset_n == BIT(0) ) THEN
 		dma_channels(idx).state <= dma_idle;
 		dma_channels(idx).addr <= TO_UINT(0, data_addr_span);
 		dma_channels(idx).tsfr_sz <= TO_UINT(0, DMA_TSFR_SZ);
+		PORT_BASE(irq_dma_o)(idx) <= BIT(0);
+
 	ENDLOOP
 
 	wait_for_core_grant <= BIT(0);
@@ -110,7 +111,10 @@ IF ( reset_n == BIT(0) ) THEN
 	PORT_BASE(spi_dma_o).data_en <= BIT(0);
 	boot_mode <= BIT(0);
 	lock_bus <= BIT(0);
-
+	irq_dma(0) <= BIT(0);
+	irq_dma(1) <= BIT(1);
+	PORT_BASE(irq_dma_o)(0) <= BIT(0);
+	PORT_BASE(irq_dma_o)(1) <= BIT(1);
 ELSEIF ( EVENT(clk_dma) and (clk_dma == BIT(1)) ) THEN
 	boot_mode <= boot_mode_i;
 
@@ -244,6 +248,18 @@ ELSEIF ( EVENT(clk_dma) and (clk_dma == BIT(1)) ) THEN
 					dma_channels(idx).time <= dma_channels(idx).time - 1;
 					IF ( ( dma_channels(idx).time == TO_UINT(0, DMA_TIME_SZ) ) and not ( dma_channels(idx).timeout == TO_UINT(0, DMA_TIME_SZ) ) ) THEN
 						dma_channels(idx).state <= dma_idle;
+						PORT_BASE(irq_dma_o)(idx) <= BIT(1); // Transfer completed, raise IRQ
+						IF (dma_channels(idx).source == BIN(000)) THEN // lower dma request
+							PORT_BASE(uart_dma_o).req <= BIT(0);
+						ELSEIF (dma_channels(idx).source == BIN(001)) THEN
+							PORT_BASE(spi_dma_o).req <= BIT(0);
+						ENDIF	
+					ELSE 
+						IF (dma_channels(idx).source == BIN(000)) THEN // raise dma request
+							PORT_BASE(uart_dma_o).req <= BIT(1);
+						ELSEIF (dma_channels(idx).source == BIN(001)) THEN
+							PORT_BASE(spi_dma_o).req <= BIT(1);
+						ENDIF							
 					ENDIF
 				ENDIF
 			// Cycle after peripheral sent data: reset grant and issue mem write if required
@@ -279,7 +295,7 @@ ELSEIF ( EVENT(clk_dma) and (clk_dma == BIT(1)) ) THEN
 					ENDIF
 				ENDIF
 
-				// requires some more peripheral data before actual mem wriite
+				// requires some more peripheral data before actual mem write
 				IF (dma_channels(idx).state == dma_send_periph_grant) THEN
 					dma_channels(idx).state <= dma_wait_for_periph_data;
 					dma_channels(idx).addr <= next_addr;
@@ -291,6 +307,12 @@ ELSEIF ( EVENT(clk_dma) and (clk_dma == BIT(1)) ) THEN
 				IF (core_grant_i == BIT(1)) THEN
 					PORT_BASE(core_request_o).cs_n <= BIT(1);
 					IF (dma_channels(idx).tsfr_sz == TO_UINT(0, DMA_TSFR_SZ)) THEN // End of transfer
+						PORT_BASE(irq_dma_o)(idx) <= BIT(1); // Transfer completed, raise IRQ
+						IF (dma_channels(idx).source == BIN(000)) THEN // lower dma request
+							PORT_BASE(uart_dma_o).req <= BIT(0);
+						ELSEIF (dma_channels(idx).source == BIN(001)) THEN
+							PORT_BASE(spi_dma_o).req <= BIT(0);
+						ENDIF	
 						dma_channels(idx).state <= dma_idle;
 					ELSE
 						dma_channels(idx).state <= dma_wait_for_periph_data; // wait for next periph data
@@ -370,10 +392,10 @@ ELSEIF ( EVENT(clk_dma) and (clk_dma == BIT(1)) ) THEN
 					PORT_BASE(spi_dma_o).data_en <= BIT(0);
 				ENDIF
 				dma_channels(idx).state <= dma_idle;
-
+				(PORT_BASE(irq_dma_o)(idx)) <= (BIT(1)); // Transfer completed, raise IRQ
 			ENDIF
 		ELSE // idle
-
+			PORT_BASE(irq_dma_o)(idx) <= BIT(0);
 		ENDIF
 	ENDLOOP
 

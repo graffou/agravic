@@ -13,7 +13,7 @@
 #include <vector>
 #include <utility>
 
-#define DEEP_PLATFORM_DEBUG 0 // To get all messages from the agravic platform
+//#define DEEP_PLATFORM_DEBUG 1 // To get all messages from the agravic platform
 #define gprintf gkprintf
 #if DEEP_PLATFORM_DEBUG
 #  define giprintf gkprintf
@@ -26,6 +26,7 @@
 #include "gmodule.h"
 #include "ports.h"
 #include "slv.h"
+#include "dsp.h"
 #include "scheduler2.h"
 #include "kb.h"
 #include "input_parms.h"
@@ -39,16 +40,19 @@
 
 #include "sUART.h"
 #include "SPI_master.h"
-#include "SPI_slave.h"
+//#include "SPI_slave.h"
 #include "SPI_wrapper.h"
+#include "SPI.h"
 
 #include "spram.h"
 #include "mem.h"
+//#include "mem_delayed.h"
 #include "peripherals.h"
 #include "dbg_mem.h"
 #include "risc_V_constants.h"
 #include "register_file.h"
 #include "risc-V_core.h"
+//#include "risc-V_core.before_wait_instrmem.h"
 #include "clk_gen.h"
 #include "ddio.h"
 #include "sdram_ctrl.h"
@@ -114,7 +118,7 @@ int main(int argc, char* argv[])
 			else
 			{
 				success = 0;
-				gprintf("#RChecking % % %", addr, to_hex(check_val), to_hex(tb.dut.u1_mem.get(addr)));
+				gprintf("#RChecking % Expected % read %", addr, to_hex(check_val), to_hex(tb.dut.u1_mem.get(addr)));
 			}
 		}
 

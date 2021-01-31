@@ -21,7 +21,12 @@ DECL_PORTS(
 		PORT(pclk_o, BIT_TYPE, OUT),
 		PORT(red_o, BIT_TYPE, OUT),
 		PORT(green_o, BIT_TYPE, OUT),
-		PORT(blue_o, BIT_TYPE, OUT)
+		PORT(blue_o, BIT_TYPE, OUT),
+		PORT(vga_hsync_o, BIT_TYPE, OUT),
+		PORT(vga_vsync_o, BIT_TYPE, OUT),
+		PORT(vga_red_o, UINT(4), OUT),
+		PORT(vga_green_o, UINT(4), OUT),
+		PORT(vga_blue_o, UINT(4), OUT)
 		)
 		, INTEGER generic_int
 
@@ -109,7 +114,7 @@ SIG(rvsyncp, UINT(1));
 SIG(rhsync, UINT(1));
 SIG(rde, UINT(1));
 SIG(rin_frame, UINT(1));
-
+#ifdef HDMI_NOT_VGA
 CONST(hres, UINT(16)) := TO_UINT(640, 16);
 CONST(hss, UINT(16)) := TO_UINT(656, 16);
 CONST(hse, UINT(16)) := TO_UINT(752, 16);
@@ -118,7 +123,16 @@ CONST(vres, UINT(16)) := TO_UINT(480, 16);
 CONST(vss, UINT(16)) := TO_UINT(489, 16); // biased values (-1) : the vsync actually begins the line before
 CONST(vse, UINT(16)) := TO_UINT(491, 16);
 CONST(vtot, UINT(16)) := TO_UINT(525, 16);
-
+#else
+CONST(hres, UINT(16)) := TO_UINT(640, 16);
+CONST(hss, UINT(16)) := TO_UINT(656, 16);
+CONST(hse, UINT(16)) := TO_UINT(752, 16);
+CONST(htot, UINT(16)) := TO_UINT(800, 16);
+CONST(vres, UINT(16)) := TO_UINT(480, 16);
+CONST(vss, UINT(16)) := TO_UINT(491, 16); // biased values (-1) : the vsync actually begins the line before
+CONST(vse, UINT(16)) := TO_UINT(493, 16);
+CONST(vtot, UINT(16)) := TO_UINT(525, 16);
+#endif
 CONST(CTRL00, UINT(8)) := BIN(11111101);
 CONST(CTRL01, UINT(8)) := BIN(00000011);
 CONST(CTRL10, UINT(8)) := BIN(11111100);
@@ -200,26 +214,10 @@ CONST(init_msg, init_msg_t ) :=
 		init_msg_t init_msg :=
 #endif
 LIST(
-		HEX(47), HEX(49),HEX(4F),HEX(52),HEX(4E),HEX(4F),HEX(20),HEX(43),HEX(4F),HEX(52),HEX(45),HEX(0A), HEX(3E), HEX(0A) );//,
+		HEX(47), HEX(49),HEX(4F),HEX(52),HEX(4E),HEX(4F),HEX(20),HEX(43),HEX(4F),HEX(52),HEX(45),HEX(0A), HEX(24), HEX(0A) );//,
 		//HEX(41),HEX(4F),HEX(4F),HEX(54),HEX(0A));
 BEGIN
 
-/*
-BLK_INST(u0_ddio, ddio,
-		MAPPING(
-				PM(clk_hdmi, clk_hdmi),
-				PM(reset_n, reset_n),
-				PM(blue_i, blue),
-				PM(green_i, green),
-				PM(red_i, red),
-				PM(pclk_i, pclk),
-				PM(blue_o, blue_o),
-				PM(green_o, green_o),
-				PM(red_o, red_o),
-				PM(pclk_o, pclk_o)
-				)
-		);
-*/
 BLK_INST(u0_char_buf, spram_4800x8,
 		MAPPING(
 				PM(clk, clk_pix),
@@ -348,13 +346,21 @@ BEGIN
 		rvsync <= ( (rvsync or (hsync and vsync) ) and not (hsync and not vsync) );
 		rvsyncp <= rvsync;
 		rin_frame <= BOOL2BIN( ( (vcnt < vres) ) );
+		vga_hsync_o <= (not B(hsync,0));
+		vga_vsync_o <= (not B(vsync,0));
 		IF (rde == BIN(1)) THEN
 
 			// Retrieve rgb data from char 8-bit line
 			IF ( (B(char_line, 7) xor blink)  == BIT(1)) THEN
 				rgb_data <= fg_color;//BIN(010000000100000001000000);//fg_color;
+				vga_red_o <= RANGE(fg_color, 23, 20);
+				vga_green_o <= RANGE(fg_color, 15, 12);
+				vga_blue_o <= RANGE(fg_color, 7, 4);
 			ELSE
 				rgb_data <= bg_color;//BIN(000001000100000001000000);//fg_color;
+				vga_red_o <= RANGE(bg_color, 23, 20);
+				vga_green_o <= RANGE(bg_color, 15, 12);
+				vga_blue_o <= RANGE(bg_color, 7, 4);
 			ENDIF
 			// shift char line data
 			char_line <= SHIFT_LEFT(char_line, 1);
@@ -362,6 +368,9 @@ BEGIN
 			ctrl_word3:= ( (not rhsync) & rhsync & (not rvsync) );
 			ctrl_word := SXT( (ctrl_word3), 8);
 			rgb_data <= (ctrl_word & ctrl_word & ctrl_word);//( CTRL00 & CTRL00 & ctrl_word);
+			vga_red_o <= TO_UINT(0, 4); //blank
+			vga_green_o <= TO_UINT(0, 4);
+			vga_blue_o <= TO_UINT(0, 4);
 		ENDIF
 
 		ctrl_data <= (not rde); // used to modifiy TMDS encoding for ctrl data (violates XOR/XNOR rule)
@@ -467,12 +476,6 @@ BEGIN
 			RESET(buf_end_line);
 		ENDIF
 
-		/*
-		boot_mode <= boot_mode_i;
-		IF ( (boot_mode == BIT(0)) and (boot_mode_i == BIT(1))) THEN
-			wbuf_char <= BIN(01000010);
-		ENDIF
-		*/
 		boot_mode <= boot_mode_i;
 		IF (trap_i == BIT(1)) THEN
 			bg_color <= BIN(111111110000000000000000); // switch to red
@@ -570,24 +573,7 @@ BEGIN
 			ENDIF
 
 		ENDIF
-/*
-		// Clear screen
-		cls_ack <= BIT(0);
-		IF (cls == BIT(1)) THEN // clear screen from clk_core domain
-			cls_ack <= BIT(1); //ack cmd
-			clsp <= BIT(1);
-			buf_cur_line <= TO_UINT(0, LEN(buf_cur_line));
-			buf_cur_col <= TO_UINT(0, LEN(buf_cur_col));
-		ENDIF
 
-		IF (clsp == BIT(1)) THEN
-			IF (buf_cur_col <= TO_UINT(79, LEN(buf_cur_col))) THEN
-			ENDIF
-
-		ENDIF
-		*/
-		//line_blank <= BIN(0);
-		//buf_blank <= BIN(0);
 	ENDIF
 
 END_PROCESS
@@ -826,17 +812,17 @@ IF ( reset_n == BIT(0) ) THEN
 	ENDIF
 	END_PROCESS
 
-	// Combinational logic
-	COMB_PROCESS(3, clk_pix)
-/*		PORT_BASE(core2instmem_o).addr <= inst_addr;//RANGE(PC, LEN(blk2mem_t0.addr)+1, 2);//RESIZE(PC, LEN(PORT_BASE(core2instmem_o).addr));
-		PORT_BASE(core2instmem_o).data <= PCp;
-		PORT_BASE(core2instmem_o).cs_n <= inst_cs_n;//BIT(0);
-		PORT_BASE(core2instmem_o).wr_n <= not loading;
-		PORT_BASE(core2instmem_o).be <= BIN(1111);
-		core2datamem_o <= blk2mem_t0;
-		addr_rs1 <= RANGE(PORT_BASE(instmem2core_i).data, 19, 15);
-		addr_rs2 <= RANGE(PORT_BASE(instmem2core_i).data, 24, 20);
-		*/
-	END_COMB_PROCESS
+//	// Combinational logic
+//	COMB_PROCESS(3, clk_pix)
+////		PORT_BASE(core2instmem_o).addr <= inst_addr;//RANGE(PC, LEN(blk2mem_t0.addr)+1, 2);//RESIZE(PC, LEN(PORT_BASE(core2instmem_o).addr));
+////		PORT_BASE(core2instmem_o).data <= PCp;
+////		PORT_BASE(core2instmem_o).cs_n <= inst_cs_n;//BIT(0);
+////		PORT_BASE(core2instmem_o).wr_n <= not loading;
+////		PORT_BASE(core2instmem_o).be <= BIN(1111);
+////		core2datamem_o <= blk2mem_t0;
+////		addr_rs1 <= RANGE(PORT_BASE(instmem2core_i).data, 19, 15);
+////		addr_rs2 <= RANGE(PORT_BASE(instmem2core_i).data, 24, 20);
+//
+//	END_COMB_PROCESS
 
 BLK_END;

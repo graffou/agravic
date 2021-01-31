@@ -312,22 +312,7 @@ IF (areset == BIT(0)) THEN
 	//clk_en_48 <= BIT(0);
 	//clk_en_120 <= BIT(0);
 	RESET(cnt);
-	// This is a C++ trick to register all generated clocks as gated clocks
-/*
-	if (init_done == 0)
-	{
-		//PORT_BASE(c0).p_en = &clk_en_48;
-		PORT_BASE(c0).half_period = 0;
-		PORT_BASE(inclk0).children.push_back(&PORT_BASE(c0));
-		//PORT_BASE(c1).p_en = &clk_en_24;
-		PORT_BASE(c1).half_period = 0;
-		PORT_BASE(inclk0).children.push_back(&PORT_BASE(c1));
-		//PORT_BASE(c2).p_en = &clk_en_120;
-		PORT_BASE(c2).half_period = 0;
-		PORT_BASE(inclk0).children.push_back(&PORT_BASE(c2));
-		init_done = 1;
-	}
-*/
+
 	// !!!!!!!!!!!!!! Compute enable on falling edge, otherwise no falling edge detection on gated clocks !!!!!!!!!!!!!!!!!!
 ELSEIF (EVENT(inclk0) and (inclk0 == BIT(1))) THEN
 
@@ -337,25 +322,29 @@ ELSEIF (EVENT(inclk0) and (inclk0 == BIT(1))) THEN
 		cnt <= BIN(0000);
 	ENDIF
 
-	c2_tmp <= (not c2_tmp);
+	//c2_tmp <= (not c2_tmp);
+	c2 <= (not PORT_BASE(c2));
 	//PORT_BASE(c2).derived_clk_assign(not PORT_BASE(c2));
 
 
 	IF ( (cnt == BIN(0000)) or (cnt == BIN(0101)) ) THEN
-		c0_tmp <= (not c0_tmp);
-		c1_tmp <= (not c1_tmp);
+		c0 <= (not PORT_BASE(c0));
+		c1 <= (not PORT_BASE(c1));
+		//c0_tmp <= (not c0_tmp);
+		//c1_tmp <= (not c1_tmp);
 		//PORT_BASE(c0).derived_clk_assign(not PORT_BASE(c0));
 		//PORT_BASE(c1).derived_clk_assign( not PORT_BASE(c1));
 	ELSEIF (  (cnt == BIN(0010)) or (cnt == BIN(0111))) THEN
 		//PORT_BASE(c0).derived_clk_assign( not PORT_BASE(c0));
-		c0_tmp <= (not c0_tmp);
+		//c0_tmp <= (not c0_tmp);
+		c0 <= (not PORT_BASE(c0));
 	ELSE
 		//PORT_BASE(c0).derived_clk_assign(PORT_BASE(c0)); // To force event = 0
 		//PORT_BASE(c1).derived_clk_assign(PORT_BASE(c1)); // To force event = 0
 	ENDIF
 ENDIF
 END_PROCESS
-
+/*
 COMB_PROCESS(1, inclk0)
 BEGIN
 	//PORT_BASE(c3).derived_clk_assign(inclk0);
@@ -368,7 +357,7 @@ BEGIN
 	c3 <= inclk0;
 
 END_PROCESS
-
+*/
 #endif
 BLK_END;
 #endif

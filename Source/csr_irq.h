@@ -47,13 +47,16 @@ SIG(mideleg, UINT(32));
 SIG(medeleg, UINT(32));
 SIG(mip, UINT(32));
 SIG(mie, UINT(32));
+SIG(mitprio, UINT(32));
 SIG(mcounter, UINT(64));
 SIG(mcounteren, UINT(32));
 SIG(mtimecmp, UINT(64));
 SIG(csr_read, UINT(32)); // register old csr value
 SIG(wfi, BIT_TYPE);
+SIG(lock_irq, BIT_TYPE); // To lock cause value to its current one once an IRQ is raised (<=> disable_irq)
 
 SIG(dbg_addr_ok, BIT_TYPE);
+SIG(mcause_dbg, UINT(8));
 
 BEGIN
 
@@ -71,6 +74,8 @@ VAR(irq_tmp, BIT_TYPE); //
 VAR(it_bit, UINT(4)); //
 VAR(mip_tmp, UINT(32)); //
 VAR(cause, UINT(6)); //
+VAR(sel_it_prio, UINT(2)); // priority of currently selected IT (in IT loop)
+VAR(it_prio, UINT(2)); // selected from MITPRIO CSR
 VAR(mstatus_mie, BIT_TYPE); // Machine mode interrupt en
 
 BEGIN
@@ -89,10 +94,14 @@ IF (reset_n == BIT(0)) THEN
 	RESET(mie);
 	RESET(mscratch);
 	RESET(mtimecmp);
+	lock_irq <= BIT(0);
 	wfi <= BIT(0);
 	priv <= BIN(11);
 	base_addr_test <= reg_base_addr;
 	addr_lsbs_test <= TO_UINT(REG_NBITS, 4);
+	RESET(PORT_BASE(csr2core_o).cause);
+	PORT_BASE(csr2core_o).irq <= BIT(0);
+	RESET(mitprio); // default: all external ITs have lower priority than timer IT (prio=1)
 ELSEIF (EVENT(clk_csr_irq) and (clk_csr_irq == BIT(1))) THEN
 
 		PORT_BASE(mem2core_o).data_en <= BIT(0);
@@ -100,6 +109,7 @@ ELSEIF (EVENT(clk_csr_irq) and (clk_csr_irq == BIT(1))) THEN
 		do_write_dbg <= BIT(0);
 		do_read_dbg  <= BIT(0);
 		dbg_addr_ok <= BIT(0);
+		mip_tmp := mip;
 		IF ( ( PORT_BASE(core2mem_i).cs_n == BIT(0) ) and ( RANGE( PORT_BASE(core2mem_i).addr, HI(PORT_BASE(core2mem_i).addr), REG_NBITS) == RANGE( reg_base_addr, HI(reg_base_addr), REG_NBITS) ) ) THEN//( RANGE( PORT_BASE(core2mem_i).addr, 12, 4) == BIN(111111110) ) ) THEN
 			dbg_addr_ok <= BIT(1);
 			addr_lsbs := RANGE(PORT_BASE(core2mem_i).addr, REG_NBITS-1, 0); // CSR addr
@@ -123,10 +133,12 @@ ELSEIF (EVENT(clk_csr_irq) and (clk_csr_irq == BIT(1))) THEN
 				CASE(CASE_AMIP) csr_val := mip;
 				CASE(CASE_AMTIME) csr_val := RANGE(mcounter, 31, 0);
 				CASE(CASE_AMTIMEH) csr_val := RANGE(mcounter, 63, 32);
+				CASE(CASE_AMTIMECMP) csr_val := RANGE(mtimecmp, 31, 0);
+				CASE(CASE_AMTIMECMPH) csr_val := RANGE(mtimecmp, 63, 32);
 				CASE(CASE_AMEPC) csr_val := mepc;
 				CASE(CASE_AMCAUSE) csr_val := mcause;
 				CASE(CASE_AMSCRATCH) csr_val := mscratch;
-
+				//CASE(CASE_AMRET) lock_irq <= BIT(0); // end of IRQ processing
 				DEFAULT csr_val := TO_UINT(0, LEN(csr_val));
 			ENDCASE
 			IF ( (do_read and not wfi_tmp) == BIT(1)) THEN // actual read requested
@@ -144,7 +156,7 @@ ELSEIF (EVENT(clk_csr_irq) and (clk_csr_irq == BIT(1))) THEN
 				CASE(CASE_ECALL) csr_val := op1;// ECALL-EBREAK
 					mepc <= csr_val;
 					IF (wfi_tmp == BIT(0)) THEN
-						mcause <= EXT(addr_lsbs, 32); // CSR address is useless in this case
+						mcause <= EXT(addr_lsbs, 32); mcause_dbg <= TO_UINT(1, 8);// CSR address is useless in this case
 					ENDIF
 				DEFAULT csr_val := TO_UINT(0, LEN(csr_val));
 			ENDCASE
@@ -154,53 +166,65 @@ ELSEIF (EVENT(clk_csr_irq) and (clk_csr_irq == BIT(1))) THEN
 					CASE(CASE_AMTIMECMP)  mtimecmp <= (RANGE(mtimecmp, 63, 32) & csr_val);
 					CASE(CASE_AMTIMECMPH) mtimecmp <= (csr_val & RANGE(mtimecmp, 31, 0) );
 					CASE(CASE_AMIE) mie <= csr_val;
+						mip_tmp := (mip and csr_val); // reset pending IRQs accordingly
+					CASE(CASE_AMIP) mip_tmp := (csr_val); // Should be used for clear
 					CASE(CASE_AMTVEC) mtvec <= csr_val;
-					CASE(CASE_AMIP) mip <= csr_val;
+					// Noooo. CASE(CASE_AMIP) mip <= csr_val;
 					CASE(CASE_AMEPC) mepc <= csr_val;
-					CASE(CASE_AMCAUSE) mcause <= csr_val;
+					CASE(CASE_AMITPRIO) mitprio <= csr_val; // custom, IT priority (16 x 2-bit)
+					CASE(CASE_AMCAUSE) mcause <= csr_val; mcause_dbg <= TO_UINT(2, 8);
 					CASE(CASE_AMSCRATCH) mscratch <= csr_val;
 					DEFAULT csr_val := TO_UINT(0, LEN(csr_val));
 				ENDCASE
 			ENDIF
+
+
 		ENDIF
 		// Process IRQs anyway, so that IRQ pulses can last a single cycle
 		IF (true) THEN// Process IRQ anyway, no matter of interference with previous mip and mcause assignments . /////No CSR r/W request -> process IRQs
 			// Update pending IRQs
-			mip_tmp := mip;
+			//mip_tmp := mip;
 			mstatus_mie := B(mstatus, 3);
-			IF ( mstatus_mie == BIT(1)) THEN
+			IF ( 1 == 1 ) THEN // pending IRQs are generated even if IRQs disabled mstatus_mie == BIT(1)) THEN
 				IF (mcounter >= mtimecmp) THEN
 					it_bit := ( BIN(0100) + EXT(priv, 4) ); // current mode timer IRQ en
-					IF ( B(mie, TO_INTEGER(it_bit)) == BIT(1) ) THEN
-						VAR_SET_BIT(mip_tmp, TO_INTEGER(it_bit), BIT(1));
-					ENDIF
+					VAR_SET_BIT(mip_tmp, TO_INTEGER(it_bit), (B(mip_tmp, TO_INTEGER(it_bit)) or B(mie, TO_INTEGER(it_bit))) );
 				ENDIF
 				// 'platform' IRQs
 				FOR(idx, 0, 15)
-					IF ( (PORT_BASE(irq_i)(idx) == BIT(1)) and (B(mie, 16+idx) == BIT(1)) ) THEN
-						VAR_SET_BIT(mip_tmp, (16+idx), BIT(1));
-					ENDIF
+					//IF ( (PORT_BASE(irq_i)(idx) == BIT(1)) and (B(mie, 16+idx) == BIT(1)) ) THEN
+					VAR_SET_BIT(mip_tmp, (16+idx), ( B(mip_tmp, 16+idx) or (B(mie, 16+idx) and PORT_BASE(irq_i)(idx)) ) );
+					//ENDIF
 				ENDLOOP
 				mip <= mip_tmp;
 
 				// Process IRQs	----
 				// Return pending IRQ with highest bit index as IRQ source
-				cause := TO_UINT(0, LEN(cause));
 				irq_tmp := BOOL2BIT(not (mip == TO_UINT(0, 32) ) );
-				PORT_BASE(csr2core_o).irq <= irq_tmp;
-				FOR(idx, 0, 31)
-					IF ( (B(mip, idx) == BIT(1)) ) THEN // active IRQ
-						cause := TO_UINT(idx, LEN(cause));
+				IF ( mstatus_mie == BIT(1)) THEN // Actually generate interrupt signal when IRQs qre enabled
+					cause := TO_UINT(0, LEN(cause));
+					PORT_BASE(csr2core_o).irq <= irq_tmp;
+					FOR(idx, 0, 31)
+						IF ( (B(mip, idx) == BIT(1)) ) THEN // active IRQ
+							cause := TO_UINT(idx+32, LEN(cause)); // IRQs start with offset 32 from regular trap (32+nIRQ)
+						ENDIF
+					ENDLOOP
+					PORT_BASE(csr2core_o).cause <= cause;
+					IF (not (cause == TO_UINT(0, LEN(cause))) ) THEN	// noIRQ, don't overwrite mcause
+						mcause <= EXT(cause, 32); mcause_dbg <= TO_UINT(3, 8);
 					ENDIF
-				ENDLOOP
-				PORT_BASE(csr2core_o).cause <= cause;
-				mcause <= EXT(cause, 32);
+				ENDIF
 
 				// WFI
 				IF ( (wfi and irq_tmp) == BIT(1) ) THEN // core is waiting for IRQ
-					PORT_BASE(mem2core_o).data_en <= BIT(1);	// unlocks cpu_wait
+					//PORT_BASE(mem2core_o).data_en <= BIT(0);	// unlocks cpu_wait
+					PORT_BASE(csr2core_o).wakeup <= BIT(1);
 					wfi <= BIT(0);
+				ELSE
+					PORT_BASE(csr2core_o).wakeup <= BIT(0);
 				ENDIF
+			//ELSE
+			//	mip <= TO_UINT(0, 32);
 			ENDIF
 		ENDIF
 

@@ -5,23 +5,10 @@ USE_PACKAGE(structures)
 USE_PACKAGE(altera)
 #ifndef VHDL
 static std::ofstream dbg_file("dbg_file", std::ios::out);
-static int print_state = 0;
-static int base_color = 0;
-static uint32_t codep = 0;
+
 
 static gstring dummy;
-/*
-#define INT32_TYPE  0x80800100
-#define INT16_TYPE  0x80800200
-#define INT8_TYPE   0x80800400
-#define UINT32_TYPE 0x80000100
-#define UINT16_TYPE 0x80000200
-#define UINT8_TYPE  0x80000400
-#define BOOL_TYPE   0x80000800
-#define FLOAT_TYPE  0x80001000
-#define COLOR_TYPE  0xFFFFFF00
-#define END_PRINT   0x88000000
-*/
+
 #define INT32_TYPE  0x80000000
 #define INT16_TYPE  0x81000000
 #define INT8_TYPE   0x82000000
@@ -47,7 +34,13 @@ DECL_PORTS(
 		, INTEGER generic_int
 
 );
+#ifndef VHDL
+int print_state = 0;
+int base_color = 0;
+uint32_t codep = 0;
 
+//std::ofstream dbg_file("dbg_file", std::ios::out);
+#endif
 SIG(cnt, UINT(32));
 SIG(cnt_cmp, UINT(32));
 SIG(cnt_started, BIT_TYPE);
@@ -90,13 +83,13 @@ BEGIN
 			// Timer ----------------
 			// The mtime / mtimecmp on risc-V spec does not make sense to me
 			//
-/*			IF (PORT_BASE(core2mem_i).addr == BIN(1111111111100)) THEN // timer write timeout
-				//gate_cell <= B(PORT_BASE(core2mem_i).data, 0);
-				cnt <= PORT_BASE(core2mem_i).data;
-				cnt_started <= BIT(0);
-				timer_IT_o <= BIT(0); // reset interrupt line
-			ENDIF
-			*/
+//		IF (PORT_BASE(core2mem_i).addr == BIN(1111111111100)) THEN // timer write timeout
+//				//gate_cell <= B(PORT_BASE(core2mem_i).data, 0);
+//				cnt <= PORT_BASE(core2mem_i).data;
+//				cnt_started <= BIT(0);
+//				timer_IT_o <= BIT(0); // reset interrupt line
+//			ENDIF
+
 			// --------------
 			//IF (PORT_BASE(core2mem_i).addr == BIN(1111111111111)) THEN
 			base_addr_ok <= BIT(1);
@@ -124,6 +117,11 @@ BEGIN
 				{
 					if ( (c == '#') or (c == '@') )
 						print_state = 1; // wait for color code
+					else if (c == '>')
+					{
+						dbg_file << (cur_time >> 8)/1000000.0 << "ms:";
+						print_state = 2;
+					}
 					else
 					{
 						print_state = 2;
@@ -150,6 +148,7 @@ BEGIN
 							}
 							base_color = 0;
 							print_state = 0;
+							dbg_file << "\n";
 							dbg_file.flush();
 						}
 						else if ( (code == 0) and (base_color) ) // end of char*
@@ -196,16 +195,16 @@ BEGIN
 	ENDIF
 END_PROCESS
 
-/*
-PROCESS(1, clk_peri, reset_n)
-BEGIN
-	IF ( reset_n == BIT(0) ) THEN
-		cnt <= TO_UINT(0, 32);
-	ELSEIF ( EVENT(clk_g) and (clk_g == BIT(1)) ) THEN
-		cnt <= cnt + 1;
-	ENDIF
-END_PROCESS
-*/
+//
+//PROCESS(1, clk_peri, reset_n)
+//BEGIN
+//	IF ( reset_n == BIT(0) ) THEN
+//		cnt <= TO_UINT(0, 32);
+//	ELSEIF ( EVENT(clk_g) and (clk_g == BIT(1)) ) THEN
+//		cnt <= cnt + 1;
+//	ENDIF
+//END_PROCESS
+
 //}
 
 BLK_END;
