@@ -86,7 +86,8 @@ void setup() {
 
 bool toggle = 0;
 bool load = 0;
-char c;
+bool preload = 0;
+char c, cp;
 int bcnt = 0;
 uint32_t cnt;
 uint32_t byte_cnt;
@@ -111,6 +112,7 @@ void loop() {
         if (cnt > 0x10000)
         {
           load = 0;
+          preload = 0;
           delay(10);
           digitalWrite(GIORNO_BOOT_MODE, LOW);
           break;
@@ -127,15 +129,32 @@ void loop() {
     cnt = 0;
     bcnt = 0;
     c = Serial.read();
-    if (c == 0x13)
+#if 0    // rough method: if text goes through uart, this will fail (0x6F is 'o')
+    if ((c == 0x13) || (c == 0x6F) )// old and new first byte // must secure that, 6F is 'o'
     {
       load = 1;
       digitalWrite(GIORNO_BOOT_MODE, HIGH);
       delay(1);
     }
     else
-          Serial1.write(c);
+          Serial1.write(c); //post load
+#else // refined method: catch 13 or 6F, then confirm with following value 0 to confirm it's code
+  // When it's code, it starts with 13 00 (old crappy crt0) or 6F 00 (clean one)
+    if ( preload and (c == 0) )// secured with preload
+    {
+      load = 1;
+      digitalWrite(GIORNO_BOOT_MODE, HIGH);
+      delay(1);
+      // no, this has been fifoed Serial1.write(cp); //resend leftover code byte, with load mode activated 
+    }
+    else
+    {
+          preload = ( (c == 0x13 ) or (c == 0x6F) );// old and new first byte of code data
+          Serial1.write(c); //post load
+          cp = c; // store in case this is code
+    }
 
+#endif
     //Serial.println(int(c), HEX);
     //Serial1.write(Serial.read());   // read it and send it out Serial1 (pins 0 & 1)
   }
