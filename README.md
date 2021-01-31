@@ -1,3 +1,21 @@
+# January'21 updates
+
+* This risc-V SoC has been used for 6 months to test BTLE/802.15.4 IPs in C++.
+* Verilog IPs can easily be compiled with verilator and be integrated to this C++ SoC. The cycle eval method provided by verilator is easily scheduled by the Agravic simulator.
+The SoC has been running the verilated IPs and the ~500kB BTLE/MAC link layer firmware, which heavily runs on IRQ processing with WFI core stalling.
+This FW is compiled using a regular risc-V toolchain, and: so far, so good.
+Of course, these BTLE/MAC IPs are not provided here.
+* FPGA operation is still demonstrated with the "Agravic invaders" game.
+* What is new here is that the preferred development platform is the DE10-lite one. This implies that VGA output has been added to the project.
+* On the DE10, the firmware is loaded using a USB-to-UART interface, physically wired to GPIOs 11 and 13 of the DE10 board.
+On the 2x20 expansion connector, we have:
+pin 14 -> uart_rx of SoC
+pin 16 -> uart_tx of SoC
+* To load the FW, put board switch 0 on (the screen turns blue). Then go to FIRMWARE folder and do 
+    make PROGRAM=invaders 
+    ./load_uart invaders.bin 
+ Then put board switch 0 off, the FW starts.
+
 # Agravic 
 
 HW development platform in C++, NOT HLS but hardware-level C++ (VHDL generation via C preprocessor, HW simulation in C++).

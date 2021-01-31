@@ -102,7 +102,7 @@ set_global_assignment -name ENABLE_BOOT_SEL_PIN OFF
 set_global_assignment -name CONFIGURATION_VCCIO_LEVEL AUTO
 set_global_assignment -name POWER_DEFAULT_INPUT_IO_TOGGLE_RATE 100%
 set_global_assignment -name TIMING_ANALYZER_MULTICORNER_ANALYSIS ON
-set_global_assignment -name SMART_RECOMPILE ON
+set_global_assignment -name SMART_RECOMPILE OFF
 set_global_assignment -name IGNORE_PARTITIONS ON
 set_global_assignment -name VERILOG_INPUT_VERSION SYSTEMVERILOG_2005
 set_global_assignment -name VERILOG_SHOW_LMF_MAPPING_MESSAGES OFF
@@ -179,24 +179,24 @@ set_location_assignment PIN_Y2 -to vga_red_o[2]
 set_location_assignment PIN_Y1 -to vga_red_o[3]
 set_location_assignment PIN_N1 -to vga_vsync_o
 
-set_location_assignment PIN_V5 -to bmkrA_io[0]
-set_location_assignment PIN_W5 -to bmkrA_io[1]
+#set_location_assignment PIN_V5 -to bmkrA_io[0]
+#set_location_assignment PIN_W5 -to bmkrA_io[1]
 #set_location_assignment PIN_AA15 -to bmkrA_io[2]
-set_location_assignment PIN_AA14 -to bmkrA_io[3]
+#set_location_assignment PIN_AA14 -to bmkrA_io[3]
 #set_location_assignment PIN_W13 -to bmkrA_io[4]
-set_location_assignment PIN_W12 -to bmkrA_io[5]
-set_location_assignment PIN_AB13 -to bmkrA_io[6]
+#set_location_assignment PIN_W12 -to bmkrA_io[5]
+#set_location_assignment PIN_AB13 -to bmkrA_io[6]
 
-set_location_assignment PIN_AB12 -to bmkrD_io[0]
-set_location_assignment PIN_Y11 -to bmkrD_io[1]
-set_location_assignment PIN_AB11 -to bmkrD_io[2]
-set_location_assignment PIN_W11 -to bmkrD_io[3]
-set_location_assignment PIN_AB10 -to bmkrD_io[4]
+#set_location_assignment PIN_AB12 -to bmkrD_io[0]
+#set_location_assignment PIN_Y11 -to bmkrD_io[1]
+#set_location_assignment PIN_AB11 -to bmkrD_io[2]
+#set_location_assignment PIN_W11 -to bmkrD_io[3]
+#set_location_assignment PIN_AB10 -to bmkrD_io[4]
 
 #set_instance_assignment -name IO_STANDARD "2.5-V" -to bmkrA_io[0]
 #set_instance_assignment -name IO_STANDARD "2.5-V" -to bmkrA_io[1]
 #set_instance_assignment -name IO_STANDARD "2.5-V" -to bmkrA_io[2]
-set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to bmkrA_io[4]
+#set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to bmkrA_io[4]
 
 
 #set_instance_assignment -name IO_STANDARD "2.5-V" -to bmkrD_io[5]
@@ -208,27 +208,50 @@ set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to bmkrA_io[4]
 #set_instance_assignment -name IO_STANDARD "2.5-V" -to bmkrD_io[11]
 #set_instance_assignment -name IO_STANDARD "2.5-V" -to bmkrD_io[12]
 
-set_location_assignment PIN_AA10 -to bmkrD_io[5]
-set_location_assignment PIN_AA9 -to bmkrD_io[6]
+#set_location_assignment PIN_AA10 -to bmkrD_io[5]
+#set_location_assignment PIN_AA9 -to bmkrD_io[6]
 #skip Y8
-set_location_assignment PIN_AA8 -to bmkrD_io[8]
-set_location_assignment PIN_Y7 -to bmkrD_io[9]
-set_location_assignment PIN_AA7 -to bmkrD_io[10]
-set_location_assignment PIN_Y6 -to bmkrD_io[11]
-set_location_assignment PIN_AA6 -to bmkrD_io[12]
+#set_location_assignment PIN_AA8 -to bmkrD_io[8]
+#set_location_assignment PIN_Y7 -to bmkrD_io[9]
+#set_location_assignment PIN_AA7 -to bmkrD_io[10]
+#set_location_assignment PIN_Y6 -to bmkrD_io[11]
+#set_location_assignment PIN_AA6 -to bmkrD_io[12]
 
-set_location_assignment PIN_Y5 -to bmkrA_io[2]
-set_location_assignment PIN_AA5 -to bmkrA_io[4]
+
+#set_location_assignment PIN_Y5 -to bmkrA_io[2]
+#set_location_assignment PIN_AA5 -to bmkrA_io[4]
 
 #UART is pins 11,13
-set_location_assignment PIN_W13 -to bmkrD_io[13]
-set_location_assignment PIN_AA15 -to bmkrD_io[14]
+#set_location_assignment PIN_W13 -to bmkrD_io[13]
+#set_location_assignment PIN_AA15 -to bmkrD_io[14]
 #Boot is SW0
-set_location_assignment PIN_C10 -to bmkrD_io[7]
+#set_location_assignment PIN_C10 -to bmkrD_io[7]
+
+#DE10-LITE conf with new SoC top pins ------------------------------
+
+#UART is pins 11,13
+set_location_assignment PIN_W13 -to uart_tx_o
+set_location_assignment PIN_AA15 -to uart_rx_i
+#Boot is SW0
+set_location_assignment PIN_C10 -to boot_mode_i
+
+#SPI: not tested on FPGA
+set_location_assignment PIN_AA8 -to spi_csn_io
+set_location_assignment PIN_Y7 -to spi_clk_io
+set_location_assignment PIN_AA7 -to spi_tx_o
+set_location_assignment PIN_Y6 -to spi_rx_i
+
+set_global_assignment -name OPTIMIZATION_MODE "HIGH PERFORMANCE EFFORT"
+
+set_global_assignment -name PARTITION_NETLIST_TYPE SOURCE -section_id Top
+set_global_assignment -name PARTITION_FITTER_PRESERVATION_LEVEL PLACEMENT_AND_ROUTING -section_id Top
+set_global_assignment -name PARTITION_COLOR 16764057 -section_id Top
 
 
 
+set_global_assignment -name BOARD "MAX 10 DE10 - Lite"
 
+set_global_assignment -name VHDL_FILE ../RTL/Source/SPI.vhd
 set_global_assignment -name VHDL_FILE ../RTL/Source/csr_irq.vhd
 set_global_assignment -name VHDL_FILE ../RTL/Source/dma.vhd
 set_global_assignment -name VHDL_FILE ../RTL/Source/dbg_mem.vhd
@@ -253,14 +276,9 @@ set_global_assignment -name VHDL_FILE ../RTL/Source/peripherals.vhd
 set_global_assignment -name VHDL_FILE ../RTL/Source/mem.vhd
 set_global_assignment -name QIP_FILE ../RTL/Source/alt_mem.qip
 set_global_assignment -name QIP_FILE ../RTL/Source/../alt_ddio/alt_ddio.qip
-set_global_assignment -name OPTIMIZATION_MODE "HIGH PERFORMANCE EFFORT"
-
-set_global_assignment -name PARTITION_NETLIST_TYPE SOURCE -section_id Top
-set_global_assignment -name PARTITION_FITTER_PRESERVATION_LEVEL PLACEMENT_AND_ROUTING -section_id Top
-set_global_assignment -name PARTITION_COLOR 16764057 -section_id Top
-
-
-
-set_global_assignment -name BOARD "MAX 10 DE10 - Lite"
+set_global_assignment -name MIN_CORE_JUNCTION_TEMP 0
+set_global_assignment -name MAX_CORE_JUNCTION_TEMP 85
+set_global_assignment -name POWER_PRESET_COOLING_SOLUTION "23 MM HEAT SINK WITH 200 LFPM AIRFLOW"
+set_global_assignment -name POWER_BOARD_THERMAL_MODEL "NONE (CONSERVATIVE)"
 
 set_instance_assignment -name PARTITION_HIERARCHY root_partition -to | -section_id Top
