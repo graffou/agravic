@@ -1,0 +1,266 @@
+# -------------------------------------------------------------------------- #
+#
+# Copyright (C) 2018  Intel Corporation. All rights reserved.
+# Your use of Intel Corporation's design tools, logic functions 
+# and other software and tools, and its AMPP partner logic 
+# functions, and any output files from any of the foregoing 
+# (including device programming or simulation files), and any 
+# associated documentation or information are expressly subject 
+# to the terms and conditions of the Intel Program License 
+# Subscription Agreement, the Intel Quartus Prime License Agreement,
+# the Intel FPGA IP License Agreement, or other applicable license
+# agreement, including, without limitation, that your use is for
+# the sole purpose of programming logic devices manufactured by
+# Intel and sold by Intel or its authorized distributors.  Please
+# refer to the applicable agreement for further details.
+#
+# -------------------------------------------------------------------------- #
+#
+# Quartus Prime
+# Version 18.1.0 Build 625 09/12/2018 SJ Lite Edition
+# Date created = 15:07:43  novembre 11, 2019
+#
+# -------------------------------------------------------------------------- #
+#
+# Notes:
+#
+# 1) The default values for assignments are stored in the file:
+#		top_assignment_defaults.qdf
+#    If this file doesn't exist, see file:
+#		assignment_defaults.qdf
+#
+# 2) Altera recommends that you do not modify this file. This
+#    file is updated automatically by the Quartus Prime software
+#    and any changes you make may be lost or overwritten.
+#
+# -------------------------------------------------------------------------- #
+
+
+# -------------------------------------------------------------------------- #
+#
+# Copyright (C) 2018  Intel Corporation. All rights reserved.
+# Your use of Intel Corporation's design tools, logic functions 
+# and other software and tools, and its AMPP partner logic 
+# functions, and any output files from any of the foregoing 
+# (including device programming or simulation files), and any 
+# associated documentation or information are expressly subject 
+# to the terms and conditions of the Intel Program License 
+# Subscription Agreement, the Intel Quartus Prime License Agreement,
+# the Intel FPGA IP License Agreement, or other applicable license
+# agreement, including, without limitation, that your use is for
+# the sole purpose of programming logic devices manufactured by
+# Intel and sold by Intel or its authorized distributors.  Please
+# refer to the applicable agreement for further details.
+#
+# -------------------------------------------------------------------------- #
+#
+# Quartus Prime
+# Version 18.1.0 Build 625 09/12/2018 SJ Lite Edition
+# Date created = 23:27:08  septembre 04, 2019
+#
+# -------------------------------------------------------------------------- #
+#
+# Notes:
+#
+# 1) The default values for assignments are stored in the file:
+#		top_assignment_defaults.qdf
+#    If this file doesn't exist, see file:
+#		assignment_defaults.qdf
+#
+# 2) Altera recommends that you do not modify this file. This
+#    file is updated automatically by the Quartus Prime software
+#    and any changes you make may be lost or overwritten.
+#
+# -------------------------------------------------------------------------- #
+
+
+
+set_global_assignment -name FAMILY "MAX 10"
+set_global_assignment -name DEVICE 10M50DAF484C6GES
+set_global_assignment -name TOP_LEVEL_ENTITY top
+set_global_assignment -name ORIGINAL_QUARTUS_VERSION 15.1.0
+set_global_assignment -name LAST_QUARTUS_VERSION "18.1.0 Lite Edition"
+set_global_assignment -name PROJECT_CREATION_TIME_DATE "14:04:25 MAY 30,2016"
+set_global_assignment -name DEVICE_FILTER_PACKAGE FBGA
+set_global_assignment -name DEVICE_FILTER_PIN_COUNT 484
+set_global_assignment -name DEVICE_FILTER_SPEED_GRADE 6
+
+
+#PG picked from arduino conf *****
+set_global_assignment -name ENABLE_OCT_DONE OFF
+set_global_assignment -name STRATIXV_CONFIGURATION_SCHEME "PASSIVE SERIAL"
+set_global_assignment -name USE_CONFIGURATION_DEVICE ON
+set_global_assignment -name CRC_ERROR_OPEN_DRAIN OFF
+set_global_assignment -name STRATIX_DEVICE_IO_STANDARD "3.3-V LVTTL"
+set_global_assignment -name OUTPUT_IO_TIMING_NEAR_END_VMEAS "HALF VCCIO" -rise
+set_global_assignment -name OUTPUT_IO_TIMING_NEAR_END_VMEAS "HALF VCCIO" -fall
+set_global_assignment -name OUTPUT_IO_TIMING_FAR_END_VMEAS "HALF SIGNAL SWING" -rise
+set_global_assignment -name OUTPUT_IO_TIMING_FAR_END_VMEAS "HALF SIGNAL SWING" -fall
+set_global_assignment -name CYCLONEII_RESERVE_NCEO_AFTER_CONFIGURATION "USE AS REGULAR IO"
+set_global_assignment -name ENABLE_CONFIGURATION_PINS OFF
+set_global_assignment -name ENABLE_BOOT_SEL_PIN OFF
+set_global_assignment -name CONFIGURATION_VCCIO_LEVEL AUTO
+set_global_assignment -name POWER_DEFAULT_INPUT_IO_TOGGLE_RATE 100%
+set_global_assignment -name TIMING_ANALYZER_MULTICORNER_ANALYSIS ON
+set_global_assignment -name SMART_RECOMPILE ON
+set_global_assignment -name IGNORE_PARTITIONS ON
+set_global_assignment -name VERILOG_INPUT_VERSION SYSTEMVERILOG_2005
+set_global_assignment -name VERILOG_SHOW_LMF_MAPPING_MESSAGES OFF
+set_global_assignment -name GENERATE_RBF_FILE ON
+set_global_assignment -name GENERATE_TTF_FILE ON
+set_global_assignment -name ON_CHIP_BITSTREAM_DECOMPRESSION ON
+set_global_assignment -name GENERATE_JAM_FILE ON
+set_global_assignment -name GENERATE_JBC_FILE ON
+set_global_assignment -name STRATIXIII_UPDATE_MODE STANDARD
+set_global_assignment -name CYCLONEIII_CONFIGURATION_DEVICE EPCS16
+
+
+set_global_assignment -name ENABLE_SIGNALTAP OFF
+
+set_global_assignment -name ERROR_CHECK_FREQUENCY_DIVISOR 1
+
+# end of from arduino *****
+
+
+#set_instance_assignment -name IO_STANDARD LVDS -to blue_o
+#set_instance_assignment -name IO_STANDARD LVDS -to green_o
+#set_instance_assignment -name IO_STANDARD LVDS -to red_o
+#set_instance_assignment -name IO_STANDARD LVDS -to pclk_o
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to PIN_B8
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to PIN_P11
+set_location_assignment PIN_B8 -to reset_n
+set_location_assignment PIN_P11 -to clk_top
+
+#To bank 8 (not wired on de10-lite)
+set_location_assignment PIN_C7 -to red_o
+set_location_assignment PIN_C8 -to green_o
+set_location_assignment PIN_A6 -to blue_o
+
+#set_location_assignment PIN_W9 -to "red_o(n)"
+#set_location_assignment PIN_W7 -to "green_o(n)"
+#set_location_assignment PIN_V7 -to "blue_o(n)"
+
+set_location_assignment PIN_B7 -to pclk_o
+#set_location_assignment PIN_V9 -to "pclk_o(n)"
+
+#set_location_assignment PIN_C11 -to uart_tx_o
+#set_location_assignment PIN_A13 -to uart_rx_i
+
+
+#============================================================
+# VGA
+#============================================================
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to vga_blue_o[0]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to vga_blue_o[1]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to vga_blue_o[2]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to vga_blue_o[3]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to vga_green_o[0]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to vga_green_o[1]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to vga_green_o[2]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to vga_green_o[3]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to vga_hsync_o
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to vga_red_o[0]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to vga_red_o[1]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to vga_red_o[2]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to vga_red_o[3]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to vga_vsync_o
+set_location_assignment PIN_P1 -to vga_blue_o[0]
+set_location_assignment PIN_T1 -to vga_blue_o[1]
+set_location_assignment PIN_P4 -to vga_blue_o[2]
+set_location_assignment PIN_N2 -to vga_blue_o[3]
+set_location_assignment PIN_W1 -to vga_green_o[0]
+set_location_assignment PIN_T2 -to vga_green_o[1]
+set_location_assignment PIN_R2 -to vga_green_o[2]
+set_location_assignment PIN_R1 -to vga_green_o[3]
+set_location_assignment PIN_N3 -to vga_hsync_o
+set_location_assignment PIN_AA1 -to vga_red_o[0]
+set_location_assignment PIN_V1 -to vga_red_o[1]
+set_location_assignment PIN_Y2 -to vga_red_o[2]
+set_location_assignment PIN_Y1 -to vga_red_o[3]
+set_location_assignment PIN_N1 -to vga_vsync_o
+
+set_location_assignment PIN_V5 -to bmkrA_io[0]
+set_location_assignment PIN_W5 -to bmkrA_io[1]
+#set_location_assignment PIN_AA15 -to bmkrA_io[2]
+set_location_assignment PIN_AA14 -to bmkrA_io[3]
+#set_location_assignment PIN_W13 -to bmkrA_io[4]
+set_location_assignment PIN_W12 -to bmkrA_io[5]
+set_location_assignment PIN_AB13 -to bmkrA_io[6]
+
+set_location_assignment PIN_AB12 -to bmkrD_io[0]
+set_location_assignment PIN_Y11 -to bmkrD_io[1]
+set_location_assignment PIN_AB11 -to bmkrD_io[2]
+set_location_assignment PIN_W11 -to bmkrD_io[3]
+set_location_assignment PIN_AB10 -to bmkrD_io[4]
+
+#set_instance_assignment -name IO_STANDARD "2.5-V" -to bmkrA_io[0]
+#set_instance_assignment -name IO_STANDARD "2.5-V" -to bmkrA_io[1]
+#set_instance_assignment -name IO_STANDARD "2.5-V" -to bmkrA_io[2]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to bmkrA_io[4]
+
+
+#set_instance_assignment -name IO_STANDARD "2.5-V" -to bmkrD_io[5]
+#set_instance_assignment -name IO_STANDARD "2.5-V" -to bmkrD_io[6]
+#set_instance_assignment -name IO_STANDARD "2.5-V" -to bmkrD_io[7]
+#set_instance_assignment -name IO_STANDARD "2.5-V" -to bmkrD_io[8]
+#set_instance_assignment -name IO_STANDARD "2.5-V" -to bmkrD_io[9]
+#set_instance_assignment -name IO_STANDARD "2.5-V" -to bmkrD_io[10]
+#set_instance_assignment -name IO_STANDARD "2.5-V" -to bmkrD_io[11]
+#set_instance_assignment -name IO_STANDARD "2.5-V" -to bmkrD_io[12]
+
+set_location_assignment PIN_AA10 -to bmkrD_io[5]
+set_location_assignment PIN_AA9 -to bmkrD_io[6]
+#skip Y8
+set_location_assignment PIN_AA8 -to bmkrD_io[8]
+set_location_assignment PIN_Y7 -to bmkrD_io[9]
+set_location_assignment PIN_AA7 -to bmkrD_io[10]
+set_location_assignment PIN_Y6 -to bmkrD_io[11]
+set_location_assignment PIN_AA6 -to bmkrD_io[12]
+
+set_location_assignment PIN_Y5 -to bmkrA_io[2]
+set_location_assignment PIN_AA5 -to bmkrA_io[4]
+
+#UART is pins 11,13
+set_location_assignment PIN_W13 -to bmkrD_io[13]
+set_location_assignment PIN_AA15 -to bmkrD_io[14]
+#Boot is SW0
+set_location_assignment PIN_C10 -to bmkrD_io[7]
+
+
+
+
+set_global_assignment -name VHDL_FILE ../RTL/Source/csr_irq.vhd
+set_global_assignment -name VHDL_FILE ../RTL/Source/dma.vhd
+set_global_assignment -name VHDL_FILE ../RTL/Source/dbg_mem.vhd
+set_global_assignment -name VHDL_FILE ../RTL/Source/spram.vhd
+set_global_assignment -name VHDL_FILE ../RTL/Source/sdram_ctrl.vhd
+set_global_assignment -name VHDL_FILE ../RTL/Source/spram_font.vhd
+set_global_assignment -name VHDL_FILE ../RTL/Source/spram_4800x8.vhd
+set_global_assignment -name VHDL_FILE ../RTL/Source/clk_gen.vhd
+set_global_assignment -name VHDL_FILE ../RTL/Source/ddio.vhd
+set_global_assignment -name VHDL_FILE ../RTL/Source/slv_utils.vhd
+set_global_assignment -name VHDL_FILE ../RTL/Source/hdmi.vhd
+set_global_assignment -name VHDL_FILE ../RTL/Source/register_file.vhd
+set_global_assignment -name QIP_FILE ../RTL/Source/../clk_gating_cell/synthesis/clk_gating_cell.qip
+set_global_assignment -name VHDL_FILE ../RTL/Source/sUART.vhd
+set_global_assignment -name VHDL_FILE ../RTL/Source/altera.vhd
+set_global_assignment -name VHDL_FILE ../RTL/Source/risc_V_constants.vhd
+set_global_assignment -name SDC_FILE ../RTL/Source/../../agravic.sdc
+set_global_assignment -name VHDL_FILE ../RTL/Source/structures.vhd
+set_global_assignment -name VHDL_FILE ../RTL/Source/top.vhd
+set_global_assignment -name VHDL_FILE "../RTL/Source/risc-V_core.vhd"
+set_global_assignment -name VHDL_FILE ../RTL/Source/peripherals.vhd
+set_global_assignment -name VHDL_FILE ../RTL/Source/mem.vhd
+set_global_assignment -name QIP_FILE ../RTL/Source/alt_mem.qip
+set_global_assignment -name QIP_FILE ../RTL/Source/../alt_ddio/alt_ddio.qip
+set_global_assignment -name OPTIMIZATION_MODE "HIGH PERFORMANCE EFFORT"
+
+set_global_assignment -name PARTITION_NETLIST_TYPE SOURCE -section_id Top
+set_global_assignment -name PARTITION_FITTER_PRESERVATION_LEVEL PLACEMENT_AND_ROUTING -section_id Top
+set_global_assignment -name PARTITION_COLOR 16764057 -section_id Top
+
+
+
+set_global_assignment -name BOARD "MAX 10 DE10 - Lite"
+
+set_instance_assignment -name PARTITION_HIERARCHY root_partition -to | -section_id Top
