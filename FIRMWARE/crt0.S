@@ -1,10 +1,21 @@
   .section .text
 
-default_exc_handler:
-  jal x0, default_exc_handler
+/* =================================================== [ exceptions ] === */
+/* This section has to be down here, since we have to disable rvc for it  */
 
-reset_handler:
-  /* set all registers to zero */
+  .section .vectors, "ax"
+  .option norvc;
+  .org 0x00
+  cpu_boot:
+  //Boot addr is 0: go to reset handler
+  jal x0, reset_handler
+  // Trap handler addr is 4
+  default_exc_handler:
+  jal x0, default_exc_handler // loop
+
+  // There are 29 words left before IRQ traps: use them to initialize most registers
+  reset_handler:
+  /* set all registers to zero */ //PG: should not be required if registers were properly reset
   mv  x1, x0
   mv  x2, x1
   mv  x3, x1
@@ -34,6 +45,45 @@ reset_handler:
   mv x27, x1
   mv x28, x1
   mv x29, x1
+  // continue to reset handler
+  jal x0, reset_handler2
+
+  // IRQ vector (32)
+  IRQ_vector:
+  nop //
+  mret
+  mret
+  mret
+  mret // SW IRQ
+  mret
+  mret
+  mret
+  j timer_irq_handler // Timer IRQ
+  mret
+  mret
+  mret
+  mret
+  mret
+  mret
+  mret
+  mret
+  mret // First user IRQ
+  mret
+  mret
+  mret
+  mret
+  mret
+  mret
+  mret
+  mret
+  mret
+  mret
+  mret
+  mret
+  mret
+  mret
+  mret
+  reset_handler2:
   mv x30, x1
   mv x31, x1
 
@@ -55,11 +105,7 @@ zero_loop:
   ble x26, x27, zero_loop
 zero_loop_end:
 
-
-
-
   la x26, _sdata
- /* la x27, _edata*/
   la x27, _bss_start
   la x25, _sidata
 
@@ -74,10 +120,6 @@ init_loop:
   blt x26, x27, init_loop
 init_loop_end:
 
-
-
-
-
   call    __libc_init_array
 
 main_entry:
@@ -86,28 +128,3 @@ main_entry:
   addi x11, x0, 0
   jal x1, main
 
-/* =================================================== [ exceptions ] === */
-/* This section has to be down here, since we have to disable rvc for it  */
-
-  .section .vectors, "ax"
-  .option norvc;
-
-  // external interrupts are handled by the same callback
-  // until compiler supports IRQ routines
-  .org 0x00
-  .rept 31
-  nop
-  .endr
-  // graffou: ??????? program goes to trap directly ???? jal x0, default_exc_handler
-  nop
-  // reset vector
-  .org 0x80
-  jal x0, reset_handler
-
-  // illegal instruction exception
-  .org 0x84
-  jal x0, default_exc_handler
-
-  // ecall handler
-  .org 0x88
-  jal x0, default_exc_handler

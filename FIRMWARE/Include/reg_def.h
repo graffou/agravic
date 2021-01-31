@@ -1,6 +1,6 @@
 #pragma once
 // Mask corresponds to the address bus width, in bytes (15 bits -> 7FFF)
-#define REG_MASK 0x7FFF
+//#define REG_MASK 0x7FFF
 #define REG_MASK 0xFFFFFF
 
 // Bits 30:28 define the address span of the block (4 -> 2^4 32-bit words)
@@ -12,7 +12,8 @@
 // So BFFFE000 -> actually 12 bits, not 11
 #define CSR_IRQ_REGS BFFFE000
 #define SPI_MST_REGS 4FFFFA00
-#define SPI_SLV_REGS 4FFFFA10
+#define SPI_REGS 4FFFFA00
+#define SPI_TB_REGS 4FFFFA10
 #define UART_TB_REGS 4FFFFEF0
 #define DMA_REGS     4FFFFFD0
 #define UART_REGS    1FFFFFF0

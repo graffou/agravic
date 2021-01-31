@@ -81,7 +81,7 @@ int main(int argc, char **argv) {
   
  
   gprintf("#VGiorno core running %Y %Y\n", *var, uint32_t(127));    
-
+#if 0
   while (cnt < 10) {
     usleep(1); // 1000 ms
     //std::cerr << var;
@@ -337,6 +337,6 @@ while(1);
 
 
 	 // *spi_conf = ( (7 << 16) | (5 << 10) | (0 << 8) );
-
+#endif
 
 }

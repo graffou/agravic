@@ -1,7 +1,4 @@
-// Copyright lowRISC contributors.
-// Licensed under the Apache License, Version 2.0, see LICENSE for details.
-// SPDX-License-Identifier: Apache-2.0
-
+// Graffou 2019-2020, small space invaders game
 #include <stdint.h>
 //#include <cmath>
 #include "misc.h"
@@ -320,8 +317,10 @@ struct alien_row
 
 unsigned char ship_x = 1;
 uint16_t score;
-uint16_t timeout = 20000;
-uint32_t super_timeout = 20000*25;
+uint32_t timeout = 200;
+uint32_t init_timeout = 20000;
+
+uint32_t super_timeout = timeout*25;
 
 
 void erase_missiles();
@@ -338,7 +337,7 @@ void new_ship()
 	erase_missiles();
 	PRINT_AT(36, ship_x,0);
 	gprintf(" xyz ");
-	usleep(4000000);
+	usleep(2000000);
 }
 
 void init_invaders();
@@ -378,7 +377,8 @@ void init_game()
 	PRINT_AT(35,0,0)
 	gprintf("]]]]");
 	lifes = 2;
-	super_timeout = (timeout * 25) >>  GAME_ACCELERATION;
+	timeout = init_timeout;
+	super_timeout = (init_timeout * 25) >>  GAME_ACCELERATION;
 	ship_x = 0;
 }
 
@@ -750,7 +750,9 @@ int main(int argc, char **argv) {
 	for (int i = 0; i < 12; i++)
  	{
 		*dbg = FONT | (((93-32)*12+i) << 8) | 0xFF;
+		nsleep(200); // Avoid artifacts on blocks: the compiler optimizes writes and this is too fast for the HDMI memory I/F (runs @24MHz)
 		*dbg = FONT | ((('a'-32)*12+i) << 8) | 0xFF;
+		nsleep(200);
 		*dbg = FONT | (((95-32)*12+i) << 8) | hole[i];
 		*dbg = FONT | (((94-32)*12+i) << 8) | hole[11-i];
 		*dbg = FONT | ((('l'-32)*12+i) << 8) | (crash[i]);
@@ -798,7 +800,7 @@ int main(int argc, char **argv) {
 		{
 			rnd = rng();
 			//usleep(timeout);
-			msleep(timeout);
+			usleep(timeout);
 			time += timeout;
 			char c = 0;
 			if ( *uart & 0x100)

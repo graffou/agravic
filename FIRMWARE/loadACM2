@@ -1,0 +1,6 @@
+#/bin/bash
+
+#stty -F /dev/ttyACM0 115200 -opost 
+stty -F /dev/ttyACM2 115200  -echo -echoe -icrnl -ixon -isig -opost -onlcr -icanon
+
+dd if=$1 of=/dev/ttyACM2

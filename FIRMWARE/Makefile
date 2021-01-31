@@ -4,19 +4,18 @@
 #
 # Generate a baremetal application
 
-PROGRAM ?= verif
-PROGRAM_CFLAGS = -Wall -g -Os
+
+# -munaligned-access -mno-unaligned-access
+
+#PROGRAM ?= invaders
+PROGRAM_CFLAGS = -Wall -g -Os -Warray-bounds 
 ARCH = rv32i
 # ARCH = rv32im # to disable compressed instructions
 SRCS = $(PROGRAM).cpp
 
 CC = /opt/riscv/bin/riscv64-unknown-elf-g++
 ZZ = /opt/riscv/bin/riscv64-unknown-elf-gcc
-CPP = /opt/riscv/bin/riscv64-unknown-elf-g++
-#//CC = /sw/FROM_sw_st_gnu_compil_comp/comp/riscv/riscv-gnu-toolchain-9.2.0/bin/riscv64-unknown-elf-g++
-#CC = riscv64-linux-gnu-g++-8
-#CCz = riscv64-linux-gnu-g++-8
-#ZZ = riscv64-linux-gnu-gcc-8
+#CPP = /opt/riscv/bin/riscv64-unknown-elf-g++
 
 OBJCOPY ?= $(subst gcc,objcopy,$(wordlist 1,1,$(ZZ)))
 OBJDUMP ?= $(subst gcc,objdump,$(wordlist 1,1,$(ZZ)))
@@ -42,7 +41,7 @@ OUTFILES = $(PROGRAM).elf $(PROGRAM).bin $(PROGRAM).dis
 all: $(OUTFILES)
 
 $(PROGRAM).elf: $(OBJS) $(LINKER_SCRIPT)
-	$(CC) $(CFLAGS) -T $(LINKER_SCRIPT) $(OBJS) $(INCS) -o $@ $(LIBS)
+	$(CC) $(CFLAGS) -T $(LINKER_SCRIPT) $(OBJS) -o $@ $(LIBS)
 	$(OBJSIZE) $@
 %.dis: %.elf
 	$(OBJDUMP) -SD $^ > $@
