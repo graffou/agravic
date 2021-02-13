@@ -1,3 +1,5 @@
+//TODO: fix autocsn, however this is not of great value (except for 3-wire link)
+
 #include "../Include_libs/slv.h"
 
 START_OF_FILE(SPI)
@@ -137,7 +139,7 @@ VAR(fifo_wptr_tx_tmp, UINT(3));
 BEGIN
 	IF ( reset_n == BIT(0) ) THEN
 		div <= TO_UINT((1), LEN(div)); // assume 60MHz defualt
-		ready <= BIT(1);
+		//assigned in other process ready <= BIT(1);
 		RESET(fifo_wptr_tx);
 		RESET(fifo_rptr_rx);
 		start_spi <= BIT(0);
@@ -213,7 +215,7 @@ BEGIN
 				IF (RANGE(PORT_BASE(core2mem_i).addr, REG_NBITS-1, 0) == TO_UINT(1, REG_NBITS)) THEN
 					PORT_BASE(mem2core_o).data_en <= BIT(1);
 					PORT_BASE(mem2core_o).data <= ( fifo_rx(3) & fifo_rx(2) & fifo_rx(1) & fifo_rx(0) );
-					reset_spi <= BIT(1); // prepare for another read w/o configuration
+					reset_spi <= (not is_master); // prepare for another read w/o configuration; not for master as it would start another Tx!
 				ENDIF
 			ENDIF
 		ENDIF
@@ -310,7 +312,7 @@ BEGIN
 		IF (is_master == BIT(0)) THEN
 			// Auto csn generation
 			IF (auto_csn == BIT(0)) THEN
-				spi_csn <= BIN2BIT(PORT_BASE(spi_csn_io));
+				spi_csn <= (not BOOL2BIT(PORT_BASE(spi_csn_io) == BIN(0))); //BIN2BIT(PORT_BASE(spi_csn_io));
 			ELSEIF (eot == BIT(0)) THEN
 				IF (fifo_init == BIT(1)) THEN // init cnt_auto_csn as well
 					cnt_auto_csn <= csn_clk_ncycles;
@@ -409,7 +411,7 @@ BEGIN
 			tsfr_cnt <= TO_UINT(0, LEN(tsfr_cnt));
 			IF (BIT2BOOL(is_master)) THEN
 				cnt <= EXT(csn_clk_ncycles, LEN(cnt)); // don't care in slv mode: spi exits wait state on clk'event
-				spi_csn_io <= BIT(0);
+				spi_csn_io <= BIN(0);
 			ELSE
 				cnt <= TO_UINT(1, LEN(cnt)); // will exit immediately to send state
 			ENDIF
