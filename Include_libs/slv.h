@@ -855,6 +855,12 @@ struct tristate:slv<N>
 		return true;
 	}
 
+	bool operator==(const slv<N>& x)
+	{
+		if (z_flags) return false;
+		else return slv<N>::operator==(x);
+	}
+
 	// for toto <= "11zz00";
 	inline void set_d(const char x_i[N])
 	{
