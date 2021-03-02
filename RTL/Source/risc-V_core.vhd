@@ -6,6 +6,7 @@ library work; use work.risc_V_constants.all;
 
 
 
+
 entity risc_V_core is port ( clk_core : IN std_logic; reset_n : IN std_logic; boot_mode_i : IN std_logic; trap_o : OUT std_logic; dbg_o : OUT unsigned ((33 -1) downto 0); load_port_i : IN blk2mem_t; core2instmem_o : OUT blk2mem_t; instmem2core_i : IN mem2blk_t; core2datamem_o : OUT blk2mem_t; dma_request_i : IN blk2mem_t; dma_grant_o : OUT std_logic; datamem2core_i : IN mem2blk_t; csr2core_i : IN csr2core_t ); end risc_V_core; architecture rtl of risc_V_core is component dummy_zkw_pouet is port(clk : in std_logic);end component;
 component register_file is port ( clk : IN std_logic; reset_n : IN std_logic; addr_rs1_i : IN unsigned ((5 -1) downto 0); addr_rs2_i : IN unsigned ((5 -1) downto 0); addr_rd_i : IN unsigned ((5 -1) downto 0); wb_en_i : IN std_logic; wb_i : IN unsigned ((32 -1) downto 0); rs1_o : OUT unsigned ((32 -1) downto 0); rs2_o : OUT unsigned ((32 -1) downto 0) ); end component;
 component dbg_mem is port ( clk : IN std_logic; reset_n : IN std_logic; addr_i : IN unsigned ((5 -1) downto 0); data_i : IN unsigned ((64 -1) downto 0); wen_i : IN std_logic; data_o : OUT unsigned ((64 -1) downto 0) ); end component;
@@ -13,6 +14,7 @@ type reg_file_t is array(0 to (32 -1)) of unsigned ((32 -1) downto 0);
 signal regs : reg_file_t;
 signal PC : unsigned ((32 -1) downto 0);
 signal PCp : unsigned ((32 -1) downto 0);
+signal PCpp : unsigned ((32 -1) downto 0);
 
 
 signal loading : std_logic;
@@ -59,6 +61,8 @@ signal rrd_val : unsigned ((32 -1) downto 0);
 signal rtaken : unsigned ((1 -1) downto 0);
 
 signal halt : std_logic;
+signal dma_rd_wait : std_logic;
+signal dma_granted : std_logic;
 signal inst_cs_n : std_logic;
 signal exec : std_logic;
 signal pipe : unsigned ((4 -1) downto 0);
@@ -69,22 +73,16 @@ signal rshiftwb : unsigned ((2 -1) downto 0);
 
 signal csri : std_logic;
 signal priv : unsigned ((2 -1) downto 0);
-signal mstatus : unsigned ((32 -1) downto 0);
-signal mepc : unsigned ((32 -1) downto 0);
-signal mscratch : unsigned ((32 -1) downto 0);
-signal mtvec : unsigned ((32 -1) downto 0);
-signal mcause : unsigned ((32 -1) downto 0);
-signal mideleg : unsigned ((32 -1) downto 0);
-signal medeleg : unsigned ((32 -1) downto 0);
-signal mip : unsigned ((32 -1) downto 0);
-signal mie : unsigned ((32 -1) downto 0);
-signal mcounter : unsigned ((64 -1) downto 0);
 signal blk2mem_t0 : blk2mem_t;
 signal mem2blk_t0 : mem2blk_t;
 signal rinstr : unsigned ((32 -1) downto 0);
 signal rrinstr : unsigned ((32 -1) downto 0);
 signal inst_addr : unsigned ((24 - 2 -1) downto 0);
 signal inst_data : unsigned ((32 -1) downto 0);
+signal cur_irq : unsigned ((6 -1) downto 0);
+signal start_irq : std_logic;
+signal reset_cur_irq : std_logic;
+
 
 
 
@@ -101,12 +99,15 @@ signal ror_res : unsigned ((32 -1) downto 0);
 signal rxor_res : unsigned ((32 -1) downto 0);
 signal rjalr : unsigned ((5 -1) downto 0);
 signal rload_from_instmem : std_logic;
+signal wait_for_interrupt : std_logic;
+
 signal rdbg : std_logic;
 signal rdbg2 : std_logic;
 signal rcan_grant : std_logic;
 signal code_loaded : std_logic;
 signal code_loaded0 : std_logic;
 signal cpu_stuck_cnt : unsigned ((5 -1) downto 0);
+
 signal cond1 : std_logic;
 signal cond2 : std_logic;
 signal cond3 : std_logic;
@@ -120,6 +121,8 @@ signal dbg_data_w : unsigned ((64 -1) downto 0);
 signal dbg_data_r : unsigned ((64 -1) downto 0);
 signal dbg_wen : std_logic;
 signal dbg_cnt : unsigned ((7 -1) downto 0);
+signal dbg_cpu_wait : unsigned ((8 -1) downto 0);
+signal dbg_ropcode : unsigned ((8 -1) downto 0);
 signal dbg_cnt2 : unsigned ((5 -1) downto 0);
 signal debug_write : std_logic;
 signal dbg_stop : unsigned ((8 -1) downto 0);
@@ -128,6 +131,7 @@ signal dbg_can_read : std_logic;
 signal dbg_toggle : std_logic;
 signal dbg_csr_write : std_logic;
 signal dbg_csr_read : std_logic;
+signal dbg_illinstr : std_logic;
 
 begin
 
@@ -162,6 +166,7 @@ variable xor_res : unsigned ((32 -1) downto 0);
 variable ld_data : unsigned ((32 -1) downto 0);
 variable nshift : unsigned ((2 -1) downto 0);
 variable wbe : unsigned ((4 -1) downto 0);
+variable csr_be : unsigned ((3 -1) downto 0);
 variable taken : unsigned ((1 -1) downto 0);
 variable rd_val : unsigned ((32 -1) downto 0);
 variable trap : std_logic;
@@ -182,6 +187,7 @@ variable csr_write : std_logic;
 variable csr_op : std_logic;
 variable wfi : std_logic;
 variable mret : std_logic;
+variable must_start_irq : BOOLEAN;
 
 begin
 
@@ -191,7 +197,6 @@ begin
  IF ( reset_n = '0' ) then
 
   pipe <= TO_UNSIGNED(0,pipe'length);
-
   PC <= x"FFFFFFFC";
   PCp <= TO_UNSIGNED(0,PCp'length);
   cpu_wait <= '0';
@@ -203,19 +208,10 @@ begin
   use_immediate <= '0';
   csri <= '0';
   loading <= '0';
-  mcounter <= TO_UNSIGNED(0,mcounter'length);
-  mstatus <= TO_UNSIGNED(0,mstatus'length);
-  mcause <= TO_UNSIGNED(0,mcause'length);
-  medeleg <= TO_UNSIGNED(0,medeleg'length);
-  mideleg <= TO_UNSIGNED(0,mideleg'length);
-  mtvec <= TO_UNSIGNED(0,mtvec'length);
-  mepc <= TO_UNSIGNED(0,mepc'length);
-  mip <= TO_UNSIGNED(0,mip'length);
-  mie <= TO_UNSIGNED(0,mie'length);
-  mscratch <= TO_UNSIGNED(0,mscratch'length);
   rinstr <= TO_UNSIGNED(0,rinstr'length);
   rrinstr <= TO_UNSIGNED(0,rrinstr'length);
   ropcode <= TO_UNSIGNED(0,ropcode'length);
+  dbg_cpu_wait <= TO_UNSIGNED(0,dbg_cpu_wait'length);
 
   rfunct3 <= TO_UNSIGNED(0,rfunct3'length);
   rrd <= TO_UNSIGNED(0,rrd'length);
@@ -233,8 +229,11 @@ begin
   cpu_wait_on_write <= '0';
   rrd_wr_en <= '0';
   dma_grant_o <= '0';
+  dma_granted <= '0';
+  dma_rd_wait <= '0';
 
   mask_data_en <= '0';
+  wait_for_interrupt <= '0';
   blk2mem_t0.cs_n <= '1' ;
   blk2mem_t0.wr_n <= '1' ;
 
@@ -250,10 +249,12 @@ begin
   debug_write <= '1' ;
   dbg_stop <= TO_UNSIGNED(0,dbg_stop'length);
   rcsr_op_with_read <= '0';
+  cur_irq <= "000000";
+  start_irq <= '0';
+  dma_granted <= '0';
 
   elsif ( clk_core'event and (clk_core = '1' ) ) then
 
-   mcounter <= mcounter + 1;
    flush <= '0';
    instr := instmem2core_i.data;
    next_PC := PC;
@@ -272,6 +273,7 @@ begin
 
    IF ( (pipe(0) = '1' ) and (cpu_wait = '0') and (flush = '0') ) then
      rinstr <= instr;
+     PCpp <= PCp;
      opcode := (instr(6 downto 0));
      rd := (instr(11 downto 7));
      rs1 := (instr(19 downto 15));
@@ -280,7 +282,11 @@ begin
      funct7 := (instr(31 downto 25));
 
 
+     must_start_irq := ( (csr2core_i.irq = '1' ) and (cur_irq = TO_UNSIGNED(0,cur_irq'length)) );
+
+
      IF (opcode = OPI) then
+      dbg_ropcode <= TO_UNSIGNED(1,8);
       ropcode <= OP;
       IF (funct3 = "101") then
        alt_op <= instr(30);
@@ -290,8 +296,10 @@ begin
      else
       IF (code_loaded = '1' ) then
        ropcode <= opcode;
+       dbg_ropcode <= TO_UNSIGNED(2,8);
       else
        ropcode <= TO_UNSIGNED(0,ropcode'length);
+       dbg_ropcode <= TO_UNSIGNED(3,8);
       end if;
       alt_op <= instr(30);
      end if;
@@ -342,16 +350,33 @@ begin
      dbg_toggle <= (not dbg_toggle);
      raw_opcode <= opcode;
 
+
+     IF (must_start_irq) then
+      immediate_type := J_type;
+
+      ropcode <= SYS;
+      dbg_ropcode <= TO_UNSIGNED(4,8);
+      start_irq <= '1' ;
+      rfunct3 <= ECALL;
+      immediate := TO_UNSIGNED(0,32);
+      rrd <= "00000";
+     end if;
+
+
      IF (immediate_type = no_type) then
       use_immediate <= '0';
      elsif ( (immediate_type = J_type) or (immediate_type = B_type) or (opcode = AUIPC) or
-       ( (opcode = SYS) and ((funct7(6 downto 1)) = "000000" ) ) ) then
+
+       ( (opcode = SYS) and ((instr(31 downto 21)) = "00000000000" ) ) ) then
       rimmediate <= immediate + PCp;
       use_immediate <= '0';
      else
       use_immediate <= '1' ;
       rimmediate <= immediate;
      end if;
+
+
+
 
 
      IF ( (opcode = SYS) and (funct3(2) = '1' ) ) then
@@ -370,7 +395,8 @@ begin
 
    stop_PC := ( ( ( (ropcode = LOAD) or (rcsr_op_with_read = '1' ) ) and cpu_wait = '0' ) or
         ( (cpu_wait = '1' ) and not load_data_ok ) or
-      (halt = '1' ) );
+      (halt = '1' ) or
+      (wait_for_interrupt = '1' ));
 
 
    IF (not stop_PC) then
@@ -380,7 +406,7 @@ begin
     next_PC := PC + TO_UNSIGNED(4,PC'length);
     inst_cs_n <= '0';
    else
-   rdbg <= '0';
+    rdbg <= '0';
     inst_cs_n <= '0';
    end if;
 
@@ -391,6 +417,10 @@ begin
    IF ( (pipe(1) = '1' ) and (cpu_wait = '0') and (flush = '0') ) then
 
     exec <= '1' ;
+
+
+
+
     rrinstr <= rinstr;
 
     IF (csri = '1' ) then
@@ -440,6 +470,7 @@ begin
     rd_val := "10101010010101011010101001010101";
     rjalr <= "00000";
     load_mem0 <= '0';
+    reset_cur_irq <= '0';
 
     case ropcode is
      when CASE_SYS =>
@@ -449,21 +480,37 @@ begin
       dbg_csr_read <= csr_read;
       wfi := '0';
       mret := '0';
+      csr_be := rfunct3;
       case rfunct3 is
       when CASE_ECALL =>
-       IF (use_immediate = '0') then
 
+       IF (use_immediate = '0') then
         blk2mem_t0.data <= rimmediate;
-        blk2mem_t0.addr <= ( (TO_UNSIGNED(16#BFFFE000#,24 - 2)(24 - 3 downto 12)) & RESIZE(((not rrs2(0)) & "0" & priv), 12) );
-        trap := '1' ; -- gprintf("#VECALL trap addr", to_hex(TO_INTEGER(csr2core_i.mepc)));
+        IF (start_irq = '1' ) then
+         blk2mem_t0.addr <= ( (TO_UNSIGNED(16#BFFFE000#,24 - 2)(24 - 3 downto 12)) & RESIZE(csr2core_i.cause, 12) );
+        else
+         blk2mem_t0.addr <= ( (TO_UNSIGNED(16#BFFFE000#,24 - 2)(24 - 3 downto 12)) & RESIZE(((not rrs2(0)) & "0" & priv), 12) );
+        end if;
+        trap := '1' ; -- gprintf("%s", tabs); -- gprintf("#VECALL trap addr %Y time %Y", to_hex(TO_INTEGER(csr2core_i.mepc)), cur_time>>8);
         csr_read := '0';
-       elsif ( ( rfunct7 = "0011000" ) and ( rrs2 = "00010" ) ) then
-        next_PC := csr2core_i.mepc; flush <= '1' ; pipe <= TO_UNSIGNED(0,pipe'length); ropcode <= TO_UNSIGNED(0,ropcode'length); rcsr_op_with_read <= '0'; mret := '1' ;
+        start_irq <= '0';
+        ropcode <= TO_UNSIGNED(0,ropcode'length); rcsr_op_with_read <= '0';
+        dbg_ropcode <= TO_UNSIGNED(5,8);
+
+       elsif ( ( (rfunct7 = "0011000" ) or (rfunct7 = "0000000" ) ) and ( rrs2 = "00010" ) ) then
+        next_PC := csr2core_i.mepc; flush <= '1' ; pipe <= TO_UNSIGNED(0,pipe'length); ropcode <= TO_UNSIGNED(0,ropcode'length); rcsr_op_with_read <= '0';
         csr_read := '0';
+        csr_be := "001";
+        blk2mem_t0.addr <= ( (TO_UNSIGNED(16#BFFFE000#,24 - 2)(24 - 3 downto 12)) & AMRET );
+        reset_cur_irq <= '1' ;
        elsif ( ( rfunct7 = "0001000" ) and ( rrs2 = "00101" ) ) then
-         csr_read := '1' ;
+         csr_read := '0';
+         blk2mem_t0.addr <= ( (TO_UNSIGNED(16#BFFFE000#,24 - 2)(24 - 3 downto 12)) & AMEPC_WFI );
          blk2mem_t0.data <= PCp;
          wfi := '1' ;
+         wait_for_interrupt <= '1' ;
+
+
 
         end if;
 
@@ -478,16 +525,18 @@ begin
        blk2mem_t0.wr_n <= ( ( (rfunct3(1)) and (not csr_write)) or (not rfunct3(1) and csr_read) ) ;
 
       end case;
-      blk2mem_t0.be <= (wfi & rfunct3);
-      blk2mem_t0.cs_n <= (mret);
+      blk2mem_t0.be <= (wfi & csr_be);
+      blk2mem_t0.cs_n <= '0';
 
-      cpu_wait <= csr_read;
+      cpu_wait <= (csr_read or wfi);
       rwb <= rrd;
       funct3wb <= "010";
       rshiftwb <= "00";
       load_mem0 <= '0';
       mask_data_en <= csr_read;
      when CASE_MEM =>
+
+
      when CASE_OP =>
       case rfunct3 is
        when CASE_ADDx => IF (alt_op = '0') then rd_val := RESIZE(add_res, 32); else rd_val := RESIZE(sub_res, 32); end if;
@@ -533,10 +582,12 @@ begin
         blk2mem_t0.addr <= (add_res(blk2mem_t0.addr'length+1 downto 2));
         blk2mem_t0.wr_n <= '1' ;
         blk2mem_t0.be <= "1111";
+        -- gprintf(tarmac, "%dns MR% %d ", double(cur_time)/256000, 1<<(TO_INTEGER(rfunct3)&3), to_hex(TO_INTEGER(add_res)));
       end if;
      when CASE_STORE =>
       wbe := ( rfunct3(1) & rfunct3(1) & (rfunct3(0) or rfunct3(1)) & '1' );
       wbe := SHIFT_LEFT(wbe, TO_INTEGER(nshift));
+      -- gprintf(tarmac, "%dns MW% %d %\n", double(cur_time)/256000, 1<<(TO_INTEGER(rfunct3)&3), to_hex(TO_INTEGER(add_res)), to_hex(TO_INTEGER(regs(TO_INTEGER(rrs2)))));
       blk2mem_t0.addr <= (add_res(blk2mem_t0.addr'length+1 downto 2));
       blk2mem_t0.cs_n <= '0';
       blk2mem_t0.wr_n <= '0';
@@ -554,8 +605,9 @@ begin
 
       IF (taken = "1") then
        next_PC := rimmediate; flush <= '1' ; pipe <= TO_UNSIGNED(0,pipe'length); ropcode <= TO_UNSIGNED(0,ropcode'length); rcsr_op_with_read <= '0';
+       dbg_ropcode <= TO_UNSIGNED(6,8);
       end if;
-     when others => trap := '1' ; cause := ILLINSTR; if (not boot_mode = '1' ) then -- gprintf("ILLINSTR trap opcode");
+     when others => trap := '1' ; cause := ILLINSTR; if (not boot_mode = '1' ) then -- gprintf("ILLINSTR trap opcode"); dbg_illinstr <= '1' ;
                 end if;
 
     end case;
@@ -566,6 +618,12 @@ begin
 
      blk2mem_t0 <= dma_request_i;
      dma_grant_o <= (not dma_request_i.cs_n);
+     dma_granted <= (not dma_request_i.cs_n);
+     IF (dma_granted = '1' ) then
+         blk2mem_t0.cs_n <= '1' ;
+     else
+         dma_rd_wait <= ((not dma_request_i.cs_n) and dma_request_i.wr_n);
+     end if;
      rcan_grant <= '1' ;
     else
      rcan_grant <= '0';
@@ -574,11 +632,20 @@ begin
     wrd := rrd;
    else
 
-    blk2mem_t0.cs_n <= '1' ;
+
     exec <= '0';
     rd_val := "10101010010101011010101001010101";
     blk2mem_t0 <= dma_request_i;
-    dma_grant_o <= (not dma_request_i.cs_n and not cpu_wait);
+
+
+    dma_grant_o <= ((not dma_request_i.cs_n) and (not cpu_wait or wait_for_interrupt) );
+    dma_granted <= ((not dma_request_i.cs_n) and (not cpu_wait or wait_for_interrupt) );
+    blk2mem_t0.cs_n <= (dma_request_i.cs_n or (cpu_wait and not wait_for_interrupt));
+    IF (dma_granted = '1' ) then
+      blk2mem_t0.cs_n <= '1' ;
+    else
+        dma_rd_wait <= ((not dma_request_i.cs_n) and (not cpu_wait or wait_for_interrupt) and dma_request_i.wr_n);
+    end if;
     rcan_grant <= not cpu_wait;
    end if;
 
@@ -600,6 +667,10 @@ begin
     mask_data_en <= '0';
    end if;
 
+   IF ( (dma_rd_wait = '1' ) and (datamem2core_i.data_en = '1' ) ) then
+       dma_rd_wait <= '0';
+
+   end if;
 
 
    IF ( not(rwb = TO_UNSIGNED(0,rwb'length)) and ( mask_data_en = '0' ) and ( ( (datamem2core_i.data_en = '1' ) and (load_mem = '0')) or ( (instmem2core_i.data_en = '1' ) and (load_mem = '1' ) ) ) ) then
@@ -620,8 +691,16 @@ begin
      when CASE_LBU => rd_val := RESIZE((ld_data(7 downto 0)), rd_val'length);
      when others => rd_val := TO_UNSIGNED(0,rd_val'length);
     end case;
+    -- gprintf(tarmac, " %d\n", to_hex(TO_INTEGER(rd_val)));
+
     wrd := rwb;
     rwb <= TO_UNSIGNED(0,rwb'length);
+   end if;
+
+
+   IF ((wait_for_interrupt = '1' ) and (csr2core_i.wakeup = '1' )) then
+    cpu_wait <= '0';
+    wait_for_interrupt <= '0';
    end if;
 
    regs(TO_INTEGER(wrd)) <= rd_val;
@@ -641,26 +720,29 @@ begin
 
 
    IF ( (boot_mode = '1' ) and (boot_modep = '0') ) then
-    code_loaded <= '0';
+
     code_loaded0 <= '0';
    end if;
 
    IF (boot_modep = '1' ) then
-    next_PC := TO_UNSIGNED(0,PC'length);
+    next_PC := x"FFFFFFFC";
     inst_cs_n <= dma_request_i.cs_n;
     code_loaded0 <= ( code_loaded0 or not dma_request_i.cs_n );
+    pipe <= TO_UNSIGNED(0,pipe'length);
 
     IF (boot_mode = '0') then
       -- gprintf("#RCODE LOADED, starting Giorno core");
+
       next_PC := TO_UNSIGNED(0,PC'length);
       inst_cs_n <= '0';
       loading <= '0';
       flush <= '1' ;
-      pipe <= TO_UNSIGNED(0,pipe'length);
-      cpu_wait <= '0';
-      code_loaded <= code_loaded0;
-      ropcode <= TO_UNSIGNED(0,ropcode'length);
 
+      cpu_wait <= '0';
+      code_loaded <= (code_loaded or code_loaded0);
+
+
+      dbg_ropcode <= TO_UNSIGNED(7,8);
       PCp <= TO_UNSIGNED(0,PCp'length);
       alt_op <= '0';
       halt <= '0';
@@ -689,20 +771,31 @@ begin
 
    end if;
 
-   rtrap <= (trap and code_loaded);
+
+   dbg_cpu_wait <= ((dbg_cpu_wait(6 downto 0)) & cpu_wait);
+
+   rtrap <= (trap and code_loaded and not start_irq);
 
    IF ((not (loading = '1' ) and not (boot_mode = '1' )) and (trap = '1' )) then
     trap_addr_base := csr2core_i.mtvec and "11111111111111111111111111111100";
-    IF ( ((mtvec(1 downto 0)) = "01" ) and (cause(31) = '1' ) ) then
-     trap_addr_offset := (cause(29 downto 0)) & "00";
+    IF ( ((csr2core_i.mtvec(1 downto 0)) = "01" ) and (start_irq = '1' ) ) then
+     trap_addr_offset := RESIZE(csr2core_i.cause, 30) & "00";
+     cur_irq <= csr2core_i.cause;
+     -- gprintf(tarmac, "%dns E % %d\n", double(cur_time)/256000, "INT_ENTRY >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>", to_hex(TO_INTEGER(csr2core_i.cause)));
     else
      trap_addr_offset := TO_UNSIGNED(0,trap_addr_offset'length);
+     -- gprintf(tarmac, "%dns E % %d\n", double(cur_time)/256000, "TRAP", to_hex(TO_INTEGER(csr2core_i.cause)));
     end if;
     next_PC := trap_addr_base + trap_addr_offset;
     flush <= '1' ; pipe <= TO_UNSIGNED(0,pipe'length); ropcode <= TO_UNSIGNED(0,ropcode'length);
-
-    mcause <= cause;
+    dbg_ropcode <= TO_UNSIGNED(8,8);
    end if;
+   IF ( reset_cur_irq = '1' ) then
+    cur_irq <= "000000";
+    reset_cur_irq <= '0';
+    -- gprintf(tarmac, "%dns E % %d\n", double(cur_time)/256000, "INT_LEAVE <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<", to_hex(TO_INTEGER(cur_irq)));
+   end if;
+
 
    PC <= next_PC;
    rload_from_instmem <= load_from_instmem;

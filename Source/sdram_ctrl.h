@@ -32,6 +32,8 @@ DECL_PORTS(
 		PORT(ras_o, BIT_TYPE, OUT),
 		PORT(en0_o, BIT_TYPE, OUT), // either data _en or data_request to initiator
 		PORT(en1_o, BIT_TYPE, OUT),
+		PORT(done0_o, BIT_TYPE, OUT), // either data _en or data_request to initiator
+		PORT(done1_o, BIT_TYPE, OUT),
 		PORT(dQm_o, UINT(2), OUT),
 
 		PORT(dQ_io, TRISTATE(16), INOUT)
@@ -92,18 +94,37 @@ VAR(req, BASE_TYPE(sdram_req_t));
 BEGIN
 
 IF ( reset_n == BIT(0) ) THEN
-	state <= sdram_wait;
+	state <= sdram_idle; // ???sdram_wait;
 	last_state <= sdram_idle;
 	next_state <= sdram_init;
 	wait_cnt <= BIN(11111);
 	cke_o <= BIT(1); // always on, optimize later on
 	cs_o <= BIT(0);
+	we_o <= BIT(0);
+	ras_o <= BIT(1);
+	cas_o <= BIT(1);
 	PORT_BASE(dQ_io) <= "ZZZZZZZZZZZZZZZZ";
 	sdram_dQ  <= "ZZZZZZZZZZZZZZZZ";
+	dQm_o <= BIN(00);
 	en <= BIT(0);
 	RESET(en_pipe);
 	RESET(dev_pipe);
+	RESET(data_o);
+	RESET(refresh_cnt);
+	RESET(burst_cnt);
+	RESET(bank);
+	RESET(col);
+	RESET(row);
 	first_data <= BIT(0);
+	en0_o <= BIT(0);
+	en1_o <= BIT(0);
+	done0_o <= BIT(0);
+	done1_o <= BIT(0);
+	device <= BIT(0);
+	read_burst_active <= BIT(0);
+	write_burst_active <= BIT(0);
+	read_burst <= BIT(0);
+	write_burst <= BIT(0);
 
 ELSEIF ( EVENT(clk_sdram) and (clk_sdram == BIT(1)) ) THEN
 
@@ -134,8 +155,10 @@ ELSEIF ( EVENT(clk_sdram) and (clk_sdram == BIT(1)) ) THEN
 			IF ( (next_state == sdram_burst) and (write_burst == BIT(1)) ) THEN // Must tell initiator to send data
 				IF (device == TO_UINT(0, LEN(device))) THEN
 					en0_o <= BIT(1);
+					done0_o <= BIT(0);
 				ELSE
 					en1_o <= BIT(1);
+					done1_o <= BIT(0);
 				ENDIF
 			ENDIF
 			IF (next_state == sdram_burst) THEN
@@ -211,6 +234,11 @@ ELSEIF ( EVENT(clk_sdram) and (clk_sdram == BIT(1)) ) THEN
 			en <= BIT(0);
 			en0_o <= BIT(0); //overriden in read mode
 			en1_o <= BIT(0);
+			IF (device == BIT(0)) THEN
+				done0_o <= BIT(1);
+			ELSE
+				done1_o <= BIT(1);
+			ENDIF
 		ELSEIF (end_of_page) THEN // case tsfr end because of page end
 			wait_cnt <= TO_UINT(rp_latency, LEN(wait_cnt)); // ??? no idle state between bursts
 			next_state <= sdram_bank_activate;
@@ -253,8 +281,10 @@ ELSEIF ( EVENT(clk_sdram) and (clk_sdram == BIT(1)) ) THEN
 
 		IF ( PORT_BASE(req0_i).en == BIT(1) ) THEN// port 0 has priority
 			req := PORT_BASE(req0_i);
+			device <= BIT(0);
 		ELSEIF ( PORT_BASE(req1_i).en == BIT(1) ) THEN
 			req := PORT_BASE(req1_i);
+			device <= BIT(1);
 		ELSEIF ( req_test.en == BIT(1) ) THEN
 			req := (req_test);
 			//req_test.en <= BIT(0);

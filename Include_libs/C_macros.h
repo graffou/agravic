@@ -220,7 +220,7 @@
 #define ENTITY(type, ports, ...) IF_ELSE(HAS_ARGS(__VA_ARGS__))(template<__VA_ARGS__>)(template<int generic_int>) struct type : gmodule {/*
 		*/ EVAL1(DECL_PORTS(get_##ports)) /*
 		*/ type(const char*x, gmodule* y):gmodule(x,y) {}//std::cerr << "CTOR " << name << "\n";}
-#define TESTBENCH(type, ...) template<int dummy0> struct type : gmodule {/*
+#define TESTBENCH(type, ...) template<int dummy0, int dummy1> struct type : gmodule {/*
 		*/ type(const char*x, gmodule* y):gmodule(x,y) {}//std::cerr << "CTOR " << name << "\n";}
 
 #define PACKAGE(a)
@@ -307,7 +307,8 @@
 /*#define BLK_INST_TOP(name, type, port_map, ...) IF_ELSE(HAS_ARGS(__VA_ARGS__))\
 	(type<0,APPLY_GENERIC(__VA_ARGS__)>& name = *create_block(#name, gmodule::out_of_hier, APPLY_MAP(type<0,APPLY_GENERIC(__VA_ARGS__)>, port_map)))\
 	(type<0>& name = *create_block<type<0>>(#name, gmodule::out_of_hier, APPLY_MAP(type<0>, port_map)))*/
-#define BLK_INST_TOP(name, type, ...) type<0>& name = *create_block<type<0>>(#name)
+//#define BLK_INST_TOP(name, type, ...) type<0>& name = *create_block<type<0>>(#name)
+#define BLK_INST_TOP(name, type, ...) type<0,0>& name = *create_block<type<0,0>>(#name)
 
 
 #define FOREVER(type) template<int dummy##type> struct type : gmodule {\

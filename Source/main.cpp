@@ -26,7 +26,7 @@
 #include "gmodule.h"
 #include "ports.h"
 #include "slv.h"
-#include "dsp.h"
+#include "../Include_libs/dsp.h"
 #include "scheduler2.h"
 #include "kb.h"
 #include "input_parms.h"

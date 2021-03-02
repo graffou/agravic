@@ -228,15 +228,14 @@ END SYN;
 #else
 
 ENTITY( clk_gen,
-	DECL_PORTS
-	(
-		PORT(areset, RST_TYPE, IN),// 		: IN STD_LOGIC  := '0';
-		PORT(inclk0, CLK_TYPE, IN),	//	: IN STD_LOGIC  := '0';
-		PORT(c0, CLK_TYPE, OUT),	//	: OUT STD_LOGIC ;
-		PORT(c1, CLK_TYPE, OUT),	//	: OUT STD_LOGIC ;
-		PORT(c2, CLK_TYPE, OUT),	//	: OUT STD_LOGIC ;
-		PORT(c3, CLK_TYPE, OUT),	//	: OUT STD_LOGIC ;
-		PORT(locked, BIT_TYPE, OUT)	//	: OUT STD_LOGIC
+	DECL_PORTS(
+		PORT(areset, RST_TYPE, IN),
+		PORT(inclk0, CLK_TYPE, IN),
+		PORT(c0, CLK_TYPE, OUT),
+		PORT(c1, CLK_TYPE, OUT),
+		PORT(c2, CLK_TYPE, OUT),
+		PORT(c3, CLK_TYPE, OUT),
+		PORT(locked, BIT_TYPE, OUT)
 	)
 );
 

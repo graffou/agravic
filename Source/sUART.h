@@ -57,6 +57,9 @@ SIG(addr_lsbs_test, UINT(4));
 
 SIG(base_addr_ok, BIT_TYPE);
 SIG(addr_ok, BIT_TYPE);
+
+#ifdef CPX_TESTS // tests for cpx_int/Signed classes
+
 SIG(titi, CPX_INT(16));
 SIG(titip, CPX_INT(16));
 SIG(toti, CPX_INT(6));
@@ -76,7 +79,7 @@ SIG(tito8, INT(8));
 SIG(tito9, CPX_INT(16));
 SIG(tito10, UINT(7));
 SIG(tito11, UINT(16));
-
+#endif
 BEGIN
 
 
@@ -124,13 +127,16 @@ BEGIN
 		addr_lsbs_test <= TO_UINT(reg_addr_lsbs, 4);
 		irq_o <= BIT(0);
 		PORT_BASE(uart_dma_o).rdy <= BIT(1);
+#ifdef CPX_TESTS // tests for cpx_int/Signed classes
 		titi <= TO_CPX_INT(0, 0, LEN(titi));
 		titip <= TO_CPX_INT(0, 1, LEN(titi));
 		toti <= TO_CPX_INT(-4, 4, LEN(toti));
 		tata <= SIGNED(TO_UINT(3, LEN(tata)));
+#endif
 		//always_tx <= BIN(1);
 	ELSEIF ( EVENT(clk_peri) and (clk_peri == BIT(1)) ) THEN
 		//cnt <= cnt - TO_UINT(1, LEN(cnt));
+#ifdef CPX_TESTS // tests for cpx_int/Signed classes
 		titip <= titi;
 		titi <= CSXT( (titi + TO_CPX_INT(1, 4, LEN(titi))) * toti, LEN(titi) ) + SSXT(tata, LEN(titi)/2) + TO_CPX_INT(2, -1, LEN(titi));
 		IF (titi == titip) THEN
@@ -153,7 +159,7 @@ BEGIN
 		tito9 <= (re(titi) + ii * im(titi));
 		tito10 <= tito8.sabs();
 		tito11 <= tito9.sabs();
-
+#endif
 		rx_cnt <= rx_cnt - 1;
 		tx_cnt <= tx_cnt - 1;
 		reset_data_en := BIT(0);

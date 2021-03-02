@@ -1,4 +1,4 @@
-
+/*
 tb: bin
 tb:u0_sUART: bin
 tb:dut: bin
@@ -20,9 +20,22 @@ tb:dut:u0_hdmi: bin
 tb:dut:u0_hdmi:u0_char_buf: bin
 tb:dut:u0_hdmi:u0_font: bin
 tb:dut:u0_hdmi:u0_ddio: bin
-
+*/
 tb:dut:u0_risc_V_core: bin
+
 tb:dut:u0_csr_irq: bin
+/*
+tb:dut:u0_mem: bin
+tb:dut:u1_mem: bin
+*/
+tb:dut:u0_sUART: bin
+tb:dut:u0_spi: bin
+tb:u0_spi: bin
+tb:dut:dbg bin
+tb:u0_sUART: bin
+/*
+tb: bin
+*/
 /*
 tb: bin
 tb:u0_clk_gen: bin

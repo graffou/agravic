@@ -41,19 +41,7 @@ DECL_PORTS(
 		PORT(vga_vsync_o, BIT_TYPE, OUT),
 		PORT(vga_red_o, UINT(4), OUT),
 		PORT(vga_green_o, UINT(4), OUT),
-		PORT(vga_blue_o, UINT(4), OUT),
-#ifdef TEST_SDRAM_CTRL
-		PORT(sdram_addr_o, UINT(12), OUT),
-		PORT(sdram_ba_o, UINT(2), OUT),
-		PORT(sdram_cke_o, BIT_TYPE, OUT),
-		PORT(sdram_cs_o, BIT_TYPE, OUT),
-		PORT(sdram_we_o, BIT_TYPE, OUT),
-		PORT(sdram_cas_o, BIT_TYPE, OUT),
-		PORT(sdram_ras_o, BIT_TYPE, OUT),
-		PORT(sdram_dQm_o, UINT(2), OUT),
-
-		PORT(sdram_dQ_io, TRISTATE(16), INOUT)
-#endif
+		PORT(vga_blue_o, UINT(4), OUT)
 		//PORT(gpios_o, UINT(32), OUT)
 		//,
 		//PORT(debug_o, UINT(10), OUT)
@@ -204,20 +192,8 @@ BLK_INST(dut, top,
 				PM(blue_o, blue),
 				PM(red_o, red),
 				PM(green_o, green),
-				PM(pclk_o, pclk),
-#ifdef TEST_SDRAM_CTRL
-				PM(sdram_addr_o,sdram_addr),
-				PM(sdram_ba_o,sdram_ba),
-				PM(sdram_cke_o,sdram_cke),
-				PM(sdram_cs_o,sdram_cs),
-				PM(sdram_we_o,sdram_we),
-				PM(sdram_ras_o,sdram_ras),
-				PM(sdram_cas_o,sdram_cas),
-				PM(sdram_dQm_o,sdram_dQm),
-				PM(sdram_dQ_io,sdram_dQ)				//PM(gpios_o, gpios)
-#endif
-		)/*,
-				0*/
+				PM(pclk_o, pclk)
+		)
 );
 SIG(halt_pipe, UINT(32));
 

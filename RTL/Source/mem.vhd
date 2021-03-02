@@ -14,6 +14,7 @@ signal data_wr : unsigned ((32 -1) downto 0);
 signal be : unsigned ((4 -1) downto 0);
 signal wen : std_logic;
 signal rd_en : unsigned ((1 -1) downto 0);
+signal addr_dbg : unsigned ((core2mem_i.addr'length-1) downto 0);
 
 
 begin
@@ -26,6 +27,7 @@ begin
    rd_en <= "0";
   elsif ( clk_mem'event and (clk_mem = '1' ) ) then
    IF ( (core2mem_i.cs_n = '0') and ((core2mem_i.addr) < max_addr) ) then
+    addr_dbg <= (core2mem_i.addr) ;
     IF ((core2mem_i.wr_n = '1' )) then
      rd_en <= "1";
 
@@ -33,9 +35,9 @@ begin
      rd_en <= "0";
     end if;
    else
+    addr_dbg <= unsigned(RESIZE(signed(TO_UNSIGNED(7,3)), addr_dbg'length)) ;
     rd_en <= "0";
    end if;
-
   end if;
  end process;
 
@@ -46,4 +48,7 @@ begin
   be <= core2mem_i.be;
   mem2core_o.data <= ( data_rd and unsigned(RESIZE(signed(rd_en), 32)));
   mem2core_o.data_en <= rd_en(0);
+
+
+
 end rtl;

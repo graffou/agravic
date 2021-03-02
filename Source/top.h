@@ -6,15 +6,14 @@ INCLUDES
 USE_PACKAGE(structures)
 
 ENTITY(top,
-DECL_PORTS(
-		PORT(clk_top, CLK_TYPE, IN),
+DECL_PORTS(PORT(clk_top, CLK_TYPE, IN),
 		PORT(reset_n, RST_TYPE, IN),
 		PORT(boot_mode_i, BIT_TYPE, IN),
 		PORT(spi_clk_io, TRISTATE(1), INOUT),
 		PORT(spi_csn_io, TRISTATE(1), INOUT),
-		PORT(spi_tx_o, BIT_TYPE, OUT), //whether these are MISO or MOSI depends on SPI mode
+		PORT(spi_tx_o, BIT_TYPE, OUT),
 		PORT(spi_rx_i, BIT_TYPE, IN),
-		PORT(uart_tx_o, BIT_TYPE, OUT), //whether these are MISO or MOSI depends on SPI mode
+		PORT(uart_tx_o, BIT_TYPE, OUT),
 		PORT(uart_rx_i, BIT_TYPE, IN),
 		PORT(pclk_o, BIT_TYPE, OUT),
 		PORT(red_o, BIT_TYPE, OUT),
@@ -24,25 +23,8 @@ DECL_PORTS(
 		PORT(vga_vsync_o, BIT_TYPE, OUT),
 		PORT(vga_red_o, UINT(4), OUT),
 		PORT(vga_green_o, UINT(4), OUT),
-		PORT(vga_blue_o, UINT(4), OUT),
-#ifdef TEST_SDRAM_CTRL
-		PORT(sdram_addr_o, UINT(12), OUT),
-		PORT(sdram_ba_o, UINT(2), OUT),
-		PORT(sdram_cke_o, BIT_TYPE, OUT),
-		PORT(sdram_cs_o, BIT_TYPE, OUT),
-		PORT(sdram_we_o, BIT_TYPE, OUT),
-		PORT(sdram_cas_o, BIT_TYPE, OUT),
-		PORT(sdram_ras_o, BIT_TYPE, OUT),
-		PORT(sdram_dQm_o, UINT(2), OUT),
-
-		PORT(sdram_dQ_io, TRISTATE(16), INOUT)
-#endif
-		//PORT(gpios_o, UINT(32), OUT)
-		//,
-		//PORT(debug_o, UINT(10), OUT)
+		PORT(vga_blue_o, UINT(4), OUT)
 		)
-		// not ok for synthesis w/o default value, INTEGER generic_int
-
 );
 
 COMPONENT(hdmi,
@@ -155,15 +137,14 @@ DECL_PORTS(
 );
 
 COMPONENT( clk_gen,
-	DECL_PORTS
-	(
-		PORT(areset, RST_TYPE, IN),// 		: IN STD_LOGIC  := '0';
-		PORT(inclk0, CLK_TYPE, IN),	//	: IN STD_LOGIC  := '0';
-		PORT(c0, CLK_TYPE, OUT),	//	: OUT STD_LOGIC ;
-		PORT(c1, CLK_TYPE, OUT),	//	: OUT STD_LOGIC ;
-		PORT(c2, CLK_TYPE, OUT),	//	: OUT STD_LOGIC ;
-		PORT(c3, CLK_TYPE, OUT),	//	: OUT STD_LOGIC ;
-		PORT(locked, BIT_TYPE, OUT)	//	: OUT STD_LOGIC
+	DECL_PORTS(
+		PORT(areset, RST_TYPE, IN),
+		PORT(inclk0, CLK_TYPE, IN),
+		PORT(c0, CLK_TYPE, OUT),
+		PORT(c1, CLK_TYPE, OUT),
+		PORT(c2, CLK_TYPE, OUT),
+		PORT(c3, CLK_TYPE, OUT),
+		PORT(locked, BIT_TYPE, OUT)
 	)
 );
 
@@ -183,7 +164,7 @@ DECL_PORTS(
 		PORT(we_o, BIT_TYPE, OUT),
 		PORT(cas_o, BIT_TYPE, OUT),
 		PORT(ras_o, BIT_TYPE, OUT),
-		PORT(en0_o, BIT_TYPE, OUT), // either data _en or data_request to initiator
+		PORT(en0_o, BIT_TYPE, OUT),
 		PORT(en1_o, BIT_TYPE, OUT),
 		PORT(dQm_o, UINT(2), OUT),
 
@@ -247,15 +228,14 @@ DECL_PORTS(
 );
 
 COMPONENT(csr_irq,
-DECL_PORTS(
-		PORT(clk_csr_irq, CLK_TYPE, IN), // might be the 'always on' clock in the future
+DECL_PORTS(PORT(clk_csr_irq, CLK_TYPE, IN),
 		PORT(reset_n, RST_TYPE, IN),
 		PORT(core2mem_i, blk2mem_t, IN),
-		PORT(irq_i, irq_t, IN), //Array of external IRQs
+		PORT(irq_i, irq_t, IN),
 		PORT(mem2core_o, mem2blk_t, OUT),
 		PORT(csr2core_o, csr2core_t, OUT)
-		),
-		INTEGER generic_int
+		)
+		,INTEGER generic_int
 );
 
 
@@ -327,19 +307,17 @@ SIG(irq_vec, irq_t); // Array of 16 external IRQs
 BEGIN
 
 BLK_INST(u0_clk_gen, clk_gen,
-MAPPING(
-		PM(areset, reset_n), // PG is forced to zero in VHDL code
+MAPPING(PM(areset, reset_n),
 		PM(inclk0, clk_top),
 		PM(c0, clk_mcu),
 		PM(c1, clk_24),
 		PM(c2, clk_120),
-		PM(c3, clk_240),
+		PM(c3, clk_240)
 		)
 );
 
 BLK_INST(u0_csr_irq, csr_irq,
-MAPPING(
-		PM(clk_csr_irq, clk_mcu),
+MAPPING(PM(clk_csr_irq, clk_mcu),
 		PM(reset_n, reset_n),
 		PM(core2mem_i, core2datamem),
 		PM(mem2core_o, csr_irq2core),
@@ -350,8 +328,7 @@ MAPPING(
 );
 
 BLK_INST(u0_hdmi, hdmi,
-MAPPING(
-		PM(clk_hdmi, clk_120),
+MAPPING(PM(clk_hdmi, clk_120),
 		PM(clk_core, clk_mcu),
 		PM(clk_pix, clk_24),
 		PM(reset_n, reset_n),
@@ -376,8 +353,7 @@ MAPPING(
 
 
 BLK_INST(u0_dma, dma,
-MAPPING(
-		PM(clk_dma, clk_mcu),
+MAPPING(PM(clk_dma, clk_mcu),
 		PM(reset_n, reset_n),
 		PM(boot_mode_i, boot_mode_i),
 		PM(core2mem_i, core2datamem),
@@ -396,8 +372,7 @@ MAPPING(
 
 
 BLK_INST(u0_sUART, sUART,
-MAPPING(
-		PM(clk_peri, clk_mcu),
+MAPPING(PM(clk_peri, clk_mcu),
 		PM(reset_n, reset_n),
 		PM(boot_mode_i, boot_mode_i),
 		PM(core2mem_i, core2datamem),
@@ -413,8 +388,7 @@ MAPPING(
 );
 
 BLK_INST(u0_risc_V_core, risc_V_core,
-		MAPPING(
-				PM(clk_core, clk_mcu),
+		MAPPING(PM(clk_core, clk_mcu),
 				PM(reset_n, reset_n),
 				PM(boot_mode_i, boot_mode_i),
 				PM(trap_o, trap),
@@ -426,15 +400,14 @@ BLK_INST(u0_risc_V_core, risc_V_core,
 				PM(dma_request_i, dma_request),
 				PM(dma_grant_o, dma_grant),
 				PM(csr2core_i, csr2core),
-				PM(datamem2core_i, all2core),
+				PM(datamem2core_i, all2core)
 				)
 		);
 
 // Instruction RAM (ROM)
 //BLK_INST(u0_mem, mem_delayed,
 BLK_INST(u0_mem, mem,
-		MAPPING(
-				PM(clk_mem, clk_mcu),
+		MAPPING(PM(clk_mem, clk_mcu),
 				PM(reset_n, reset_n),
 				PM(core2mem_i,core2instmem),
 				PM(mem2core_o, instmem2core)
@@ -444,8 +417,7 @@ BLK_INST(u0_mem, mem,
 
 // Data RAM
 BLK_INST(u1_mem, mem,
-		MAPPING(
-				PM(clk_mem, clk_mcu),
+		MAPPING(PM(clk_mem, clk_mcu),
 				PM(reset_n, reset_n),
 				PM(core2mem_i,core2datamem),
 				PM(mem2core_o, datamem2core)
@@ -457,8 +429,7 @@ BLK_INST(u1_mem, mem,
 // gpios are output IOs
 // TODO This will change
 BLK_INST(u0_peripherals, peripherals,
-		MAPPING(
-				PM(clk_peri, clk_mcu),
+		MAPPING(PM(clk_peri, clk_mcu),
 				PM(reset_n, reset_n),
 				PM(core2mem_i,core2datamem),
 				PM(dbg_o, dbg),
@@ -491,8 +462,7 @@ BLK_INST( u0_sdram_ctrl, sdram_ctrl,
 #endif
 
 BLK_INST(u0_spi, SPI,
-MAPPING(
-		PM(clk_120, clk_120),
+MAPPING(PM(clk_120, clk_120),
 		PM(clk_mcu, clk_mcu),
 		PM(reset_n, reset_n),
 		PM(core2mem_i, core2datamem),

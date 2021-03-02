@@ -176,15 +176,19 @@ set_location_assignment PIN_P3 -to bmkrD_io[2]
 set_location_assignment PIN_R3 -to bmkrD_io[3]
 set_location_assignment PIN_T3 -to bmkrD_io[4]
 set_location_assignment PIN_T2 -to bmkrD_io[5]
-set_location_assignment PIN_G16 -to bmkrD_io[6]
-set_location_assignment PIN_G15 -to bmkrD_io[7]
-set_location_assignment PIN_F16 -to bmkrD_io[8]
-set_location_assignment PIN_F15 -to bmkrD_io[9]
-set_location_assignment PIN_C16 -to bmkrD_io[10]
+set_location_assignment PIN_G16 -to spi_csn_io
+
+set_location_assignment PIN_G15 -to boot_mode_i
+# pin 8 is MISO
+set_location_assignment PIN_F16 -to spi_tx_o
+set_location_assignment PIN_F15 -to spi_clk_io
+# pin 10 is MOSI
+set_location_assignment PIN_C16 -to spi_rx_i
+
 set_location_assignment PIN_C15 -to bmkrD_io[11]
 set_location_assignment PIN_B16 -to bmkrD_io[12]
-set_location_assignment PIN_C11 -to bmkrD_io[13]
-set_location_assignment PIN_A13 -to bmkrD_io[14]
+set_location_assignment PIN_C11 -to uart_tx_o
+set_location_assignment PIN_A13 -to uart_rx_i
 
 
 
@@ -210,4 +214,5 @@ set_global_assignment -name VHDL_FILE mem.vhd
 set_global_assignment -name QIP_FILE alt_mem.qip
 set_global_assignment -name QIP_FILE ../alt_ddio/alt_ddio.qip
 set_global_assignment -name OPTIMIZATION_MODE "HIGH PERFORMANCE EFFORT"
+
 set_instance_assignment -name PARTITION_HIERARCHY root_partition -to | -section_id Top

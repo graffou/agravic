@@ -180,6 +180,7 @@ constant CASE_AMIDELEG : unsigned ((12 -1) downto 0) := "001100000011";
 constant CASE_AMIE : unsigned ((12 -1) downto 0) := "001100000100";
 constant CASE_AMTVEC : unsigned ((12 -1) downto 0) := "001100000101";
 constant CASE_AMTCOUNTEREN : unsigned ((12 -1) downto 0) := "001100000110";
+constant CASE_AMITPRIO : unsigned ((12 -1) downto 0) := "001100100000";
 
 constant CASE_ACYCLE : unsigned ((12 -1) downto 0) := "110000000000";
 constant CASE_ATIME : unsigned ((12 -1) downto 0) := "110000000001";
@@ -187,17 +188,18 @@ constant CASE_ACYCLEH : unsigned ((12 -1) downto 0) := "110010000000";
 constant CASE_ATIMEH : unsigned ((12 -1) downto 0) := "110010000001";
 
 constant CASE_AMCYCLE : unsigned ((12 -1) downto 0) := "101100000000";
-constant CASE_AMTIME : unsigned ((12 -1) downto 0) := "101100000001";
+constant CASE_AMTIME : unsigned ((12 -1) downto 0) := "111111000000";
 constant CASE_AMTIMECMP : unsigned ((12 -1) downto 0) := "101111110000";
 constant CASE_AMTIMECMPH : unsigned ((12 -1) downto 0) := "101111110001";
 constant CASE_AMCYCLEH : unsigned ((12 -1) downto 0) := "101110000000";
-constant CASE_AMTIMEH : unsigned ((12 -1) downto 0) := "101110000001";
+constant CASE_AMTIMEH : unsigned ((12 -1) downto 0) := "111111000001";
 constant CASE_AMCOUNTEREN : unsigned ((12 -1) downto 0) := "001100000110";
 constant CASE_AMCOUNTINHIB : unsigned ((12 -1) downto 0) := "001100100000";
 
 constant CASE_AMSCRATCH : unsigned ((12 -1) downto 0) := "001101000000";
 constant CASE_AMEPC : unsigned ((12 -1) downto 0) := "001101000001";
 constant CASE_AMEPC_WFI : unsigned ((12 -1) downto 0) := "001101000101";
+constant CASE_AMRET : unsigned ((12 -1) downto 0) := "001101000110";
 constant CASE_AMCAUSE : unsigned ((12 -1) downto 0) := "001101000010";
 
 constant CASE_AMIP : unsigned ((12 -1) downto 0) := "001101000100";
@@ -224,6 +226,8 @@ constant AMCAUSE : unsigned ((12 -1) downto 0) := "001101000010";
 
 constant AMIP : unsigned ((12 -1) downto 0) := "001101000100";
 
+constant AMRET : unsigned ((12 -1) downto 0) := "001101000110";
+constant AMEPC_WFI : unsigned ((12 -1) downto 0) := "001101000101";
 
 
 constant ILLINSTR : unsigned ((32 -1) downto 0) := TO_UNSIGNED(2,32);

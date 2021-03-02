@@ -11,11 +11,10 @@ USE_PACKAGE(risc_V_constants)
 // The mcause value is stored as the msbs of CSR addr
 
 ENTITY(csr_irq,
-DECL_PORTS(
-		PORT(clk_csr_irq, CLK_TYPE, IN), // might be the 'always on' clock in the future
+DECL_PORTS(PORT(clk_csr_irq, CLK_TYPE, IN),
 		PORT(reset_n, RST_TYPE, IN),
 		PORT(core2mem_i, blk2mem_t, IN),
-		PORT(irq_i, irq_t, IN), //Array of external IRQs
+		PORT(irq_i, irq_t, IN),
 		PORT(mem2core_o, mem2blk_t, OUT),
 		PORT(csr2core_o, csr2core_t, OUT)
 		),

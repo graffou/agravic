@@ -51,15 +51,26 @@ int main(int argc, char **argv) {
   // 1: clk_pol
   // 0: is_master
   uint32_t val1, val2;
-  *spi_tb_conf = ( (10 << 26) | (4 << 16) | (2 << 11) | (3 << 8)  | (0 << 5) |  (0 << 3) | (0 << 0) );
-  *spi_conf = ( (10 << 26) | (4 << 16) | (2 << 11) | (3 << 8)  | (0 << 5) |  (1 << 3) | (1 << 0) );
-  *spi_data = 0xAA55FF00;
-  while ((*spi_conf)){} // still busy
-  val1 = *spi_tb_data;
-  *spi_data = 0x55FF00AA;
-  while ((*spi_conf)){} // still busy
-  val2 = *spi_tb_data;
-  gprintf("#MRead % then %\n", val1, val2);
+  //				pause	  |    div    | csn_ncyc  |     sz    |   txrx   | autocsn   |   mst
+  *spi_tb_conf = ( (10 << 26) | (4 << 16) | (2 << 11) | (3 << 8)  | (1 << 5) |  (0 << 3) | (0 << 0) );
+  *spi_conf =    ( (10 << 26) | (4 << 16) | (2 << 11) | (3 << 8)  | (1 << 5) |  (0 << 3) | (1 << 0) );
+  uint32_t spi_tx = 0;
+  *spi_data = spi_tx;
+  for (int i = 0; i < 255; i++)
+  {
+	  while ((*spi_conf)){} // still busy
+	  val1 = *spi_tb_data;
+	  val2 = *spi_data;
+	  gprintf("#MTB Read  % \n", val1);
+	  gprintf("#RDUT Read % \n", val2);
+	  spi_tx++;
+	  *spi_tb_data = spi_tx+1000;
+	  *spi_data = spi_tx;
+  }
+//  *spi_data = 0x55FF00AA;
+//  while ((*spi_conf)){} // still busy
+//  val2 = *spi_tb_data;
+//  gprintf("#MRead % then %\n", val1, val2);
 
   //while ((*spi_conf)){} // still busy
 	gprintf("#U****************** END OF SIMULATION *******************");

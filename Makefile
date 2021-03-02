@@ -62,6 +62,8 @@ show:  $(RTL_VHDL) $(RTL_CONV)  $(CONV) $(SOURCEDIR)main.cpp
 # Fake rule for hpp, indeed replaces := with = and puts it in Include_rtl dir.
 %.hpp	: %.h 
 	sed -e ''s/:=/=/g'' $< > ./Include_rtl/$<
+#	cat Include_libs/c_macros.m4 $< | sed -e ''s/:=/=/g'' | m4 > ./Include_rtl/$<
+#	sed -e ''s/:=/=/g'' $< > ./Include_rtl/$<
 
 # Rule for vhdl code generation (in RTL/Source dir.)
 # Gets preprocessor output with -DVHDL option, replaces == with =, Then keeps 100000 lines after the Agravic keyword is found (start of VHDL block)
