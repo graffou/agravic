@@ -1069,6 +1069,7 @@
 // http://jhnet.co.uk/articles/cpp_magic -----------------
 #define FIRST(a, ...) a
 #define SECOND(a, b, ...) b
+#define THIRD_ETC(a, b, ...) __VA_ARGS__
 
 #define EMPTY()
 

@@ -49,6 +49,8 @@
 #define B(a,b) (a).get_bit(b)
 #define VAR_SET_BIT(a, b, c) a.set_bit(b, c) //ONLY VARIABLES !!!!!!!!!!!!!!!!!!!!
 #define SIG_SET_BIT(a, b, c) a.set_bit(b, c) //ONLY COMB !!!!!!!!!!!!!!!!!!!!
+#define VAR_SET_RANGE(a, b, c, d) a.set_range(b, c, d) //ONLY VARIABLES !!!!!!!!!!!!!!!!!!!!
+#define SIG_SET_RANGE(a, b, c, d) a.set_range(b, c, d) //ONLY COMB !!!!!!!!!!!!!!!!!!!!
 #define HI(a) decltype(a)::high
 #define LEN(a) decltype(a)::length
 #define ARRAY_LEN(a) decltype(a)::array_length
@@ -86,6 +88,7 @@
 #define REC(a) struct a {
 #define ENDREC };
 #define LIST(...) { __VA_ARGS__ }
+#define TEMPLATE_TYPE(type, ...) type< __VA_ARGS__ >
 //#define EVENT(a) static_cast<tree>(a.get()).event()//CAT_(a,.event())
 #define EVENT(a) (a.get()).event()//CAT_(a,.event())
 #define CONSTANT const
@@ -215,9 +218,25 @@
 
 #define BASE_TYPE(type) type##_base
 
+#define get_GEN(...) __VA_ARGS__
+#define DEFAULT_VAL(...) IF_ELSE(HAS_ARGS(__VA_ARGS__))( = __VA_ARGS__)()
+#define GENERIC2(a) SECOND( a ) FIRST(a) DEFAULT_VAL(THIRD_ETC(a))
+#define GENERIC0(a, ...)  __VA_ARGS__ //GENERIC2(EVAL1(get_##a))
+
+#define GENERIC_DECL_SEMI(a) GENERIC2(get_##a), //GENERIC2(EVAL1(get_##a))GENERIC1(a);
+#define GENERIC_DECL(a) GENERIC2(get_##a) //GENERIC1(a)
+/*
+#define ENTITY(type, ports, ...) IF_ELSE(HAS_ARGS(__VA_ARGS__))\
+	( IF_ELSE(HAS_ARGS(GENERIC0(__VA_ARGS__))) (entity type is generic (EVAL(MAP2(GENERIC_DECL_SEMI, GENERIC_DECL, __VA_ARGS__))); port)(entity type is generic (generic_int: integer); port) )\
+	(entity type is port ) (\
+		EVAL(DECL_PORTS(get_##ports)) \
+		); end type; architecture rtl of type is component dummy_zkw_pouet is port(clk : in std_logic);end component//std::cerr << "CTOR " << name << "\n";}
+*/
 // Block and ports declaration
 //#define ENTITY(type, ports, ...) IF_ELSE(HAS_ARGS(__VA_ARGS__))(template<int dummy0, __VA_ARGS>)(template<int dummy0>) struct type : gmodule {/*
-#define ENTITY(type, ports, ...) IF_ELSE(HAS_ARGS(__VA_ARGS__))(template<__VA_ARGS__>)(template<int generic_int>) struct type : gmodule {/*
+#define ENTITY(type, ports, ...) IF_ELSE(HAS_ARGS(__VA_ARGS__))\
+	(IF_ELSE(HAS_ARGS(GENERIC0(__VA_ARGS__))) (template<EVAL(MAP2(GENERIC_DECL_SEMI, GENERIC_DECL, __VA_ARGS__))>) (template<int generic_int>))\
+	(template<int generic_int>) struct type : gmodule {/*
 		*/ EVAL1(DECL_PORTS(get_##ports)) /*
 		*/ type(const char*x, gmodule* y):gmodule(x,y) {}//std::cerr << "CTOR " << name << "\n";}
 #define TESTBENCH(type, ...) template<int dummy0, int dummy1> struct type : gmodule {/*
@@ -292,16 +311,21 @@
 // end of block declaration
 #define BLK_END }
 
+//#define APPLY_MAP(type, port_map) APPLY_MAP2(EVAL(type), port_map) //PORT_MAPS(type, EVAL1(get_##port_map))
 #define APPLY_MAP(type, port_map) PORT_MAPS(type, EVAL1(get_##port_map))
 
 // Pass generic parameters - to be used later
 #define APPLY_GENERIC(a) EVAL1(get_##a)
 
+#define CONCATENATE_DIRECT(s1, s2) s1##s2
+#define CONCATENATE(s1, s2) CONCATENATE_DIRECT(s1, s2)
 // instantiation of block inside hierarchy - all except testbench
 #define BLK_INST(name, type, port_map, ...) IF_ELSE(HAS_ARGS(__VA_ARGS__))\
-		(type<__VA_ARGS__>& name = *create_block< type<__VA_ARGS__> >(#name, this, APPLY_MAP(type<__VA_ARGS__>, port_map)))\
+		(typedef type<__VA_ARGS__> CONCATENATE(type, __LINE__) ; \
+		type<__VA_ARGS__>& name = *create_block< type<__VA_ARGS__> >(#name, this, APPLY_MAP( CONCATENATE(type, __LINE__), port_map)))\
 	(type<0>& name = *create_block< type<0> >(#name, this, APPLY_MAP(type<0>, port_map)))
 //type<0,APPLY_GENERIC(__VA_ARGS__)>& name = *create_block(#name, this, APPLY_MAP(type<0,APPLY_GENERIC(__VA_ARGS__)>, port_map)))\
+		(type<__VA_ARGS__>& name = *create_block< type<__VA_ARGS__> >(#name, this, APPLY_MAP(type<__VA_ARGS__>, port_map)))\
 
 // Instantiation of top rtl block - should be testbench
 /*#define BLK_INST_TOP(name, type, port_map, ...) IF_ELSE(HAS_ARGS(__VA_ARGS__))\
@@ -343,6 +367,12 @@
 #define INCLUDES
 
 #define REG_NBITS ( ((generic_int) /  268435456 + 16) & 0xF )
+
+// macros for memory genericity. Use MEM_**(generic_int) and set generic_int accordingly
+// ex: generic_int(4<<8 | 10) for a 4-byte, 1024-depth memory
+#define MEM_ADDR_NBITS(a) ( a & 255 )
+#define MEM_ADDR_NDEPTH(a) ( 1 << ( ( a) & 255 ) )
+#define MEM_ADDR_NBYTES(a) ( ( (a) >> 8 ) & 0x7 )
 
 
 #else

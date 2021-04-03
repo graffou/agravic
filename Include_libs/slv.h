@@ -352,6 +352,19 @@ _Pragma ("GCC diagnostic pop")
 
 	}
 
+	template<int M>
+	inline void set_range(unsigned int pos, unsigned int pos2, slv<M> val) //const T& val)
+	{
+		// test range
+		if (pos-pos2 != M-1)
+			gprintf("#RError, assignment error in set_range of signal % pos % pos2 %M %", pvcd_entry->name, pos, pos2, M);
+		else
+		{
+			uint64_t mask = ~(val.mask << pos2);
+			n = (n & mask) | (val.n << pos2);
+		}
+
+	}
 	friend std::ostream& operator<< (std::ostream& os, const slv<N>& x)
 	{
 	        return os << x.n;
@@ -758,17 +771,20 @@ struct tristate:slv<N>
 
 	uint64_t z_flags;
 	uint64_t z_flags_d;
+	bool pullup_high; // Set this to choose how tristate converts to slv when it is 'Z' => 1 for pullup high, 0 for pullup low
 	tristate()
 	{}
 
 	tristate(sig_desc x_i) : slv<N>(x_i)
 		{
 			z_flags = 0xffffffffffffffff;
+			pullup_high = 1;
 		}
 
 	tristate(int64_t x_i) : slv<N>(x_i)
 		{
 			z_flags = 0xffffffffffffffff;
+			pullup_high = 1;
 		}
 
 
@@ -819,6 +835,7 @@ struct tristate:slv<N>
 		if (val == 'Z')
 		{
 			z_flags_d |= (bitmask & slv<N>::mask); // Avoid setting bit which does not belong to bitvector
+			slv<N>::_d = pullup_high ? slv<N>::_d | (bitmask & slv<N>::mask) : (slv<N>::_d & !bitmask) & slv<N>::mask; //simulate resistor pullup behavior
 		}
 		else if ((val) == '1') // set to 1
 		{

@@ -55,6 +55,8 @@
 #define SUBVECTOR(a,b,c) (a(b+c-1 downto c)) // IN C++: Version with cst len return slv from variable position (use e.g. in foor loops)
 #define VAR_SET_BIT(a, b, c) a(b) := c //ONLY VARIABLES !!!!!!!!!!!!!!!!!!!!
 #define SIG_SET_BIT(a, b, c) a(b) <= c //ONLY COMB !!!!!!!!!!!!!!!!!!!!
+#define VAR_SET_RANGE(a, b, c, d) a(b downto c) := d //ONLY VARIABLES !!!!!!!!!!!!!!!!!!!!
+#define SIG_SET_RANGE(a, b, c, d) a(b downto c) <= d //ONLY COMB !!!!!!!!!!!!!!!!!!!!
 
 #define SLV_RANGE(a,b,c) std_logic_vector(a(b downto c)) //a.range<b,c>()
 #define B(a,b) a(b)
@@ -120,17 +122,39 @@
 #define DECL_PORT_SEMI(a) PORT_DEF(EVAL1(get1_##a),EVAL1(get2_##a),EVAL1(get3_##a));
 #define DECL_PORT(a) PORT_DEF(EVAL1(get1_##a),EVAL1(get2_##a),EVAL1(get3_##a))
 #define DECL_PORTS(...) EVAL(MAP2(DECL_PORT_SEMI, DECL_PORT, __VA_ARGS__))
-
+/*
 #define ENTITY(type, ports, ...) IF_ELSE(HAS_ARGS(__VA_ARGS__))(entity type is generic (generic_int: integer); port )( entity type is port ) (\
 		EVAL(DECL_PORTS(get_##ports)) \
 		); end type; architecture rtl of type is component dummy_zkw_pouet is port(clk : in std_logic);end component//std::cerr << "CTOR " << name << "\n";}
+*/
+
+#define get_GEN(...) __VA_ARGS__
+#define DEFAULT_VAL(...) IF_ELSE(HAS_ARGS(__VA_ARGS__))( := __VA_ARGS__)()
+#define GENERIC2(a) FIRST(a) : SECOND( a ) DEFAULT_VAL(THIRD_ETC(a))
+#define GENERIC0(a, ...)  __VA_ARGS__ //GENERIC2(EVAL1(get_##a))
+
+#define GENERIC_DECL_SEMI(a) GENERIC2(get_##a); //GENERIC2(EVAL1(get_##a))GENERIC1(a);
+#define GENERIC_DECL(a) GENERIC2(get_##a) //GENERIC1(a)
+
+#define ENTITY(type, ports, ...) IF_ELSE(HAS_ARGS(__VA_ARGS__))\
+	( IF_ELSE(HAS_ARGS(GENERIC0(__VA_ARGS__))) (entity type is generic (EVAL(MAP2(GENERIC_DECL_SEMI, GENERIC_DECL, __VA_ARGS__))); port)(entity type is generic (generic_int: integer); port) )\
+	(entity type is port ) (\
+		EVAL(DECL_PORTS(get_##ports)) \
+		); end type; architecture rtl of type is component dummy_zkw_pouet is port(clk : in std_logic);end component//std::cerr << "CTOR " << name << "\n";}
+
+#define COMPONENT(type, ports, ...) IF_ELSE(HAS_ARGS(__VA_ARGS__))\
+	( IF_ELSE(HAS_ARGS(GENERIC0(__VA_ARGS__))) (component type is generic (EVAL(MAP2(GENERIC_DECL_SEMI, GENERIC_DECL, __VA_ARGS__))); port)(component type is generic (generic_int: integer); port) )\
+	(component type is port ) (\
+		EVAL(DECL_PORTS(get_##ports)) \
+		); end component
 
 #define TESTBENCH(type) entity  type is \
 		\ begin end type; architecture rtl of type is component dummy_zkw_pouet is port(clk : in std_logic);end component//std::cerr << "CTOR " << name << "\n";}
 
-#define COMPONENT(type, ports, ...) IF_ELSE(HAS_ARGS(__VA_ARGS__))(component type is generic (generic_int: integer); port)(component  type is port) (\
+/*#define COMPONENT(type, ports, ...) IF_ELSE(HAS_ARGS(__VA_ARGS__))(component type is generic (generic_int: integer); port)(component  type is port) (\
 		 EVAL(DECL_PORTS(get_##ports)) \
-		); end component //std::cerr << "CTOR " << name << "\n";}
+		); end component //std::cerr << "CTOR " << name << "\n";}*/
+
 
 #define END_ENTITY //}
 
@@ -151,10 +175,13 @@
 #define APPLY_GENERIC(a) EVAL1(get_##a)
 
 // instantiation of block inside hierarchy - all except testbench
-#define BLK_INST(name, type, port_map, ...) IF_ELSE(HAS_ARGS(__VA_ARGS__))\
+/*#define BLK_INST(name, type, port_map, ...) IF_ELSE(HAS_ARGS(__VA_ARGS__))\
 	(name : type generic map(generic_int => __VA_ARGS__) port map( APPLY_MAP(type<0>, port_map)))\
 	(name : type port map( APPLY_MAP(type<0>, port_map)))
-
+*/
+#define BLK_INST(name, type, port_map, ...) IF_ELSE(HAS_ARGS(__VA_ARGS__))\
+	(name : type generic map(__VA_ARGS__) port map( APPLY_MAP(type<0>, port_map)))\
+	(name : type port map( APPLY_MAP(type<0>, port_map)))
 
 #define DECL_FIELD(a) FIELD_DEF(EVAL1(get1_##a),EVAL1(get2_##a))
 #define DECL_FIELDS(...) EVAL(MAP(DECL_FIELD, __VA_ARGS__))
@@ -216,6 +243,12 @@ use IEEE.NUMERIC_STD.ALL;
 
 
 #define REG_NBITS ( (generic_int /  268435456 + 16) rem 16 ) // 4-lsbs of integer is a signed value, convert to 4-bit unsigned
+
+// macros for memory genericity. Use MEM_**(generic_int) and set generic_int accordingly
+// ex: generic_int(4<<8 | 10) for a 4-byte, 1024-depth memory
+#define MEM_ADDR_NBITS(a) ( a rem 256 )
+#define MEM_ADDR_DEPTH(a) (2 **( a rem 256 ) )
+#define MEM_NBYTES(a) ( ( a/256 ) rem 8 )
 
 
 #define gprintf(...) -- gprintf(__VA_ARGS__)
