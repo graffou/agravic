@@ -47,6 +47,12 @@ volatile uint32_t *spi_conf = (volatile uint32_t *) CONV_ADDR(SPI_MST_REGS);
 volatile uint32_t *spi_data = (volatile uint32_t *) CONV_ADDR(SPI_MST_REGS)+1;//0x40007f44;
 volatile uint32_t *spi_tb_conf = (volatile uint32_t *) CONV_ADDR(SPI_TB_REGS);//0x40007f00;
 volatile uint32_t *spi_tb_data = (volatile uint32_t *) CONV_ADDR(SPI_TB_REGS)+1;//0x40007f04;
+
+volatile uint32_t *i2c_conf = (volatile uint32_t *) CONV_ADDR(I2C_REGS);
+volatile uint32_t *i2c_data = (volatile uint32_t *) CONV_ADDR(I2C_REGS)+1;//0x40007f44;
+volatile uint32_t *i2c_tb_conf = (volatile uint32_t *) CONV_ADDR(I2C_TB_REGS);//0x40007f00;
+volatile uint32_t *i2c_tb_data = (volatile uint32_t *) CONV_ADDR(I2C_TB_REGS)+1;//0x40007f04;
+
 // second uart is included in testbench
 // configure it with a -0x400 (or 0x100 in 4B words) offset
 // this verification hack is found in tb.h
@@ -64,9 +70,10 @@ volatile uint32_t *dma = (volatile uint32_t *) CONV_ADDR(DMA_REGS);
 #define MIT_ENABLE csrrs_noread(CSR_MSTATUS, (1<<MSTATUS_MIE));
 #define MIT_DISABLE csrrc_noread(CSR_MSTATUS, (1<<MSTATUS_MIE));
 #define RESTORE_IRQ csrrc_noread(CSR_MSTATUS, 0); // This reenables IRQs inside an ISR
-#define IT_ENABLE(val) csrrs_noread(CSR_MIE, val);
-#define IT_DISABLE(val) csrrc_noread(CSR_MIE, val);
+#define IT_ENABLE(val) csrrs_noread(CSR_MIE, 1<<val);
+#define IT_DISABLE(val) csrrc_noread(CSR_MIE, 1<<val);
 #define IT_PENDING(val) ( csrr(CSR_MIP, val) != 0 )
+#define IT_CLEAR(val) csrrc_noread(CSR_MIP, (1<<val));
 #define SET_TRAP_VECTOR(val) csrrw_noread(CSR_MTVEC, (val | 1) ); // use vectored trap addresses for ITs
 
 #define CLK_FIXED_FREQ_HZ (50ULL * 1000 * 1000)
