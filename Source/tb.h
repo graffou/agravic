@@ -27,12 +27,15 @@ DECL_PORTS(
 		PORT(clk_top, CLK_TYPE, IN),
 		PORT(reset_n, RST_TYPE, IN),
 		PORT(boot_mode_i, BIT_TYPE, IN),
+		PORT(i2c_scl_io, TRISTATE(1), INOUT),
+		PORT(i2c_sda_io, TRISTATE(1), INOUT),
 		PORT(spi_clk_io, TRISTATE(1), INOUT),
 		PORT(spi_csn_io, TRISTATE(1), INOUT),
 		PORT(spi_tx_o, BIT_TYPE, OUT), //whether these are MISO or MOSI depends on SPI mode
 		PORT(spi_rx_i, BIT_TYPE, IN),
 		PORT(uart_tx_o, BIT_TYPE, OUT), //whether these are MISO or MOSI depends on SPI mode
 		PORT(uart_rx_i, BIT_TYPE, IN),
+		PORT(ext_irq_i, BIT_TYPE, IN),
 		PORT(pclk_o, BIT_TYPE, OUT),
 		PORT(red_o, BIT_TYPE, OUT),
 		PORT(green_o, BIT_TYPE, OUT),
@@ -50,24 +53,6 @@ DECL_PORTS(
 
 );
 
-/*
-COMPONENT(SPI_wrapper,
-DECL_PORTS(
-		PORT(clk_mcu, CLK_TYPE, IN),
-		PORT(reset_n, RST_TYPE, IN),
-		PORT(data_i, UINT(16), IN),
-		PORT(data_o, UINT(16), OUT),
-		PORT(data_en_i, BIT_TYPE, IN),
-		PORT(data_en_o, BIT_TYPE, OUT),
-		PORT(spi_csn_o, BIT_TYPE, OUT),
-		PORT(spi_clk_o, BIT_TYPE, OUT),
-		PORT(spi_tx_o, BIT_TYPE, OUT),
-		PORT(spi_rx_i, BIT_TYPE, IN)
-		)
-		, INTEGER generic_int
-
-);
-*/
 
 COMPONENT(SPI,
 DECL_PORTS(
@@ -87,6 +72,25 @@ DECL_PORTS(
 		, INTEGER generic_int
 );
 
+COMPONENT(I2C,
+DECL_PORTS(
+		PORT(clk_mcu, CLK_TYPE, IN),
+		PORT(reset_n, RST_TYPE, IN),
+		PORT(core2mem_i, blk2mem_t, IN),
+		PORT(mem2core_o, mem2blk_t, OUT),
+		//PORT(i2c_dma_i, d2p_8_t, IN),
+		//PORT(i2c_dma_o, p2d_8_t, OUT),
+		PORT(i2c_irq_o, BIT_TYPE, OUT),
+		PORT(i2c_scl_io, BIT_TYPE, INOUT),
+		PORT(i2c_sda_io, BIT_TYPE, INOUT),
+//		PORT(i2c_scl_oe_o, BIT_TYPE, OUT),
+//		PORT(i2c_sda_oe_o, BIT_TYPE, OUT)
+		)
+		, GEN(generic_int, INTEGER)
+		, GEN(generic_int2, INTEGER, 0)
+);
+
+
 SIG(clk, CLK_TYPE);
 SIG(clk_100, CLK_TYPE);
 SIG(reset_n, RST_TYPE);// reset_n;
@@ -104,6 +108,7 @@ SIG(pclk, BIT_TYPE);
 
 SIG(uart2core, mem2blk_t);
 SIG(spi2core, mem2blk_t);
+SIG(i2c2core, mem2blk_t);
 SIG(core2datamem, blk2mem_t);
 
 SIG(sdram_addr, UINT(12));
@@ -117,6 +122,7 @@ SIG(sdram_dQm, UINT(2));
 SIG(sdram_dQ, TRISTATE(16));
 
 
+SIG(ext_irq, BIT_TYPE);
 SIG(uart_irq, BIT_TYPE);
 SIG(uart_rx, BIT_TYPE);
 SIG(uart_tx, BIT_TYPE);
@@ -127,6 +133,8 @@ SIG(boot_mode, BIT_TYPE);
 SIG(spi_rx, BIT_TYPE);
 SIG(spi_csn, TRISTATE(1));
 SIG(spi_clk, TRISTATE(1));
+SIG(i2c_scl, TRISTATE(1));
+SIG(i2c_sda, TRISTATE(1));
 SIG(spi2pluto, UINT(16));
 SIG(spi2pluto_en,BIT_TYPE );
 SIG(pluto2spi, UINT(16));
@@ -183,12 +191,15 @@ BLK_INST(dut, top,
 				PM(clk_top, clk),
 				PM(reset_n, reset_n),
 				PM(boot_mode_i, boot_mode),
+				PM(i2c_scl_io, i2c_scl),
+				PM(i2c_sda_io, i2c_sda),
 				PM(spi_clk_io, spi_clk),
 				PM(spi_csn_io, spi_csn),
 				PM(spi_tx_o, spi_tx),
 				PM(spi_rx_i, spi_rx),
 				PM(uart_tx_o, uart_tx),
 				PM(uart_rx_i, uart_rx),
+				PM(ext_irq_i, ext_irq),
 				PM(blue_o, blue),
 				PM(red_o, red),
 				PM(green_o, green),
@@ -232,6 +243,20 @@ MAPPING(
 		HEX_INT(SPI_TB_REGS)
 );
 
+
+BLK_INST(u0_i2c, I2C,
+MAPPING(PM(clk_mcu, dut.clk_mcu),
+		PM(reset_n, reset_n),
+		PM(core2mem_i, core2datamem),
+		PM(mem2core_o, i2c2core),
+//		PM(i2c_dma_i, dma2i2c),
+//		PM(i2c_dma_o, i2c2dma),
+		PM(i2c_irq_o, ext_irq),
+		PM(i2c_scl_io, i2c_scl),
+		PM(i2c_sda_io, i2c_sda)
+		),
+		HEX_INT(I2C_REGS), 0
+);
 // Clk 240MHz
 FOREVER_PROCESS(0)
 //gprintf("#M>01 % ", cnt);
