@@ -168,7 +168,7 @@ static void wait_cycles(unsigned long loops) {
     csrrw_noread(CSR_MTIMECMP, cur_time);
     SET_TRAP_VECTOR(0x4)
     MIT_ENABLE
-    IT_ENABLE(1<<MTIME_IT)
+    IT_ENABLE(MTIME_IT)// Changed for direct assignme,t instead of 1<<MTIME_IT
 
     __WFI__
 	//IT_CLEAR(1<<MTIME_IT)
@@ -210,7 +210,7 @@ extern "C" void timer_irq_handler()
 	// clear IRQ by setting timecmp value >> current timer
 	csrrw_noread(CSR_MTIMECMPH, 0xFFFFFFFF);
 	//csrrw_noread(CSR_MTIMECMP, cur_time);
-	IT_DISABLE(1<<MTIME_IT)
+	IT_DISABLE(MTIME_IT)
 		    //RESTORE_IRQ // reenables active IRQs after register save
 	//recurse_print("#RIn timer_irq_handler routine %", '!');
 	if (callback)
@@ -222,7 +222,7 @@ extern "C" void dma_irq_handler() __attribute__ ((interrupt ("machine"), nested)
 
 extern "C" void dma_irq_handler()
 {
-	IT_DISABLE(1<<MTIME_IT)
+	IT_DISABLE(MTIME_IT)//WTF ???
 	recurse_print("#RIn timer_irq_handler routine %", '!');
 	if (callback)
 		(*callback)();
