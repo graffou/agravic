@@ -9,12 +9,15 @@ ENTITY(top,
 DECL_PORTS(PORT(clk_top, CLK_TYPE, IN),
 		PORT(reset_n, RST_TYPE, IN),
 		PORT(boot_mode_i, BIT_TYPE, IN),
+		PORT(i2c_scl_io, TRISTATE(1), INOUT),
+		PORT(i2c_sda_io, TRISTATE(1), INOUT),
 		PORT(spi_clk_io, TRISTATE(1), INOUT),
 		PORT(spi_csn_io, TRISTATE(1), INOUT),
 		PORT(spi_tx_o, BIT_TYPE, OUT),
 		PORT(spi_rx_i, BIT_TYPE, IN),
 		PORT(uart_tx_o, BIT_TYPE, OUT),
 		PORT(uart_rx_i, BIT_TYPE, IN),
+		PORT(ext_irq_i, BIT_TYPE, IN),
 		PORT(pclk_o, BIT_TYPE, OUT),
 		PORT(red_o, BIT_TYPE, OUT),
 		PORT(green_o, BIT_TYPE, OUT),
@@ -192,40 +195,7 @@ DECL_PORTS(
 		, INTEGER generic_int
 );
 
-COMPONENT(SPI_master,
-DECL_PORTS(
-		PORT(clk_120, CLK_TYPE, IN),
-		PORT(clk_mcu, CLK_TYPE, IN),
-		PORT(reset_n, RST_TYPE, IN),
-		PORT(core2mem_i, blk2mem_t, IN),
-		PORT(mem2core_o, mem2blk_t, OUT),
-		PORT(trig_i, BIT_TYPE, IN),    // signal that trigs transfers (should come from timer)
-		PORT(spi_dma_i, d2p_8_t, IN),
-		PORT(spi_dma_o, p2d_8_t, OUT),
-		PORT(spi_csn_o, BIT_TYPE, OUT),
-		PORT(spi_clk_o, BIT_TYPE, OUT),
-		PORT(spi_tx_o, BIT_TYPE, OUT),
-		PORT(spi_rx_i, BIT_TYPE, IN)
-		)
-		, INTEGER generic_int
-);
 
-COMPONENT(SPI_slave,
-DECL_PORTS(
-		PORT(clk_120, CLK_TYPE, IN),
-		PORT(clk_mcu, CLK_TYPE, IN),
-		PORT(reset_n, RST_TYPE, IN),
-		PORT(core2mem_i, blk2mem_t, IN),
-		PORT(mem2core_o, mem2blk_t, OUT),
-		PORT(spi_dma_i, d2p_8_t, IN),
-		PORT(spi_dma_o, p2d_8_t, OUT),
-		PORT(spi_csn_i, BIT_TYPE, IN),
-		PORT(spi_clk_i, BIT_TYPE, IN),
-		PORT(spi_tx_o, BIT_TYPE, OUT),
-		PORT(spi_rx_i, BIT_TYPE, IN)
-		)
-		, INTEGER generic_int
-);
 
 COMPONENT(csr_irq,
 DECL_PORTS(PORT(clk_csr_irq, CLK_TYPE, IN),
@@ -238,7 +208,19 @@ DECL_PORTS(PORT(clk_csr_irq, CLK_TYPE, IN),
 		,INTEGER generic_int
 );
 
-
+COMPONENT(I2C,
+DECL_PORTS(
+		PORT(clk_mcu, CLK_TYPE, IN),
+		PORT(reset_n, RST_TYPE, IN),
+		PORT(core2mem_i, blk2mem_t, IN),
+		PORT(mem2core_o, mem2blk_t, OUT),
+		PORT(i2c_irq_o, BIT_TYPE, OUT),
+		PORT(i2c_scl_io, TRISTATE(1), INOUT),
+		PORT(i2c_sda_io, TRISTATE(1), INOUT)
+		)
+		, GEN(generic_int, INTEGER)
+		, GEN(generic_int2, INTEGER, 0)
+);
 
 SIG(boot_mode, BIT_TYPE);
 
@@ -252,6 +234,7 @@ SIG(uart2core, mem2blk_t);
 SIG(dma2core, mem2blk_t);
 SIG(hdmi2core, mem2blk_t);
 SIG(spi2core, mem2blk_t);
+SIG(i2c2core, mem2blk_t);
 SIG(spi_slv2core, mem2blk_t);
 SIG(csr_irq2core, mem2blk_t);
 
@@ -271,6 +254,8 @@ SIG(uart_rx, BIT_TYPE);
 SIG(uart_tx, BIT_TYPE);
 SIG(uart_rts, BIT_TYPE);
 SIG(uart_cts, BIT_TYPE);
+
+SIG(i2c_irq, BIT_TYPE);
 
 SIG(uart2dma, p2d_8_t);
 SIG(dma2uart, d2p_8_t);
@@ -337,7 +322,6 @@ MAPPING(PM(clk_hdmi, clk_120),
 		PM(dbg_i, dbg33),
 		PM(core2mem_i, core2datamem),
 		PM(mem2core_o, hdmi2core),
-		//PM(debug, debug_o)
 		PM(blue_o, blue_o),
 		PM(green_o, green_o),
 		PM(red_o, red_o),
@@ -461,6 +445,19 @@ BLK_INST( u0_sdram_ctrl, sdram_ctrl,
 		);
 #endif
 
+BLK_INST(u0_i2c, I2C,
+MAPPING(PM(clk_mcu, clk_mcu),
+		PM(reset_n, reset_n),
+		PM(core2mem_i, core2datamem),
+		PM(mem2core_o, i2c2core),
+		PM(i2c_irq_o, i2c_irq),
+		PM(i2c_scl_io, i2c_scl_io),
+		PM(i2c_sda_io, i2c_sda_io)
+		),
+		HEX_INT(I2C_REGS),
+		0
+);
+
 BLK_INST(u0_spi, SPI,
 MAPPING(PM(clk_120, clk_120),
 		PM(clk_mcu, clk_mcu),
@@ -477,65 +474,6 @@ MAPPING(PM(clk_120, clk_120),
 		),
 		HEX_INT(SPI_REGS)
 );
-
-
-#ifdef SPI_MASTER
-BLK_INST(u0_spi, SPI_master,
-MAPPING(
-		PM(clk_120, clk_240),
-		PM(clk_mcu, clk_mcu),
-		PM(reset_n, reset_n),
-		PM(core2mem_i, core2datamem),
-		PM(mem2core_o, spi2core),
-		PM(spi_dma_i, dma2spi),
-		PM(spi_dma_o, spi2dma),
-		PM(trig_i, spi_trig),
-		PM(spi_clk_o, spi_clk),
-		PM(spi_csn_o, spi_csn),
-		PM(spi_tx_o, spi_mosi),
-		PM(spi_rx_i, spi_miso)
-//		,
-//		(trig_i, BIT_TYPE, IN),    // signal that trigs transfers (should come from timer)
-//		(, d2p_8_t, IN),
-//		(spi_dma_o, p2d_8_t, OUT),
-//		(spi_csn_o, BIT_TYPE, OUT),
-//		(spi_clk_o, BIT_TYPE, OUT),
-//		(spi_tx_o, BIT_TYPE, OUT),
-//		(spi_rx_i, BIT_TYPE, IN)
-//		)
-		),
-		HEX_INT(SPI_REGS)
-);
-#endif
-
-#ifdef SPI_SLAVE
-BLK_INST(u0_spi_slv, SPI_slave,
-MAPPING(
-		PM(clk_120, clk_240),
-		PM(clk_mcu, clk_mcu),
-		PM(reset_n, reset_n),
-		PM(core2mem_i, core2datamem),
-		PM(mem2core_o, spi_slv2core),
-		PM(spi_dma_i, dma2spi),
-		PM(spi_dma_o, spi2dma),
-		PM(spi_clk_i, spi_clk),
-		PM(spi_csn_i, spi_csn),
-		PM(spi_rx_i, spi_mosi),
-		PM(spi_tx_o, spi_miso)
-//		,
-//		(trig_i, BIT_TYPE, IN),    // signal that trigs transfers (should come from timer)
-//		(, d2p_8_t, IN),
-//		(spi_dma_o, p2d_8_t, OUT),
-//		(spi_csn_o, BIT_TYPE, OUT),
-//		(spi_clk_o, BIT_TYPE, OUT),
-//		(spi_tx_o, BIT_TYPE, OUT),
-//		(spi_rx_i, BIT_TYPE, IN)
-//		)
-		),
-		HEX_INT(SPI_SLV_REGS)
-);
-#endif
-
 
 
 // Combine responses of memory and peripherals (for now sUART) ----------
@@ -567,6 +505,8 @@ COMB_PROCESS(1, clk_top)
 	//SIG_SET_BIT(irq_vec, 0, dma2irq(0).dma2irq(0));
 	irq_vec(0) <=  dma2irq(0);
 	irq_vec(1) <=  dma2irq(1);
+	irq_vec(8) <= i2c_irq;
+	irq_vec(15) <= ext_irq_i;
 
 
 #ifdef VHDL
