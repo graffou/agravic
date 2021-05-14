@@ -57,6 +57,8 @@ SIG(addr_lsbs_test, UINT(4));
 
 SIG(base_addr_ok, BIT_TYPE);
 SIG(addr_ok, BIT_TYPE);
+SIG(dbg_cnt, UINT(16));
+SIG(dbg_32, UINT(32));
 
 #ifdef CPX_TESTS // tests for cpx_int/Signed classes
 
@@ -92,7 +94,7 @@ PROCESS(0, clk_peri, reset_n) // -----------------------------------------------
 VAR(rx_trans, BIT_TYPE);
 VAR(val, UINT(32));
 VAR(reset_data_en, BIT_TYPE);
-VAR(DBG, UINT(8));
+VAR(DBG, UINT(32));
 
 BEGIN
 	IF ( reset_n == BIT(0) ) THEN
@@ -136,6 +138,12 @@ BEGIN
 		//always_tx <= BIN(1);
 	ELSEIF ( EVENT(clk_peri) and (clk_peri == BIT(1)) ) THEN
 		//cnt <= cnt - TO_UINT(1, LEN(cnt));
+		dbg_cnt <= dbg_cnt + 1;
+		VAR_SET_RANGE(DBG, 15, 0, dbg_cnt);
+		VAR_SET_RANGE(DBG, 23, 16, BIN(10101010));
+		VAR_SET_RANGE(DBG, 31, 24, BIN(01010101));
+		dbg_32 <= DBG;
+
 #ifdef CPX_TESTS // tests for cpx_int/Signed classes
 		titip <= titi;
 		titi <= CSXT( (titi + TO_CPX_INT(1, 4, LEN(titi))) * toti, LEN(titi) ) + SSXT(tata, LEN(titi)/2) + TO_CPX_INT(2, -1, LEN(titi));
