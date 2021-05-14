@@ -66,8 +66,8 @@ END slv_utils;
 // ---------------------------------------------------------------------------------
 #define BOOL2BIN(x) slv<1>(x)
 #define BOOL2BIT(x) slv<1>(x)
-#define BIT2BOOL(x) (x == BIT(1))
-#define BIT2BIN(x) x
-#define BIN2BIT(x) x
+#define BIT2BOOL(x) ((x) == BIT(1))
+#define BIT2BIN(x) (x)
+#define BIN2BIT(x) (x)
 
 #endif
