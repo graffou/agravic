@@ -41,7 +41,8 @@
 #include "sUART.h"
 #include "SPI_master.h"
 //#include "SPI_slave.h"
-#include "SPI_wrapper.h"
+#include "I2C.h"
+//#include "SPI_wrapper.h"
 #include "SPI.h"
 
 #include "spram.h"
