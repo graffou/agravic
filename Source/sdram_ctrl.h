@@ -35,12 +35,9 @@ DECL_PORTS(
 		PORT(done0_o, BIT_TYPE, OUT), // either data _en or data_request to initiator
 		PORT(done1_o, BIT_TYPE, OUT),
 		PORT(dQm_o, UINT(2), OUT),
-
 		PORT(dQ_io, TRISTATE(16), INOUT)
-
 		)
-		, INTEGER generic_int
-
+//		, INTEGER generic_int
 );
 
 
@@ -120,7 +117,7 @@ IF ( reset_n == BIT(0) ) THEN
 	en1_o <= BIT(0);
 	done0_o <= BIT(0);
 	done1_o <= BIT(0);
-	device <= BIT(0);
+	device <= BIN(0);
 	read_burst_active <= BIT(0);
 	write_burst_active <= BIT(0);
 	read_burst <= BIT(0);
@@ -222,7 +219,7 @@ ELSEIF ( EVENT(clk_sdram) and (clk_sdram == BIT(1)) ) THEN
 		ENDIF
 		col <= col + 1;
 		burst_cnt <= burst_cnt - 1;
-		// Improve this code in order to deal with interleved accesses
+		// Improve this code in order to deal with interleaved accesses
 		// If tsfr is close to completion, without page change predicted, and if no refresh is required soon
 		// then it would be safe to go to idle state to process the next command and initiate its precharging
 		will_refresh := (refresh_cnt > (refresh_max-rp_latency));
@@ -234,7 +231,7 @@ ELSEIF ( EVENT(clk_sdram) and (clk_sdram == BIT(1)) ) THEN
 			en <= BIT(0);
 			en0_o <= BIT(0); //overriden in read mode
 			en1_o <= BIT(0);
-			IF (device == BIT(0)) THEN
+			IF (device == BIN(0)) THEN
 				done0_o <= BIT(1);
 			ELSE
 				done1_o <= BIT(1);
@@ -281,10 +278,10 @@ ELSEIF ( EVENT(clk_sdram) and (clk_sdram == BIT(1)) ) THEN
 
 		IF ( PORT_BASE(req0_i).en == BIT(1) ) THEN// port 0 has priority
 			req := PORT_BASE(req0_i);
-			device <= BIT(0);
+			device <= BIN(0);
 		ELSEIF ( PORT_BASE(req1_i).en == BIT(1) ) THEN
 			req := PORT_BASE(req1_i);
-			device <= BIT(1);
+			device <= BIN(1);
 		ELSEIF ( req_test.en == BIT(1) ) THEN
 			req := (req_test);
 			//req_test.en <= BIT(0);
