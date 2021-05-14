@@ -457,7 +457,7 @@ BEGIN
 		//Receiver part
 		rx_trans_dbg <= BOOL2BIT(rx_trans);
 		//IF ( (sending == BIT(1)) and ( ( (BIT2BOOL(is_master) and (next_cnt == cnt_strobe)) ) or (not BIT2BOOL(is_master) and rx_trans) ) ) THEN//(next_cnt == cnt_strobe) and (sending == BIT(1)) ) THEN
-		IF ( (sending == BIT(1)) and ( ( (BIT2BOOL(is_master) and (cnt == cnt_strobe)) ) or (not BIT2BOOL(is_master) and rx_trans) ) ) THEN//(next_cnt == cnt_strobe) and (sending == BIT(1)) ) THEN
+		IF ( (sending == BIT(1)) and ( ( (BIT2BOOL(is_master and tx_rx) and (cnt == cnt_strobe)) ) or (not BIT2BOOL(is_master) and rx_trans) ) ) THEN//(next_cnt == cnt_strobe) and (sending == BIT(1)) ) THEN
 
 			rx_byte_tmp := ( RANGE( rx_byte, 6, 0) & spi_rx );
 			fifo_full_rx <= BOOL2BIT(fifo_wptr_rx == (fifo_rptr_rx + BIN(100)));
