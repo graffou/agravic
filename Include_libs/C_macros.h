@@ -172,6 +172,9 @@
 
 //#define PORT_MAPS(type,  ...) EVAL1(MAP_PLUS1(type, PORT_MAP2, __VA_ARGS__))
 #define PORT_MAPS(type,  ...) EVAL(MAP_ALT_PLUS1(type, PORT_MAP_COMMA, PORT_MAP, __VA_ARGS__))
+//#define PORT_MAPS2(type,  ...) PM**** __VA_ARGS__ **** MAP_ALT_PLUS1(type, PORT_MAP_COMMA, PORT_MAP, __VA_ARGS__) MP
+// needs too many recursions #define PORT_MAPS2(type,  ...) MAP_ALT_PLUS1(type, PORT_MAP_COMMA, PORT_MAP, __VA_ARGS__)
+#define PORT_MAPS2(type,  ...) EVAL(MAP_ALT_PLUS1(type, PORT_MAP_COMMA, PORT_MAP, __VA_ARGS__))
 #define GEN_BIND(name, ...) gen_bind(name, )
 
 #define BLK_CTOR(name) name(char* name_i, gmodule* parent) : gmodule::gmodule(name_i, parent)
@@ -313,6 +316,7 @@
 
 //#define APPLY_MAP(type, port_map) APPLY_MAP2(EVAL(type), port_map) //PORT_MAPS(type, EVAL1(get_##port_map))
 #define APPLY_MAP(type, port_map) PORT_MAPS(type, EVAL1(get_##port_map))
+#define APPLY_MAP2(type, port_map) PORT_MAPS2(type, EVAL1(get_##port_map))
 
 // Pass generic parameters - to be used later
 #define APPLY_GENERIC(a) EVAL1(get_##a)
@@ -320,10 +324,20 @@
 #define CONCATENATE_DIRECT(s1, s2) s1##s2
 #define CONCATENATE(s1, s2) CONCATENATE_DIRECT(s1, s2)
 // instantiation of block inside hierarchy - all except testbench
+#if 1
 #define BLK_INST(name, type, port_map, ...) IF_ELSE(HAS_ARGS(__VA_ARGS__))\
 		(typedef type<__VA_ARGS__> CONCATENATE(type, __LINE__) ; \
 		type<__VA_ARGS__>& name = *create_block< type<__VA_ARGS__> >(#name, this, APPLY_MAP( CONCATENATE(type, __LINE__), port_map)))\
 	(type<0>& name = *create_block< type<0> >(#name, this, APPLY_MAP(type<0>, port_map)))
+#else
+
+#endif
+#define BLK_INST2(count, name, type, port_map, ...) IF_ELSE(HAS_ARGS(__VA_ARGS__))\
+		(typedef type<__VA_ARGS__> CONCATENATE(type, __LINE__) ; typedef multiple_instance_idx<count> multiple_instance_idx_typedef;\
+		type<__VA_ARGS__>& name = *create_block< type<__VA_ARGS__> >(#name, this, APPLY_MAP2( CONCATENATE(type, __LINE__), port_map)))\
+	(type<0>& name = *create_block< type<0> >(#name, this, APPLY_MAP2(type<0>, port_map)))
+
+
 //type<0,APPLY_GENERIC(__VA_ARGS__)>& name = *create_block(#name, this, APPLY_MAP(type<0,APPLY_GENERIC(__VA_ARGS__)>, port_map)))\
 		(type<__VA_ARGS__>& name = *create_block< type<__VA_ARGS__> >(#name, this, APPLY_MAP(type<__VA_ARGS__>, port_map)))\
 

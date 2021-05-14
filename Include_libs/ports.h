@@ -29,7 +29,7 @@ template <class T, bool in>
 
             int port_hint = in ? -1 : -2; // use nbits to code port dir (number of bits of a port will not be used anyway)
 
-            pmodule = x.pmodule
+            pmodule = x.pmodule;
             giprintf("#MNew port name % ptr %", dummy.pvcd_entry->name, this);
         }
 

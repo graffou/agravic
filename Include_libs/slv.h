@@ -1781,6 +1781,19 @@ int tree_val(int n)
 #include "VHDL_macros.h"
 #endif
 
+// To retrieve instance index from a multiple instance statement (for...generate)
+#define GET_IDX(n) multiple_instances_idx_typedef::select_value<1, std::tuple_element<n, multiple_instances_idx_typedef::ArgPack>, std::integral_constant<int,0>>::value
+
+template <int... Args> struct multiple_instances_idx
+{
+    using ArgPack = std::tuple<std::integral_constant<int, Args>...>;
+    template <int Size, typename Then, typename Else>
+    using select_value = typename std::conditional_t<
+         (sizeof...(Args) > Size), Then, Else
+    >::type;
+
+    void dummy(){}
+};
 // Include here all constants (slv sizes)
 #include "../Source/constants.hpp"
 

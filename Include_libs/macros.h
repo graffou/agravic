@@ -1366,6 +1366,7 @@
 #define DEFER2(m) m EMPTY EMPTY()()
 #define DEFER3(m) m EMPTY EMPTY EMPTY()()()
 #define DEFER4(m) m EMPTY EMPTY EMPTY EMPTY()()()()
+#define DEFER5(m) m EMPTY EMPTY EMPTY EMPTY EMPTY()()()()
 #define DEFER8(m) m EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY ()()()() ()()()()
 #define DEFER16(m) m EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY ()()()() ()()()() ()()()() ()()()()
 #define DEFER32(m) m EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY EMPTY ()()()() ()()()() ()()()() ()()()()()()()() ()()()() ()()()() ()()()()
@@ -1416,6 +1417,8 @@
   )(                                 \
     /* Do nothing, just terminate */ \
   )
+
+// TODO: DEFER8 required for multiple instances, but requires 8x iterations to map a block -> find a solution
 #define MAP_ALT_PLUS1(a,m,n, first, ...)           \
 	IF_ELSE(HAS_ARGS(__VA_ARGS__)) (m(a,first))(n(a,first)) \
 	IF_ELSE(HAS_ARGS(__VA_ARGS__))(    \
